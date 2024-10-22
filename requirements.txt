@@ -1,4 +1,5 @@
 click >= 8.0.0           # bsd
-prettytable              # bsd
+humanize                 # mit
 pbr                      # apache2
 shakenfist_client        # apache2
+tqdm                     # mit / mozilla
