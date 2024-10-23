@@ -1,15 +1,11 @@
 import click
 import humanize
+import json
 from shakenfist_client import apiclient, util
 import re
 import sys
 import tarfile
-import xml.etree.ElementTree as ET
-
-
-def _emit_debug(ctx, m):
-    if ctx.obj['VERBOSE']:
-        print(m)
+import xmltodict
 
 
 @click.group(help='OVA commands (via the shakenfist-client-ova plugin)')
@@ -22,13 +18,45 @@ def ova():
 #     SHA256(disk1.vmdk)= e1a654d69cf4112756899c6d639...c760e2f271146cbf5
 MANIFEST_LINE_RE = re.compile(r'^([^ ]+) *\((.*)\) *= *(.*)$')
 
-# https://www.dmtf.org/sites/default/files/standards/documents/DSP0243_1.1.0.pdf
-V1_NS = '{http://schemas.dmtf.org/ovf/envelope/1}'
+NAMESPACES = {
+    # https://www.w3.org/XML/1998/namespace
+    'http://www.w3.org/XML/1998/namespace': 'xml',
 
-# https://www.dmtf.org/sites/default/files/standards/documents/DSP0243_2.1.1.pdf
-V2_NS = '{http://schemas.dmtf.org/ovf/envelope/2}'
+    # https://www.dmtf.org/sites/default/files/standards/documents/DSP0243_1.1.0.pdf
+    'http://schemas.dmtf.org/ovf/envelope/1': 'v1',
 
-VBOX_NS = '{http://www.virtualbox.org/ovf/machine}'
+    # https://www.dmtf.org/sites/default/files/standards/documents/DSP0243_2.1.1.pdf
+    'http://schemas.dmtf.org/ovf/envelope/2': 'v2',
+
+    # I cannot find documentation for these
+    'http://www.virtualbox.org/ovf/machine': 'vbox',
+    ('http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/'
+     'CIM_ResourceAllocationSettingData'): 'rasd',
+    ('http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/'
+     'CIM_VirtualSystemSettingData'): 'vssd',
+}
+
+STREAM_OPTIMIZED = ('http://www.vmware.com/interfaces/specifications/'
+                    'vmdk.html#streamOptimized')
+
+
+def dpath(top, path):
+    d = top
+    for elem in path:
+        d = d.get(elem)
+        if not d:
+            return None
+
+    return d
+
+
+def dfind(d, tag, path=[]):
+    if tag in d:
+        return path
+    for elem in d:
+        if isinstance(d[elem], dict):
+            for found in dfind(d[elem], tag, path + [elem]):
+                yield found
 
 
 @ova.command(name='import', help='Import an OVA file')
@@ -92,54 +120,125 @@ def ova_import(ctx, source=None, namespace=None):
 
         for ovf_file in ovf_files:
             with archive.extractfile(ovf_file) as f:
-                root = ET.fromstring(f.read())
-                if root.tag != f'{V1_NS}Envelope':
-                    print(f'Unknown root element {root.tag}!')
-                    sys.exit(1)
+                ovf = xmltodict.parse(
+                    f.read(), process_namespaces=True, namespaces=NAMESPACES)
 
-                for child in root:
-                    if child.tag == f'{V1_NS}References':
-                        for subchild in child.findall(f'{V1_NS}File'):
-                            attrs = subchild.attrib
-                            id = attrs[f'{V1_NS}id']
-                            value = attrs[f'{V1_NS}href']
-                            references[id] = value
-                        print(f'    References: {references}')
+                # Strip meaningless info tags
+                for info_tag in dfind(ovf, 'v1:Info'):
+                    print(info_tag)
+                    del ovf['v1:Envelope']['v1:NetworkSection']['v1:Info']
+                sys.exit(1)
 
-                    elif child.tag == f'{V1_NS}DiskSection':
-                        for subchild in child.findall(f'{V1_NS}Disk'):
-                            attrs = subchild.attrib
+                version = ovf['v1:Envelope']['@v1:version']
+                del ovf['v1:Envelope']['@v1:version']
+                print(f'    Version: {version}')
 
-                            disks.append({
-                                'id': attrs[f'{V1_NS}diskId'],
-                                'capacity': attrs[f'{V1_NS}capacity'],
-                                'capacity_allocation_units': attrs.get(f'{V1_NS}capacityAllocationUnits'),
-                                'populated_size': attrs.get(f'{V1_NS}populatedSize'),
-                                'reference': attrs[f'{V1_NS}fileRef'],
-                                'uuid': attrs.get(f'{VBOX_NS}uuid')
-                            })
-                        print(f'    Disks: {disks}')
-
-                    elif child.tag == f'{V1_NS}NetworkSection':
-                        for subchild in child.findall(f'{V1_NS}Network'):
-                            attrs = subchild.attrib
-                            networks.append(attrs[f'{V1_NS}name'])
-                        print(f'    Networks: {networks}')
-
-                    elif child.tag == f'{V1_NS}VirtualSystem':
-                        for subchild in child:
-                            print(subchild)
-
-                    elif child.tag == f'{V1_NS}VirtualSystemCollection':
-                        print('OVAs with VirtualSystemCollection elements are not')
-                        print('supported at this time. Please report this!')
-                        sys.exit(1)
-
+                # "v1:References": {
+                #     "v1:File": {
+                #         "@v1:href": "CSE-LABVM-disk001.vmdk",
+                #         "@v1:id": "file1"
+                #     }
+                # },
+                #
+                # "v1:References": {
+                #     "v1:File": [
+                #         {
+                #             "@v1:href": "CyberOps Workstation-disk001.vmdk",
+                #             "@v1:id": "file1"
+                #         },
+                #         {
+                #             "@v1:href": "CyberOps Workstation-disk002.vmdk",
+                #             "@v1:id": "file2"
+                #         }
+                #     ]
+                # },
+                files = dpath(ovf, ['v1:Envelope', 'v1:References', 'v1:File'])
+                if files:
+                    if isinstance(files, list):
+                        for file in files:
+                            references[file['@v1:id']] = file['@v1:href']
+                    elif isinstance(files, dict):
+                        references[files['@v1:id']] = files['@v1:href']
                     else:
-                        print(f'Unhandled XML child element: {child}')
-                        print(f'    Attributes: {child.attrib}')
-                        print()
+                        print(
+                            f'Unknown type for file references ({type(files)})')
                         sys.exit(1)
+
+                    print(f'    References: {references}')
+                    del ovf['v1:Envelope']['v1:References']['v1:File']
+                    if not ovf['v1:Envelope']['v1:References']:
+                        del ovf['v1:Envelope']['v1:References']
+
+                # "v1:DiskSection": {
+                #     "v1:Disk": [
+                #         {
+                #             "@v1:capacity": "10737418240",
+                #             "@v1:diskId": "vmdisk1",
+                #             "@v1:fileRef": "file1",
+                #             "@v1:format": STREAM_OPTIMIZED,
+                #             "@vbox:uuid": "4ef5671e-51fc-450d-9804-8361fb2ec5d9"
+                #         },
+                #         {
+                #             "@v1:capacity": "1073741824",
+                #             "@v1:diskId": "vmdisk2",
+                #             "@v1:fileRef": "file2",
+                #             "@v1:format": STREAM_OPTIMIZED,
+                #             "@vbox:uuid": "92052b2b-47c2-43c3-b1a9-520400129e5a"
+                #         }
+                #     ],
+                #     "v1:Info": "List of the virtual disks used in the package"
+                # },
+                disks = dpath(
+                    ovf, ['v1:Envelope', 'v1:DiskSection', 'v1:Disk'])
+                if disks:
+                    if isinstance(disks, dict):
+                        disks[disks]
+
+                    print(f'    Disks:')
+                    for disk in disks:
+                        print('        %s' % disk)
+                    del ovf['v1:Envelope']['v1:DiskSection']['v1:Disk']
+                    if 'v1:Info' in ovf['v1:Envelope']['v1:DiskSection']:
+                        del ovf['v1:Envelope']['v1:DiskSection']['v1:Info']
+                    if not ovf['v1:Envelope']['v1:DiskSection']:
+                        del ovf['v1:Envelope']['v1:DiskSection']
+
+                # "v1:NetworkSection": {
+                #     "v1:Info": "Logical networks used in the package",
+                #     "v1:Network": {
+                #         "@v1:name": "NAT",
+                #         "v1:Description": "Logical network used by this appliance."
+                #     }
+                # },
+                networks = dpath(
+                    ovf, ['v1:Envelope', 'v1:NetworkSection', 'v1:Network'])
+                if networks:
+                    if isinstance(networks, dict):
+                        networks = [networks]
+
+                    print(f'    Networks:')
+                    for network in networks:
+                        print('        %s' % network)
+                    del ovf['v1:Envelope']['v1:NetworkSection']['v1:Network']
+                    if not ovf['v1:Envelope']['v1:NetworkSection']:
+                        del ovf['v1:Envelope']['v1:NetworkSection']
+
+                # Remove envelope if empty
+                if not ovf['v1:Envelope']:
+                    del ovf['v1:Envelope']
+
+                # Remove boiler plate
+                for bp in ['@xml:lang', '@xmlns']:
+                    if bp in ovf['v1:Envelope']:
+                        del ovf['v1:Envelope'][bp]
+
+                # If there is anything left, it means we haven't parsed everything
+                if ovf:
+                    print()
+                    print('Not all of the OVF file was parsed!')
+                    print()
+                    print(json.dumps(ovf, sort_keys=True, indent=4))
+                    sys.exit(1)
 
         print('Uploading disk images...')
         print()
