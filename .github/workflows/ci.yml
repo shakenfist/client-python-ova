@@ -1,0 +1,86 @@
+# CI for the OVA client plugin.
+#
+# One job, because there is one gate's worth of work: the pre-commit
+# hooks and a package build. Both run on a static runner -- nothing here
+# installs an OS package or otherwise changes the machine, so nothing
+# needs a throwaway VM.
+#
+# That argument is about cost, not safety. Everything below executes
+# code the pull request controls: pre-commit runs the hooks its own
+# config names, and the build runs the pull request's packaging. The
+# static pool is persistent, so on a fork pull request that would be a
+# foothold on a shared machine. What makes it acceptable is a repository
+# setting rather than anything in this file -- Settings > Actions
+# requires approval for all external contributors, so a fork's
+# workflows do not run until a maintainer has looked. If that setting is
+# ever relaxed, this job belongs on the throwaway vm pool, as
+# supply-chain.yml already is.
+#
+# There are no unit tests yet. When there are, they run in this job.
+name: CI
+
+on:
+  pull_request:
+    branches: [develop]
+  # develop is the branch that gets tagged, so it is the one worth
+  # watching: a merge whose base moved after the pull request run
+  # otherwise reaches a release untested.
+  push:
+    branches: [develop]
+  # pr-retest.yml re-runs this workflow by dispatching it, through the
+  # RETEST_WORKFLOW repository variable.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-build:
+    name: Lint and build
+    runs-on: [self-hosted, static]
+    timeout-minutes: 15
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-lint-and-build
+      cancel-in-progress: true
+
+    steps:
+      # fetch-depth: 0 so setuptools_scm can derive the version from the
+      # most recent v* tag when the package is built.
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # A venv because the runners enforce PEP 668. Under $RUNNER_TEMP
+      # rather than a fixed /tmp path because the static pool is shared
+      # and long lived, and two runs can be in flight at once: with a
+      # constant path one run's cleanup deletes a venv another is still
+      # using. $RUNNER_TEMP is per runner, and a runner takes one job at
+      # a time.
+      - name: Install pre-commit and build
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/venv-ci"
+          "${RUNNER_TEMP}/venv-ci/bin/pip" install --quiet \
+              --disable-pip-version-check pre-commit build
+
+      # On PATH rather than called by absolute path, so the steps below
+      # read as the commands a developer runs locally, and so the
+      # llm-context-lint-ci audit sees a literal `pre-commit run`.
+      - name: Put the venv on PATH
+        run: echo "${RUNNER_TEMP}/venv-ci/bin" >> "${GITHUB_PATH}"
+
+      # Running the config rather than naming the tools means a hook
+      # added later is picked up without editing this file.
+      - name: Run the pre-commit hooks
+        run: |
+          pre-commit run --all-files --show-diff-on-failure
+
+      - name: Build the sdist and wheel
+        run: |
+          python3 -m build --outdir "${RUNNER_TEMP}/dist" .
+
+      - name: Clean up
+        if: always()
+        run: |
+          rm -rf "${RUNNER_TEMP}/venv-ci" "${RUNNER_TEMP}/dist"
+
