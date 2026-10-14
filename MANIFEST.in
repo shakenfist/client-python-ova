@@ -1,0 +1,11 @@
+# What the sdist carries, beyond what setuptools_scm's file finder offers
+# it. The finder offers every git-tracked file, which is the wrong default
+# for anything tracked that is reference material rather than source.
+#
+# specifications/ holds the DMTF OVF standards the parser was written
+# against. They stay in git, where someone working on the parser can find
+# them, but nobody installing from source needs several megabytes of
+# PDFs. docs/plans/ is the project's working history and is pruned for
+# the same reason.
+prune specifications
+prune docs/plans
