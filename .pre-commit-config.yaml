@@ -1,0 +1,31 @@
+# The linters gating every commit, and the same set CI runs: ci.yml
+# runs "pre-commit run --all-files" rather than naming each tool, so
+# this file is the only place a hook or its version is written down.
+# renovate.json enables renovate's opt-in pre-commit manager, so these
+# revisions arrive as pull requests rather than ageing in place.
+repos:
+  # Lints the agent context (AGENTS.md and anything else handed to an
+  # agent) for malformed skills, smuggled unicode and pasted secrets.
+  - repo: https://github.com/stbenjam/skillsaw
+    rev: v0.21.0
+    hooks:
+      - id: skillsaw
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+        args: ['-config-file', '.github/actionlint.yaml']
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        types_or: [sh, bash, shell]
+        args: ['-x']
+
+  # Line length is configured in .flake8.
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.4.1
+    hooks:
+      - id: flake8

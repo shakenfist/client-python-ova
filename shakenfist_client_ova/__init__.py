@@ -230,7 +230,7 @@ def ova_import(ctx, source=None, namespace=None):
                 # },
                 disks = _coerce_to_list(dpath.get(
                     ovf, ['v1:Envelope', 'v1:DiskSection', 'v1:Disk']))
-                print(f'    Disks:')
+                print('    Disks:')
                 for disk in disks:
                     alloc = _parse_alloc_units_to_bytes(disk)
                     disk['capacity_gb'] = math.ceil(
@@ -250,7 +250,7 @@ def ova_import(ctx, source=None, namespace=None):
                 # },
                 networks = _coerce_to_list(dpath.get(
                     ovf, ['v1:Envelope', 'v1:NetworkSection', 'v1:Network']))
-                print(f'    Networks:')
+                print('    Networks:')
                 for network in networks:
                     print('        %s' % network)
                 dpath.delete(
@@ -457,6 +457,7 @@ def ova_import(ctx, source=None, namespace=None):
             print()
             print(hardware)
             print()
+
 
 ova.add_command(ova_import)
 
