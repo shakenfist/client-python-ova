@@ -432,7 +432,7 @@ def ova_import(ctx, source=None, namespace=None):
             disk_files[disk_file]['size'] = ti.size
 
             print(f'{disk_file} with size '
-                  f'{humanize.naturalsize(disk_files[disk_file]['size'])}')
+                  f'{humanize.naturalsize(disk_files[disk_file]["size"])}')
             source_url = f'ova://{source}/{disk_file}'
             if not ctx.obj['CLIENT'].check_capability('blob-search-by-hash'):
                 blob = None
