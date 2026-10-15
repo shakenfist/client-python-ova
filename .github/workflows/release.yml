@@ -1,0 +1,209 @@
+# Release workflow for the Shaken Fist OVA client plugin
+#
+# Triggers on version tags (v*). Requires approval from the 'release'
+# environment before publishing. Uses Sigstore for signing and PyPI
+# trusted publishers for authentication.
+#
+# See RELEASE-SETUP.md for one-time configuration steps.
+#
+# Template source: shakenfist/development/templates/release-automation/
+
+name: Release
+
+permissions: {}
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+  # Allow manual trigger for testing (won't publish without a tag)
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build distribution packages
+    runs-on: [self-hosted, static]
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # Full history needed for setuptools_scm
+
+      - name: Install build dependencies
+        run: |
+          rm -rf release-venv
+          python3 -m venv release-venv
+          release-venv/bin/pip3 install --upgrade pip
+          release-venv/bin/pip3 install build twine
+
+      - name: Build package
+        run: |
+          release-venv/bin/python3 -m build
+
+      - name: Check package with twine
+        run: |
+          release-venv/bin/twine check dist/*
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  # The three publishing jobs are guarded so that a workflow_dispatch
+  # run only ever exercises the build and the twine check. The event
+  # is tested as well as the ref because a dispatch can be aimed at a
+  # tag: the ref test alone passes there, and the run re-signs and
+  # force-pushes a tag that already exists, rewriting a signed object
+  # someone may already have verified. Aimed at a branch instead, an
+  # unguarded sign-tag computes a tag name of the literal string
+  # "refs/heads/<branch>" and force-pushes a garbage
+  # refs/tags/refs/heads/<branch> ref. Nothing is lost by requiring
+  # push: re-running a failed release goes through "Re-run jobs",
+  # which keeps the original push event.
+  sign-tag:
+    name: Sign release tag with Sigstore
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    # This job mutates the runner -- it installs gitsign with a sudo
+    # move into /usr/local/bin and writes global git config -- so it
+    # needs a throwaway runner rather than the shared static pool,
+    # which grants no passwordless sudo and would carry the global git
+    # config into whatever else lands on it next. vm is ephemeral and
+    # has sudo; s is a small job (download a binary, sign, push).
+    runs-on: [self-hosted, vm, debian-13, s]
+    environment: release
+
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install gitsign
+        run: |
+          GITSIGN_VERSION="0.14.0"
+          curl -sLO "https://github.com/sigstore/gitsign/releases/download/v${GITSIGN_VERSION}/gitsign_${GITSIGN_VERSION}_linux_amd64"
+          curl -sLO "https://github.com/sigstore/gitsign/releases/download/v${GITSIGN_VERSION}/checksums.txt"
+          sha256sum --ignore-missing -c checksums.txt
+          chmod +x "gitsign_${GITSIGN_VERSION}_linux_amd64"
+          sudo mv "gitsign_${GITSIGN_VERSION}_linux_amd64" /usr/local/bin/gitsign
+
+      - name: Configure git for Sigstore signing
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global tag.gpgsign true
+          git config --global gpg.format x509
+          git config --global gpg.x509.program gitsign
+
+      - name: Create signed tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          echo "Signing tag: ${TAG_NAME}"
+          git tag -d "${TAG_NAME}" || true
+          git tag -s "${TAG_NAME}" -m "Release ${TAG_NAME}" "${GITHUB_SHA}"
+          git push origin "${TAG_NAME}" --force
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [build, sign-tag]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: [self-hosted, static]
+    environment: release
+
+    permissions:
+      id-token: write
+      attestations: write
+
+    steps:
+      # This job works in the checked-out workspace, while
+      # github-release below downloads into runner.temp. The asymmetry
+      # is not an oversight: gh-action-pypi-publish is a composite
+      # action that delegates to a Docker container action, and the
+      # container does not see the runner's paths at the places the
+      # workflow expressions name. From a release run:
+      #
+      #   docker run --workdir /github/workspace \
+      #     -v ".../_work/_temp":"/github/runner_temp" \
+      #     -v ".../_work/<repo>/<repo>":"/github/workspace"
+      #
+      # RUNNER_TEMP is mounted, but at /github/runner_temp, whereas
+      # "${{ runner.temp }}" expands to the host path on the left --
+      # which does not exist inside the container. The same goes for
+      # github.workspace. So every path this job hands the publish
+      # action has to be relative to the workspace, which is the one
+      # spelling that is correct on both sides of the mount. The
+      # action needs a real workspace regardless, since it writes its
+      # container trampoline into .github/.tmp/ before running it.
+      #
+      # Checking out is what makes that workspace safe to use. This
+      # pool is persistent and a job which skips checkout inherits
+      # whatever the last job left behind, but checkout cleans with
+      # "git clean -ffdx", which removes a stale gitignored dist/ --
+      # the same guarantee runner.temp buys the other job.
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - name: Generate attestations for artifacts
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: 'dist/*'
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+  github-release:
+    name: Create GitHub Release
+    needs: [build, sign-tag, publish-pypi]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: [self-hosted, static]
+
+    permissions:
+      contents: write
+
+    steps:
+      # Unlike publish-pypi above, this job does not check out, and
+      # does not need to: action-gh-release is a JavaScript action
+      # running on the host, so it reads an absolute path happily.
+      # Downloading into the per-job runner.temp is then the cheaper
+      # way to get a directory nothing else has written to, without
+      # paying for a checkout to clean one.
+      #
+      # fail_on_unmatched_files is the other half -- action-gh-release
+      # treats a glob that matches nothing as a warning, so without it
+      # a release that attached no files at all still reported
+      # success.
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: ${{ runner.temp }}/dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          files: ${{ runner.temp }}/dist/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

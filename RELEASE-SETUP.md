@@ -1,0 +1,292 @@
+# Release Infrastructure Setup
+
+This document describes how to configure PyPI and GitHub to enable automated
+releases using GitHub Actions with Sigstore signing.
+
+## Overview
+
+The release process uses:
+
+- **PyPI Trusted Publishers (OIDC)**: No API tokens needed; PyPI trusts the
+  GitHub Actions workflow directly
+- **Sigstore/gitsign**: Keyless signing for git tags (no GPG private key
+  management)
+- **GitHub Environments**: Required reviewer approval before releases proceed
+- **Protected Tags**: Restrict who can create release tags
+
+## One-Time Setup Steps
+
+### 1. Configure PyPI Trusted Publisher
+
+This allows the GitHub Actions workflow to publish to PyPI without storing any
+API tokens. Which of the two flows below applies depends on whether the
+package has ever been published before.
+
+**First release (no project on PyPI yet)**: there is no project page to
+navigate to, so a project-scoped publisher cannot be created -- there is
+nothing to scope it to. Use PyPI's **pending publisher** flow instead:
+
+1. Log in to [pypi.org](https://pypi.org) with your account
+2. Go to <https://pypi.org/manage/account/publishing/>, the account-level
+   publishing settings. The form sits under account settings rather than
+   under your projects, which is where people look for it
+3. Click **Add a new pending publisher**
+4. Fill in the form:
+   - **PyPI Project Name**: `shakenfist_client_ova`
+   - **Owner**: `shakenfist`
+   - **Repository name**: `client-python-ova`
+   - **Workflow name**: `release.yml`
+   - **Environment name**: `release` (must match the workflow)
+5. Click **Add**
+
+The pending publisher converts automatically into an ordinary
+project-scoped trusted publisher the first time a release successfully
+uploads under that project name. Nothing further needs to be done after
+that first upload.
+
+**Subsequent releases (the project already exists on PyPI)**: add a
+project-scoped publisher from the project itself:
+
+1. Log in to [pypi.org](https://pypi.org) with your account
+2. Navigate to your project: `shakenfist_client_ova`
+3. Go to **Settings** (or **Your projects** > **Manage**)
+4. Click **Publishing** in the left sidebar
+5. Under **Trusted Publishers**, click **Add a new publisher**
+6. Fill in the form:
+   - **Owner**: `shakenfist`
+   - **Repository name**: `client-python-ova`
+   - **Workflow name**: `release.yml`
+   - **Environment name**: `release` (must match the workflow)
+7. Click **Add**
+
+The workflow will now be able to publish without any stored credentials.
+
+**Note**: If the `shakenfist_client_ova` package already exists on PyPI under
+a different publishing method, you can add the trusted publisher alongside the
+existing setup and then remove the old API token once verified.
+
+**Getting any of these values wrong**, under either flow, does not fail
+immediately: `build` and `sign-tag` both succeed first, so by the time
+`publish-pypi` rejects the OIDC claim, `sign-tag` has already signed and
+force-pushed the release tag. Re-pushing that tag would rewrite a signed
+object someone may already have verified, so the recovery is to fix the
+publisher configuration and release the next version instead.
+
+### 2. Create GitHub Environment with Required Reviewers
+
+This ensures releases only happen after explicit approval.
+
+1. Go to the repository on GitHub: `shakenfist/client-python-ova`
+2. Click **Settings** > **Environments**
+3. Click **New environment**
+4. Name it: `release`
+5. Click **Configure environment**
+6. Under **Environment protection rules**:
+   - Check **Required reviewers**
+   - Add yourself (and any other trusted maintainers)
+   - Optionally add a **Wait timer** (e.g., 5 minutes) for additional safety
+7. Under **Deployment branches and tags**:
+   - Select **Selected branches and tags**
+   - Add a rule: `v*` (to only allow release tags)
+8. Click **Save protection rules**
+
+### 3. Configure Protected Tags (Recommended)
+
+This stops unauthorised users creating and deleting release tags. It
+does not stop them *rewriting* one -- see the note at the end of this
+step, which is a known gap rather than an oversight.
+
+1. Go to **Settings** > **Rules** > **Rulesets**
+2. Click **New ruleset** > **New tag ruleset**
+3. Configure:
+   - **Ruleset name**: `Release tags`
+   - **Enforcement status**: `Active`
+   - **Target tags**: Add pattern `v*`
+   - **Rules**: Check **Restrict creations**, **Restrict deletions** and
+     **Block force pushes**
+   - **Bypass list**: Add repository admins or specific maintainers. Do
+     **not** add GitHub Actions; see below for why it is not needed.
+     Whoever pushes the release tag does need to be on this list,
+     because **Restrict creations** applies to them, so check it:
+     `gh api repos/OWNER/REPO/rulesets/ID --jq .current_user_can_bypass`
+     must print `always`.
+4. Click **Create**
+
+The `sign-tag` job needs no bypass of its own. It re-creates and
+force-pushes the release tag as `github-actions[bot]`, which sounds
+like it should collide with all three rules, and collides with none of
+them: the job runs only from a tag *push*, so the ref already exists by
+the time it pushes and **Restrict creations** does not apply; it
+deletes the tag only inside its own checkout (`git tag -d`), so nothing
+reaches **Restrict deletions**; and **Block force pushes**
+(`non_fast_forward`) is not enforced against tag updates. That last
+point is observed rather than deduced: `shakenfist/client-python` has
+had this exact ruleset, with no Actions entry on its bypass list, since
+2026-03-22, and its `v0.8.3` release in July 2026 force-pushed a
+Sigstore-signed tag through it as `github-actions[bot]`.
+
+Adding GitHub Actions to the bypass list anyway is not inert: it lets
+any workflow in the repository create and delete `v*` tags, and buys
+nothing for it.
+
+The gap that leaves: since nothing restricts tag *updates*, any actor
+with write access can rewrite an already-released signed tag to point
+at a different commit. Checking **Restrict updates** would make an
+Actions bypass necessary for `sign-tag`, and that bypass is what keeps
+it from closing the gap. Anyone with write access can push a branch
+whose workflow runs with `contents: write`, and that workflow's
+`GITHUB_TOKEN` would carry the same bypass `sign-tag` relies on. The
+rewrite would cost one extra step, and creation and deletion would be
+opened to every workflow along the way. Until the bypass can be
+narrowed to the release workflow alone, the fleet accepts the gap
+rather than trade it for that.
+
+### 4. Verify Sigstore/Rekor Access
+
+No configuration needed. Sigstore is a public service that:
+
+- Signs artifacts using OIDC identity (the GitHub Actions workflow identity)
+- Records signatures in a public transparency log (Rekor)
+- Requires no key management
+
+Verification can be done by anyone using `cosign` or `gitsign verify`.
+
+## How Releases Work
+
+1. A maintainer pushes a tag matching `v*` (e.g., `v0.1.0`)
+2. The `release.yml` workflow triggers
+3. The workflow builds the package and waits for environment approval
+4. A required reviewer approves the release in GitHub's UI
+5. The workflow:
+   - Creates a signed git tag using gitsign (Sigstore)
+   - Generates Sigstore attestations for the built artifacts
+   - Publishes to PyPI using OIDC (no tokens)
+   - Creates a GitHub Release with the artifacts
+
+### Running the workflow by hand
+
+The workflow also offers `workflow_dispatch`. A manual run builds the
+package and runs `twine check`, and stops there: it never signs a tag,
+never uploads to PyPI, and never creates a release. Use it to confirm
+the package still builds without cutting a release.
+
+That is enforced by a guard on each publishing job:
+
+```yaml
+if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+```
+
+Both clauses earn their place. Without the ref test, a dispatch aimed at
+a branch would have `sign-tag` treat `refs/heads/<branch>` as a tag name
+and force-push a `refs/tags/refs/heads/<branch>` ref. Without the event
+test, a dispatch aimed at an *existing tag* would re-sign and force-push
+it, rewriting a signed object someone may already have verified.
+
+Nothing is lost by requiring `push`. Re-running a failed release goes
+through GitHub's "Re-run jobs", which replays the original push event
+and so satisfies the guard.
+
+### Where the distribution lives
+
+The two publishing jobs read the built distribution from different
+places, which is deliberate.
+
+`publish-pypi` checks out and works in `dist/` inside the workspace.
+`pypa/gh-action-pypi-publish` is a composite action that delegates to a
+Docker container action, and the container does not see the runner's
+paths where the workflow expressions say they are. From a real release
+run:
+
+```
+docker run --workdir /github/workspace \
+  -v ".../_work/_temp":"/github/runner_temp" \
+  -v ".../_work/<repo>/<repo>":"/github/workspace"
+```
+
+`RUNNER_TEMP` *is* mounted — at `/github/runner_temp` — but
+`${{ runner.temp }}` expands to the host path on the left of that
+mount, which does not exist inside the container. `github.workspace`
+has the same problem. So `packages-dir`, and the download feeding it,
+must be relative to the workspace: that is the one spelling correct on
+both sides of the mount. An absolute path is wrong even when it points
+into the workspace, since host and container disagree about where the
+workspace is. The action also writes its container trampoline into
+`.github/.tmp/` in the workspace, so it needs a real checkout
+regardless.
+
+`github-release` does not check out and downloads into
+`${{ runner.temp }}`. `softprops/action-gh-release` is a JavaScript
+action running on the host, so an absolute path is fine there.
+
+Either way the point is the same: these runners are persistent, and
+`download-artifact` extracts *into* its target rather than replacing
+it, so a job must not read a directory some earlier job may have left
+files in. Checkout gives that guarantee by cleaning
+(`git clean -ffdx`); `runner.temp` gives it by being per job.
+
+## Verifying Releases
+
+### Verify Git Tag Signature
+
+```bash
+# Install gitsign
+go install github.com/sigstore/gitsign@latest
+
+# Verify a tag
+gitsign verify --certificate-identity-regexp='.*' \
+    --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
+    v0.1.0
+```
+
+### Verify PyPI Package Attestation
+
+```bash
+# PyPI shows attestation status on the package page
+# Look for the "Provenance" section
+```
+
+### Verify with Cosign
+
+```bash
+# Install cosign
+go install github.com/sigstore/cosign/v2/cmd/cosign@latest
+
+# Verify artifact attestation
+cosign verify-attestation \
+    --certificate-identity-regexp='.*' \
+    --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
+    shakenfist_client_ova-0.1.0.tar.gz
+```
+
+## Troubleshooting
+
+### "Environment not found" Error
+
+Ensure the environment name in the workflow (`release`) exactly matches the
+environment created in GitHub Settings.
+
+### "Publisher not found" Error on PyPI
+
+- Verify the workflow filename matches exactly (case-sensitive)
+- Verify the environment name matches exactly
+- Ensure you're using the correct PyPI account (not TestPyPI)
+
+### Tag Signature Verification Fails
+
+- Ensure you're checking against the correct OIDC issuer
+- The certificate identity will be the workflow's identity, not a personal
+  email
+
+### Approval Not Requested
+
+- Ensure the tag matches the deployment branch/tag rules (e.g., `v*`)
+- Check that required reviewers are configured on the environment
+
+## Security Considerations
+
+- **No long-lived secrets**: Neither GPG keys nor PyPI tokens are stored
+- **Audit trail**: All releases are logged in GitHub Actions and Sigstore's
+  Rekor transparency log
+- **Multi-party approval**: Required reviewers prevent unilateral releases
+- **Immutable provenance**: Sigstore attestations cryptographically link
+  artifacts to the exact source commit

@@ -1,0 +1,77 @@
+[build-system]
+# The floors are the ones client-python-k3s established by building
+# against them: 77.0.1 is the first setuptools which accepts the SPDX
+# license string and the license-files key used below, and 6.4.2 is the
+# oldest setuptools_scm that project has built a correct wheel with. See
+# the comment in that repository's pyproject.toml for the history.
+#
+# setuptools has needed Python 3.9 or newer since 76.0.0, so on 3.7 and
+# 3.8 this package is wheel-only: the wheel is py3-none-any and installs
+# there, but building from the sdist cannot resolve a backend.
+requires = [
+    "setuptools>=77.0.1",
+    "setuptools_scm>=6.4.2"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shakenfist_client_ova"
+dynamic = ["version"]
+
+description = "A sf-client plugin which imports OVA appliances into Shaken Fist"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+    {name = "Michael Still", email = "mikal@stillhq.com"},
+]
+classifiers = [
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+]
+# The oldest system Python on the client operating systems listed at
+# https://images.shakenfist.com/README, matching shakenfist_client itself.
+requires-python = ">=3.7"
+dependencies = [
+    "click >= 8.0.0",              # bsd
+    "dpath",                       # mit
+    "humanize",                    # mit
+    # 0.7.6 is the first release with the file-like object upload and
+    # checksum helpers in shakenfist_client.util that the import uses.
+    "shakenfist_client >= 0.7.6",  # apache2
+    "xmltodict",                   # mit
+]
+
+[project.urls]
+"Homepage" = "https://shakenfist.com"
+"Bug Tracker" = "https://github.com/shakenfist/client-python-ova/issues"
+
+[project.entry-points."shakenfist_client.plugin"]
+ova = "shakenfist_client_ova:load"
+
+# include_package_data defaults to true under pyproject.toml, and
+# setuptools_scm installs a file finder that offers every git-tracked
+# file as package data -- which here would put the DMTF specification
+# PDFs under specifications/ into every wheel. Nothing in this package
+# reads a data file at runtime.
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+include = ["shakenfist_client_ova*"]
+exclude = ["shakenfist_client_ova.tests*"]
+
+[tool.setuptools_scm]
+git_describe_command = "git describe --dirty --tags --match v* --first-parent"
+
+[project.optional-dependencies]
+test = [
+    "tox",                 # mit
+    "flake8",              # mit
+    "testtools",           # mit
+    "stestr",              # apache2
+]

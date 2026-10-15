@@ -55,7 +55,7 @@ def _parse_alloc_units_to_bytes(element):
 
     m = BYTE_MATHS_ALLOCATION_UNITS_RE.match(element[key])
     if m:
-        return 2 ^ int(m.group(1))
+        return 2 ** int(m.group(1))
     elif element[key] == 'MegaBytes':
         return 1024 * 1024
     elif element[key] == 'GigaBytes':
@@ -230,7 +230,7 @@ def ova_import(ctx, source=None, namespace=None):
                 # },
                 disks = _coerce_to_list(dpath.get(
                     ovf, ['v1:Envelope', 'v1:DiskSection', 'v1:Disk']))
-                print(f'    Disks:')
+                print('    Disks:')
                 for disk in disks:
                     alloc = _parse_alloc_units_to_bytes(disk)
                     disk['capacity_gb'] = math.ceil(
@@ -250,7 +250,7 @@ def ova_import(ctx, source=None, namespace=None):
                 # },
                 networks = _coerce_to_list(dpath.get(
                     ovf, ['v1:Envelope', 'v1:NetworkSection', 'v1:Network']))
-                print(f'    Networks:')
+                print('    Networks:')
                 for network in networks:
                     print('        %s' % network)
                 dpath.delete(
@@ -432,7 +432,7 @@ def ova_import(ctx, source=None, namespace=None):
             disk_files[disk_file]['size'] = ti.size
 
             print(f'{disk_file} with size '
-                  f'{humanize.naturalsize(disk_files[disk_file]['size'])}')
+                  f'{humanize.naturalsize(disk_files[disk_file]["size"])}')
             source_url = f'ova://{source}/{disk_file}'
             if not ctx.obj['CLIENT'].check_capability('blob-search-by-hash'):
                 blob = None
@@ -457,6 +457,7 @@ def ova_import(ctx, source=None, namespace=None):
             print()
             print(hardware)
             print()
+
 
 ova.add_command(ova_import)
 
