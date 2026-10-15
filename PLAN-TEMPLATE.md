@@ -501,8 +501,9 @@ because the following statements will be true:
 * Behaviour which can only be validated against a live Shaken
   Fist cluster has been exercised there (manually or via the
   functional CI) before merge.
-* `ARCHITECTURE.md`, `README.md`, and `AGENTS.md` have been
-  updated if the change adds or modifies modules or CLI commands.
+* Documentation follows the rules in `AGENTS.md`: user-visible
+  behaviour in `docs/`, and `ARCHITECTURE.md` only when the shape of
+  the import changes.
 
 !!! note "In this project"
 

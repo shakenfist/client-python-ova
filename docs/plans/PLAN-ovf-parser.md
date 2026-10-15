@@ -200,6 +200,10 @@ Out of scope, and deliberately so:
    stable release, 0.7.1, dates from 2021, which is a weakness, but it
    is still the package the Python documentation recommends for
    untrusted XML. This removes two runtime dependencies and adds one.
+   ElementTree's `ParseError` and defusedxml's `DefusedXmlException`
+   are both caught inside the parser and re-raised as named `OVFError`
+   subclasses, so that a malformed or entity-declaring descriptor gets
+   the same one-line refusal as any other.
 4. **Strictness stays, but follows the specification.** An element
    the parser does not understand stops the import, unless the element
    carries `ovf:required="false"`, which OVF says a consumer may
@@ -222,6 +226,16 @@ Out of scope, and deliberately so:
    - `OperatingSystemSection` carries the guest OS's CIM id and
      `osType`. Instance creation will need them, so they go into the
      model.
+
+   Deleting from a dictionary is how today's code notices what it has
+   not read. ElementTree has no equivalent, so the parser records every
+   element and attribute it reads. At the end it walks the tree and
+   refuses anything left unread that is neither marked
+   `ovf:required="false"` nor on the closed ignore list. Attributes
+   count as well as elements: an unknown vendor attribute on a known
+   element is as unread as an unknown section. The namespace
+   declarations and `xml:lang` are the only attributes on the ignore
+   list.
 
    A hardware item of an unknown resource type stops the import unless
    it is marked not required. This changes a documented convention, so
@@ -306,9 +320,13 @@ from what the previous phase learned, rather than all now.
 
 ### 1. Corpus and fixtures
 
-This phase lands partly in `instar-testdata`, as direct commits that
-the `Merged` cell records as `instar-testdata <sha>`, and partly here
-as a pull request.
+This phase lands partly in `instar-testdata`, as direct commits, and
+partly here as a pull request. Its `Merged` cell therefore holds both
+records, as `instar-testdata <first>..<last>; <merge sha>`. A direct
+landing has no pull request to audit it, so the `instar-testdata`
+range is audited in this phase's own pull request. The things to check
+are that only `downloaded/ova/`, the fetch script and the README
+changed, and that the provenance table matches the files.
 
 - Download the appliances listed under Situation, plus any that open
   question 2 recovers, into `instar-testdata`'s `downloaded/ova/`,
@@ -325,18 +343,23 @@ as a pull request.
   - an OVF 2.x envelope;
   - a `required="false"` extension section, and an unknown required
     one;
-  - a gzip compressed file reference, and a chunked one;
+  - a gzip compressed file reference, and a chunked one, both of
+    which phase 4 refuses;
   - two disks on different controllers;
   - a descriptor declaring an entity;
   - a `ProductSection` with a user-configurable property that has no
     default, and an `EulaSection`;
   - `References` hrefs that are an absolute URL, contain `../`, name a
-    missing member, or name a duplicated member.
+    missing member, or name a duplicated member;
+  - a `VirtualSystemCollection`, which phase 3 refuses by name;
+  - an unknown attribute on a known element, and one on the
+    `Envelope`.
 
   Some archive-level cases are built as synthetic OVAs in phase 4's
   tests rather than committed: a manifest whose entry for the
   descriptor does not match, a manifest with no entry for a referenced
-  file, no manifest at all, and a `.cert` member.
+  file, no manifest at all, a `.cert` member, and hrefs naming a
+  symlink, a hardlink and a directory member.
 
 ### 2. Extract the parser
 
@@ -344,7 +367,12 @@ A behaviour-preserving refactor, with one named exception.
 
 - Move the descriptor and manifest parsing out of the Click command
   into `shakenfist_client_ova/ovf/`, still on `xmltodict`, returning
-  the dataclass model and raising `OVFError` subclasses. Where today's
+  the dataclass model and raising `OVFError` subclasses. The model is
+  defined in its final shape here, including the `ProductSection`,
+  `EulaSection` and `OperatingSystemSection` fields phase 3 fills, left
+  empty for now. It is serialised deterministically, with sorted keys
+  and lists in document order. Phase 3's expected-file diffs then show
+  behaviour changes, not a change of shape. Where today's
   code prints a message and exits, the command catches the error and
   prints exactly that message. The exception is where today's code
   dies with an unhandled `KeyError` traceback, such as on an OVF 2.x
@@ -369,6 +397,14 @@ A behaviour-preserving refactor, with one named exception.
 - Parse `ProductSection`, `EulaSection` and `OperatingSystemSection`
   into the model. Add the command's property warning and its
   `--accept-eula` refusal (decision 4).
+- Refuse a `VirtualSystemCollection` with a named error, instead of
+  letting it fail as an unknown section. An envelope holding several
+  systems is a multi-instance import, which belongs to the
+  instance-creation plan.
+- Test the command layer, not only the parser, with
+  `click.testing.CliRunner` and the client and `shakenfist_client.util`
+  mocked. Cover the `--accept-eula` refusal, the property warning, and
+  the turning of each `OVFError` into one line and exit code 1.
 - Every change to an expected file in this phase's diff is an
   intended behaviour change, explained in the pull request.
 - Drop `xmltodict` and `dpath` from `pyproject.toml`. Update
@@ -380,22 +416,33 @@ A behaviour-preserving refactor, with one named exception.
 
 - Find disks from `References` and the `DiskSection`, not by suffix.
   An `ovf:href` is untrusted input that now selects archive members,
-  so it must be a relative name that matches exactly one tar member
-  (each chunk's member, for a chunked file). An absolute URL, a `../`
-  component, a missing member and a duplicated member are each an
-  explicit refusal, never a `KeyError` and never a fetch. The importer
+  so it must be a relative name that matches exactly one tar member,
+  and that member must be a regular file (`TarInfo.isfile()`).
+  `extractfile()` follows symlink and hardlink members to *other*
+  members, which would upload something other than what the manifest
+  entry names, and it returns `None` for directories and devices. An
+  absolute URL, a `../` component, a missing or duplicated member, and
+  a member that is not a regular file are each an explicit refusal,
+  never a `KeyError`, an `AttributeError` or a fetch. The importer
   never extracts to disk, so this is about refusing clearly, not about
   path traversal.
 - Reject an archive with more than one descriptor.
 - Read the manifest before anything else, wherever it sits in the tar,
   and verify the descriptor against it *before* parsing. The
-  descriptor decides which members are trusted as disks, so verifying
-  only the disks would let an altered descriptor redirect the import.
+  descriptor decides which members are read as disks, so a corrupt
+  descriptor that went unchecked would send the import after the wrong
+  members.
   Refuse when a manifest is present but has no entry for the
   descriptor or for a referenced file. With no manifest at all, warn
   and continue: OVF makes the manifest optional, and refusing would
-  reject appliances that are valid. Record that policy in
-  `docs/usage.md`.
+  reject appliances that are valid.
+- Be explicit about what the manifest does not do, both here and in
+  `docs/usage.md`. It detects corruption and accidental mismatch. It
+  does not detect tampering: the manifest travels in the same unsigned
+  archive, so anyone who can change the descriptor can rewrite the
+  manifest to match, or remove it. Tamper evidence needs `.cert`
+  verification, which is Future work. Nothing in the code, docs or
+  output may describe the manifest check as a security control.
 - Verify each disk's manifest digest in a single pre-upload pass that
   the plugin owns, computing the manifest's SHA-1 or SHA-256 alongside
   the SHA-512 that blob deduplication searches by. Then stop before
@@ -412,14 +459,22 @@ A behaviour-preserving refactor, with one named exception.
 - Ignore a `.cert` member with a printed notice that the signature was
   not checked, and document it in `docs/usage.md`. Verifying it is
   Future work.
-- Handle `ovf:compression="gzip"` and chunked files. If either turns
-  out to be uncommon enough to refuse cleanly instead, record that
-  choice in `docs/usage.md`.
+- Refuse `ovf:compression="gzip"` and chunked (`ovf:chunkSize`)
+  references with named errors, documented in `docs/usage.md`. Both
+  are rare in practice, and supporting either properly is a design of
+  its own. The upload helpers need the size before they start, and for
+  a gzip file only a full decompression gives it: the ISIZE trailer is
+  the size modulo 2^32, so it is wrong for any disk over 4GiB. The
+  manifest digest covers the compressed bytes while dedup needs the
+  decompressed ones. Decompressing an untrusted file also needs a cap.
+  Support waits until a corpus appliance needs it (see Future work).
 - Name each disk artifact after its disk, and move the stray
   `print(hardware)` out of the upload loop.
 - Test with synthetic OVAs built in the tests, which needs no
-  cluster. Then perform the live import that answers open question 1,
-  as an operator step recorded in the phase plan.
+  cluster. That includes `CliRunner` tests showing the no-manifest
+  warning, the `.cert` notice, and that nothing is uploaded after a
+  digest mismatch. Then perform the live import that answers open
+  question 1, as an operator step recorded in the phase plan.
 
 ### 5. Corpus CI tier
 
@@ -439,6 +494,17 @@ A behaviour-preserving refactor, with one named exception.
   soften the guard. Same-repository branches run the job, and that
   includes Renovate's, since Renovate pushes its branches to this
   repository.
+- A Renovate branch changes which dependency code the job installs and
+  runs, so `GITLAB_TESTDATA_TOKEN` must never be visible to that code:
+  - the token is a read-only deploy token scoped to `instar-testdata`
+    alone, not a personal token;
+  - the clone happens in its own step, before any `pip install`, and
+    only that step's `env` carries the secret;
+  - once the fetch is done, the credential is removed from the clone's
+    remote URL. instar's script leaves it in `.git/config`, and in a
+    runner cache that outlives the job, any later step could read it.
+
+  The phase plan records the token's scope and who rotates it.
 
 ### 6. Push audit
 
@@ -892,8 +958,9 @@ because the following statements will be true:
 * Behaviour which can only be validated against a live Shaken
   Fist cluster has been exercised there (manually or via the
   functional CI) before merge.
-* `ARCHITECTURE.md`, `README.md`, and `AGENTS.md` have been
-  updated if the change adds or modifies modules or CLI commands.
+* Documentation follows the rules in `AGENTS.md`: user-visible
+  behaviour in `docs/`, and `ARCHITECTURE.md` only when the shape of
+  the import changes.
 
 !!! note "In this project"
 
@@ -934,7 +1001,13 @@ chosen to defer to here, so that we do not forget them.
   uploading and creating the artifact, and digesting that survives its
   seek-back on retry: an upstream change in `client-python`.
 - Verify an OVA's `.cert` signature over the manifest, which phase 4
-  ignores with a notice.
+  ignores with a notice. Until then the manifest is corruption
+  detection, not tamper evidence.
+- Support gzip compressed and chunked file references, which phase 4
+  refuses. The design has to settle three things: the digest is taken
+  over the compressed bytes, the decompressed size comes from one
+  decompressing pass capped at `ovf:size` or the disk's capacity (not
+  from ISIZE), and that pass must not cost a second full read.
 - Test the declared `requires-python` floor, which nothing exercises
   today. client-python-k3s#82 has the same gap.
 
