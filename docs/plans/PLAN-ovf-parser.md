@@ -231,11 +231,31 @@ Out of scope, and deliberately so:
    not read. ElementTree has no equivalent, so the parser records every
    element and attribute it reads. At the end it walks the tree and
    refuses anything left unread that is neither marked
-   `ovf:required="false"` nor on the closed ignore list. Attributes
-   count as well as elements: an unknown vendor attribute on a known
-   element is as unread as an unknown section. The namespace
-   declarations and `xml:lang` are the only attributes on the ignore
-   list.
+   `ovf:required="false"` nor on the closed ignore list.
+
+   Attributes follow the specification's extensibility rule rather
+   than the element rule. DSP0243 (1.1 section 7.3, 2.1.1 section 7.3)
+   says the information in a custom attribute "shall not be required
+   for correct behavior". An attribute from a namespace OVF does not
+   define, such as `vmw:buildId`, is therefore ignored by rule.
+   Attributes in the OVF and CIM namespaces, and unqualified attributes
+   on OVF elements, are read or refused like elements. The ignore list
+   adds the namespace declarations, `xml:lang` and
+   `xsi:schemaLocation`, none of which carry data.
+
+   Today's code deletes several things unread. Each one is decided
+   here, not left for the implementer to discover:
+
+   | What | Decision |
+   |------|----------|
+   | `vmware:buildId` and other custom attributes | Ignored by the attribute rule above |
+   | `vbox:Machine`, `vmware:Config`, `vmware:IpAssignmentSection` and other custom elements | Ignored when marked `ovf:required="false"`, as VirtualBox marks `vbox:Machine`; refused otherwise, as the specification requires. Phase 1 records which producers mark them |
+   | `ovf:transport` on `VirtualHardwareSection` | Read into the model. It names how the appliance expects to receive its OVF environment, which goes with the `ProductSection` properties |
+   | `ovf:required` on `VirtualHardwareSection` | Read and honoured, like any other `ovf:required` |
+   | `vssd:System` | Read into the model: the virtual system type (`vmx-13`, `virtualbox-2.2`) and identifier |
+   | `VirtualSystem/Name` | Read into the model as the display name |
+   | `DeploymentOptionSection` | Read into the model. Items carrying `ovf:configuration` apply only to the configurations they name, and today's code applies every item at once. The parser builds the default configuration (`ovf:default="true"`, else the first). Choosing another is the instance-creation plan's business |
+   | `AnnotationSection`, `Info` | The closed ignore list |
 
    A hardware item of an unknown resource type stops the import unless
    it is marked not required. This changes a documented convention, so
@@ -263,8 +283,9 @@ Out of scope, and deliberately so:
    "structure unchanged" is checked rather than claimed: the corpus
    tier asserts that the parser's model of each original descriptor
    equals its model of the trimmed fixture, apart from the placeholder
-   text. Each fixture starts with an XML comment recording where it
-   came from, the SHA-256 of the original descriptor, and that it was
+   text. Each fixture carries an XML comment, straight after its XML
+   declaration (which must stay first, or the file stops being XML),
+   recording where it came from, the SHA-256 of the original descriptor, and that it was
    trimmed. The full descriptors stay in the private `instar-testdata`.
 7. **Expected parses are data, not code.** Each fixture has a
    `<name>.expected.json` beside it: either the parser's model
@@ -282,7 +303,14 @@ Out of scope, and deliberately so:
    Wazuh and Splunk disks. A descriptor-only entry is re-tarred from
    the original's `.ovf` and `.mf` members. The descriptor's own
    manifest entry is still verified on every entry, while disk hashes
-   are verified only on the full ones. The `instar-testdata` README
+   are verified only on the full ones. The importer will refuse a
+   descriptor-only entry, because its `References` name disks that are
+   absent, and that refusal has no opt-out. The corpus tier instead
+   asserts it: each descriptor-only entry declares, as test input, the
+   members that are deliberately absent. The test checks that list
+   against `References`, parses the descriptor, and requires the
+   archive check to fail with the missing-member error, naming exactly
+   those members. The `instar-testdata` README
    gains a provenance table: URL, download date, original size,
    SHA-256 and producer.
 
@@ -322,11 +350,16 @@ from what the previous phase learned, rather than all now.
 
 This phase lands partly in `instar-testdata`, as direct commits, and
 partly here as a pull request. Its `Merged` cell therefore holds both
-records, as `instar-testdata <first>..<last>; <merge sha>`. A direct
-landing has no pull request to audit it, so the `instar-testdata`
-range is audited in this phase's own pull request. The things to check
-are that only `downloaded/ova/`, the fetch script and the README
-changed, and that the provenance table matches the files.
+records, as `instar-testdata <first>..<last>; <merge sha>`. This
+departs from the shared block's `<repo> <sha> (#pr)` deliberately:
+`instar-testdata` takes direct commits, so its record is a range, which
+checklist item 1 accepts. A direct landing has no pull request to audit
+it, so the `instar-testdata` range is audited as part of this phase's
+own pull request. The things to check are that only `downloaded/ova/`,
+the fetch script and the README changed, and that the provenance table
+matches the files. This repository is public, so its record of that
+audit holds only the verdict and the range. Detailed findings stay in
+`instar-testdata`.
 
 - Download the appliances listed under Situation, plus any that open
   question 2 recovers, into `instar-testdata`'s `downloaded/ova/`,
@@ -352,14 +385,21 @@ changed, and that the provenance table matches the files.
   - `References` hrefs that are an absolute URL, contain `../`, name a
     missing member, or name a duplicated member;
   - a `VirtualSystemCollection`, which phase 3 refuses by name;
-  - an unknown attribute on a known element, and one on the
-    `Envelope`.
+  - an unknown OVF-namespace attribute on a known element, and a
+    custom-namespace one, which are refused and ignored respectively;
+  - an ovftool-style descriptor carrying `vmw:buildId`,
+    `xsi:schemaLocation`, a `vmw:Config` marked not required,
+    `ovf:transport` and a `DeploymentOptionSection` with two
+    configurations. The corpus has no ovftool descriptor (open question
+    2), so this stands in for one.
 
   Some archive-level cases are built as synthetic OVAs in phase 4's
   tests rather than committed: a manifest whose entry for the
   descriptor does not match, a manifest with no entry for a referenced
-  file, no manifest at all, a `.cert` member, and hrefs naming a
-  symlink, a hardlink and a directory member.
+  file, no manifest at all, two manifests, a manifest listing the same
+  file twice, a `.cert` member, hrefs naming a symlink, a hardlink and a
+  directory member, and members stored as `./name`, including two
+  that normalise to the same name.
 
 ### 2. Extract the parser
 
@@ -406,7 +446,14 @@ A behaviour-preserving refactor, with one named exception.
   mocked. Cover the `--accept-eula` refusal, the property warning, and
   the turning of each `OVFError` into one line and exit code 1.
 - Every change to an expected file in this phase's diff is an
-  intended behaviour change, explained in the pull request.
+  intended behaviour change, explained in the pull request. Phase 2
+  will probably record most vendor fixtures as refusals, so many
+  expected files go from an error to a whole model, with nothing to
+  compare against. Each newly successful one is checked field by field
+  against its descriptor: disk capacities, controllers, NICs and
+  memory units. Each vendor fixture also gains a small hand-written
+  assertion of those values, so the expected file is not the only
+  record of what correct looks like.
 - Drop `xmltodict` and `dpath` from `pyproject.toml`. Update
   `AGENTS.md` and `docs/usage.md` for the new convention, and the
   parsing section of `ARCHITECTURE.md`, which still describes parsing
@@ -417,7 +464,10 @@ A behaviour-preserving refactor, with one named exception.
 - Find disks from `References` and the `DiskSection`, not by suffix.
   An `ovf:href` is untrusted input that now selects archive members,
   so it must be a relative name that matches exactly one tar member,
-  and that member must be a regular file (`TarInfo.isfile()`).
+  and that member must be a regular file (`TarInfo.isfile()`). Member
+  names are compared after stripping a single leading `./`, which some
+  tar writers add, and two members that strip to the same name are
+  refused as duplicates.
   `extractfile()` follows symlink and hardlink members to *other*
   members, which would upload something other than what the manifest
   entry names, and it returns `None` for directories and devices. An
@@ -426,7 +476,13 @@ A behaviour-preserving refactor, with one named exception.
   never a `KeyError`, an `AttributeError` or a fetch. The importer
   never extracts to disk, so this is about refusing clearly, not about
   path traversal.
-- Reject an archive with more than one descriptor.
+- Reject an archive with more than one descriptor, or more than one
+  manifest, and a manifest that lists the same file twice. Today a
+  later `.mf` entry silently replaces an earlier one, the same flaw
+  as with descriptors, and the manifest is now what the descriptor and
+  disks are checked against. A single manifest whose base name differs
+  from the descriptor's gets a warning, not a refusal: OVF names them
+  alike, but nothing is ambiguous when there is only one.
 - Read the manifest before anything else, wherever it sits in the tar,
   and verify the descriptor against it *before* parsing. The
   descriptor decides which members are read as disks, so a corrupt
@@ -504,7 +560,16 @@ A behaviour-preserving refactor, with one named exception.
     remote URL. instar's script leaves it in `.git/config`, and in a
     runner cache that outlives the job, any later step could read it.
 
-  The phase plan records the token's scope and who rotates it.
+  These steps keep the token away from dependency code. They do not
+  keep it from someone who can push a branch: the clone step runs
+  `tools/ci/` from the branch under test, so anyone with write access
+  can read the token. That is accepted, because the token is read-only
+  and reaches one repository of test data. The private data then sits
+  in a runner cache that other jobs on the pool can read. instar
+  already accepts that exposure for the same data, and it is accepted
+  here on the same terms. The phase plan records the token's scope,
+  who rotates it, and every trigger that can reach the job: pull
+  requests, `workflow_dispatch`, and the re-test workflow.
 
 ### 6. Push audit
 
