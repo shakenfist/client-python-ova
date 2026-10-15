@@ -55,7 +55,7 @@ def _parse_alloc_units_to_bytes(element):
 
     m = BYTE_MATHS_ALLOCATION_UNITS_RE.match(element[key])
     if m:
-        return 2 ^ int(m.group(1))
+        return 2 ** int(m.group(1))
     elif element[key] == 'MegaBytes':
         return 1024 * 1024
     elif element[key] == 'GigaBytes':
