@@ -93,8 +93,12 @@ written against, in ways a survey of the code turned up:
    networks.
 6. **Smaller defects:** every disk artifact is given the VM's name;
    `print(hardware)` sits inside the per-disk upload loop; and the
-   descriptor, which comes from an untrusted file, is parsed with no
-   protection against entity-expansion attacks.
+   descriptor, which comes from an untrusted file, is protected
+   against entity-expansion attacks only by a default. `xmltodict`
+   0.12 and later refuse any entity declaration
+   (`disable_entities=True`), but the code does not ask for that, no
+   version floor guarantees it, and the refusal escapes as a
+   `ValueError` traceback.
 
 ### Test data
 
@@ -112,10 +116,11 @@ and Wazuh 4.9.1, written by AWS VM Export. instar does not parse OVA,
 so only the disks were kept and the `.ovf` descriptors were thrown
 away.
 
-A survey on 2026-10-16 looked for real descriptors and appliances to
-replace them. No maintained OVF compatibility corpus exists: DMTF
-publishes the specification and schemas but no conformance suite, and
-no OVF plugfest results turned up. What exists instead:
+A survey on 2026-10-16, the day after this plan was first written,
+looked for real descriptors and appliances to replace them. No
+maintained OVF compatibility corpus exists: DMTF publishes the
+specification and schemas but no conformance suite, and no OVF plugfest
+results turned up. What exists instead:
 
 - **govmomi's descriptor collection.** `vmware/govmomi` (Apache-2.0)
   carries 958 `.ovf` files under `ovf/fixtures/`, added in March 2026
@@ -244,14 +249,15 @@ Out of scope, and deliberately so:
    dictionary-or-list ambiguity that `_coerce_to_list()` exists to
    paper over, and make supporting both the OVF 1 and OVF 2 envelope
    namespaces a matter of a lookup table rather than of duplicated
-   paths. `defusedxml` refuses the DTD entity tricks an untrusted
-   descriptor could otherwise use; no legitimate OVF descriptor
-   declares entities. It is pure Python and supports 3.7. Its last
-   stable release, 0.7.1, dates from 2021, which is a weakness, but it
-   is still the package the Python documentation recommends for
+   paths. ElementTree on its own expands internal entities, so the
+   move to it needs `defusedxml` to keep refusing the DTD entity
+   tricks an untrusted descriptor could otherwise use; no legitimate
+   OVF descriptor declares entities. It is pure Python and supports 3.7.
+   Its last stable release, 0.7.1, dates from 2021, which is a weakness,
+   but it is still the package the Python documentation recommends for
    untrusted XML. This removes two runtime dependencies and adds one.
-   ElementTree's `ParseError` and defusedxml's `DefusedXmlException`
-   are both caught inside the parser and re-raised as named `OVFError`
+   ElementTree's `ParseError` and defusedxml's `DefusedXmlException` are
+   both caught inside the parser and re-raised as named `OVFError`
    subclasses, so that a malformed or entity-declaring descriptor gets
    the same one-line refusal as any other.
 4. **Strictness stays, but follows the specification.** An element
@@ -328,8 +334,14 @@ Out of scope, and deliberately so:
      request, forks included. It needs the network, so it is not part
      of `tox -epy3`. It runs in its own tox environment, `tox
      -edescriptor-corpus`, which runs the fetch script into a
-     gitignored cache and then only the corpus tests, which `py3`'s
-     discovery does not reach. With nearly 1,000 descriptors,
+     gitignored cache and then only the corpus tests. Those live in
+     `shakenfist_client_ova/corpus_tests/`, outside `.stestr.conf`'s
+     `test_path`, so `py3` never collects them and their fail-closed
+     guard cannot fire offline. Each corpus environment runs `stestr
+     --test-path` on its own directory, and `pyproject.toml` excludes
+     the directory from the wheel as it does `tests`. CI runs the
+     environment on one pinned Python version, because exception class
+     names can differ between versions. With nearly 1,000 descriptors,
      hand-written expected files for each are not realistic, so the
      tier asserts three things instead:
      - a committed ledger maps each descriptor's path to its outcome:
@@ -337,7 +349,10 @@ Out of scope, and deliberately so:
        regenerates the ledger and fails on any difference, so a
        behaviour change across the whole collection shows up as a
        reviewed diff. In phase 2 the ledger records today's parser as
-       it is, raw `KeyError` and `TypeError` included.
+       it is, raw `KeyError`, `TypeError` and `xmltodict`'s entity
+       `ValueError` included. Until phase 3 removes `xmltodict`, a
+       Renovate bump of it may change the ledger, and that diff is
+       reviewed like any other.
      - from phase 3, every descriptor yields a model or a named
        `OVFError` subclass, never any other exception. Phase 3's
        ledger diff then shows exactly which descriptors that fixed.
@@ -346,8 +361,13 @@ Out of scope, and deliberately so:
        keyed by upstream path. They hold our parse, not the upstream
        text: before an expected file is written or compared, the test
        replaces every prose field in the model with the placeholder
-       decision 6 uses. The list of prose fields is defined once, in
-       the parser package, and both the trim tool and this test use it.
+       decision 6 uses. The list of prose fields is defined once, as
+       pairs of OVF element and the model field it fills. Phase 1
+       keeps it in the trim tool, the only user then. Phase 2 moves it
+       into `shakenfist_client_ova/ovf/`, and the tool imports it from
+       there. That direction is allowed: the import boundary of
+       decision 1 limits what the parser imports, not what imports
+       the parser.
    - The *appliance corpus* tier runs the importer's parse, archive and
      manifest paths over every appliance in `instar-testdata`, in CI on
      the self-hosted pool. It has its own tox environment too, `tox
@@ -406,22 +426,24 @@ Out of scope, and deliberately so:
    exports (3.1GB and 3.8GB). Their one archive-level shape, the
    manifest stored last, after the disks, is reproduced by a synthetic
    OVA in phase 4's tests, and their descriptor-only copies keep the
-   manifest. This follows the precedent `instar-testdata` already set
-   for the Wazuh and Splunk disks, and keeps the CI pull small. A
-   descriptor-only entry records the original's full member listing,
-   in order, in the provenance table, so the archive layout is still
-   on record. It is re-tarred from the original's `.ovf` and `.mf`
-   members. The descriptor's own manifest entry is still verified on
-   every entry, while disk hashes are verified only on the whole ones.
-   The importer will refuse a descriptor-only entry, because its
-   `References` name disks that are absent, and that refusal has no
-   opt-out. The appliance corpus tier instead asserts it: each
-   descriptor-only entry declares, as test input, the members that are
-   deliberately absent. The test checks that list against
-   `References`, parses the descriptor, and requires the archive check
-   to fail with the missing-member error, naming exactly those members.
-   The `instar-testdata` README gains a provenance table: URL, download
-   date, original size, SHA-256 and producer.
+   manifest. The same goes for the archive shapes of the other
+   descriptor-only entries: Tails' ISO member and `blogger.ova`'s
+   several disk members are synthetic OVAs in phase 4 too. This follows
+   the precedent `instar-testdata` already set for the Wazuh and Splunk
+   disks, and keeps the CI pull small. A descriptor-only entry records
+   the original's full member listing, in order, in the provenance
+   table, so the archive layout is still on record. It is re-tarred from
+   the original's `.ovf` and `.mf` members. The descriptor's own
+   manifest entry is still verified on every entry, while disk hashes
+   are verified only on the whole ones. The importer will refuse a
+   descriptor-only entry, because its `References` name disks that are
+   absent, and that refusal has no opt-out. The appliance corpus tier
+   instead asserts it: each descriptor-only entry declares, as test
+   input, the members that are deliberately absent. The test checks that
+   list against `References`, parses the descriptor, and requires the
+   archive check to fail with the missing-member error, naming exactly
+   those members. The `instar-testdata` README gains a provenance table:
+   URL, download date, original size, SHA-256 and producer.
 
 ## Open questions
 
@@ -475,12 +497,14 @@ audit holds only the verdict and the range. Detailed findings stay in
   `downloaded/ova/`, following decision 8, with a fetch script and the
   provenance table. Before committing VyOS 1.2.1, check its SHA-256
   against the Wayback Machine's 2019 capture of the same URL, since
-  VyOS published no checksum for it. The descriptor is the first
-  member of every OVA we have seen, so a
-  descriptor-only copy of a large remote appliance can be taken by
-  streaming the start of the download and stopping. The manifest may
-  not be near the start (see the VirtualBox note under Situation), so
-  check before relying on that for the `.mf`.
+  VyOS published no checksum for it. If that capture is missing or
+  truncated, record so in the provenance table and rely on the disk
+  matching the one already in `instar-testdata`. The descriptor is the
+  first member of every OVA we have seen, so a descriptor-only copy of a
+  large remote appliance can be taken by streaming the start of the
+  download and stopping. The manifest may not be near the start (see the
+  VirtualBox note under Situation), so check before relying on that for
+  the `.mf`.
 - Write the descriptor corpus fetch as a script in `tools/` that takes
   only govmomi's `ovf/fixtures/` and COT's `COT/tests/` (sparse,
   blob-filtered clones), so a contributor runs the same thing CI does.
@@ -498,7 +522,12 @@ audit holds only the verdict and the range. Detailed findings stay in
 - Write `tools/trim-ovf-descriptor.py` and commit a trimmed fixture
   for every appliance corpus descriptor under
   `shakenfist_client_ova/tests/fixtures/ovf/`. Commit Glance's five
-  test OVAs verbatim, with their `NOTICE` (decision 6).
+  test OVAs verbatim, with their `NOTICE` (decision 6). `.gitignore`
+  ignores `*.ova` everywhere, and `AGENTS.md` says to keep it that way
+  for large manual-testing files, so a plain `git add` would silently
+  skip them. Add a negation for
+  `shakenfist_client_ova/tests/fixtures/ova/**/*.ova` after that rule,
+  with a comment saying why, and check `git ls-files` lists all five.
 - Hand-write the edge cases neither corpus covers in a small, readable
   form:
   - an OVF 2.x envelope;
@@ -560,6 +589,10 @@ A behaviour-preserving refactor, with one named exception.
   what today's parser does, and fixing it is phase 3's work. Those
   expected files and the ledger are the safety net phase 3 is reviewed
   against. Describe the new tox environment in `docs/development.md`.
+- Add a `descriptor-corpus` job to `ci.yml` that runs `tox
+  -edescriptor-corpus` on every pull request, forks included, on a
+  GitHub-hosted runner, so the safety net is in CI from the phase that
+  builds it.
 - Update `ARCHITECTURE.md` for the new shape: the subpackage and its
   import boundary, the error hierarchy, the model, and the split
   between parser and command. The document says all the code is in
@@ -657,7 +690,10 @@ A behaviour-preserving refactor, with one named exception.
   not checked, and document it in `docs/usage.md`. Verifying it is
   Future work.
 - Refuse `ovf:compression="gzip"` and chunked (`ovf:chunkSize`)
-  references with named errors, documented in `docs/usage.md`. Both
+  references with named errors, documented in `docs/usage.md`. These
+  checks run after the member checks above, so a descriptor-only
+  corpus entry such as REMnux still fails with the missing-member
+  error decision 8 asserts. Both
   are rare in practice, and supporting either properly is a design of
   its own. The upload helpers need the size before they start, and for
   a gzip file only a full decompression gives it: the ISIZE trailer is
@@ -676,9 +712,8 @@ A behaviour-preserving refactor, with one named exception.
 ### 5. Corpus CI tier
 
 This phase covers the appliance corpus tier only. The descriptor
-corpus tier runs from phase 2 onwards, needs no secret, and is not
-gated. Its CI job runs `tox -edescriptor-corpus` on every pull
-request.
+corpus tier's job was added in phase 2; it needs no secret and is not
+gated.
 
 - Adapt instar's `prepare-testdata.sh` into `tools/ci/`. Pull only
   `downloaded/ova/` from LFS (`git lfs pull --include`), about 2GB,
@@ -729,8 +764,8 @@ to the recorded ranges, plus four questions specific to this plan:
   missed?
 - Does anything committed copy govmomi's or COT's descriptor text,
   rather than refer to it by path? Are the curated expected files free
-  of upstream prose, and does every Glance file appear in its
-  `NOTICE`?
+  of upstream prose? Does every Glance file appear in its `NOTICE`,
+  and does `git ls-files` list every file the `NOTICE` names?
 - Does the corpus CI path put the private GitLab hostname anywhere
   new? It already appears in the public `shakenfist/instar`, so
   carrying it here is not a new disclosure, but the audit records the
