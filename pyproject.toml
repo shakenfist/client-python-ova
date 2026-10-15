@@ -72,4 +72,6 @@ git_describe_command = "git describe --dirty --tags --match v* --first-parent"
 test = [
     "tox",                 # mit
     "flake8",              # mit
+    "testtools",           # mit
+    "stestr",              # apache2
 ]

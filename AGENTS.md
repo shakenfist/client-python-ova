@@ -16,10 +16,12 @@ out is in `ARCHITECTURE.md`.
 pip install -e .
 sf-client ova --help
 pre-commit run --all-files
+tox -epy3
 ```
 
-There are no unit tests yet. `docs/development.md` covers setup,
-linting, CI and releasing.
+Unit tests live in `shakenfist_client_ova/tests/` (testtools and
+stestr). `docs/development.md` covers setup, testing, linting, CI and
+releasing.
 
 ## Code Conventions
 

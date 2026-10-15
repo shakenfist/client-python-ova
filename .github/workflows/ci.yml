@@ -1,22 +1,20 @@
 # CI for the OVA client plugin.
 #
 # One job, because there is one gate's worth of work: the pre-commit
-# hooks and a package build. Both run on a static runner -- nothing here
-# installs an OS package or otherwise changes the machine, so nothing
-# needs a throwaway VM.
+# hooks, the unit tests and a package build. All three run on a static
+# runner -- nothing here installs an OS package or otherwise changes the
+# machine, so nothing needs a throwaway VM.
 #
 # That argument is about cost, not safety. Everything below executes
 # code the pull request controls: pre-commit runs the hooks its own
-# config names, and the build runs the pull request's packaging. The
-# static pool is persistent, so on a fork pull request that would be a
-# foothold on a shared machine. What makes it acceptable is a repository
-# setting rather than anything in this file -- Settings > Actions
-# requires approval for all external contributors, so a fork's
-# workflows do not run until a maintainer has looked. If that setting is
-# ever relaxed, this job belongs on the throwaway vm pool, as
-# secret-scan.yml already is.
-#
-# There are no unit tests yet. When there are, they run in this job.
+# config names, tox runs its test code, and the build runs the pull
+# request's packaging. The static pool is persistent, so on a fork pull
+# request that would be a foothold on a shared machine. What makes it
+# acceptable is a repository setting rather than anything in this file
+# -- Settings > Actions requires approval for all external
+# contributors, so a fork's workflows do not run until a maintainer has
+# looked. If that setting is ever relaxed, this job belongs on the
+# throwaway vm pool, as secret-scan.yml already is.
 name: CI
 
 on:
@@ -57,11 +55,11 @@ jobs:
       # constant path one run's cleanup deletes a venv another is still
       # using. $RUNNER_TEMP is per runner, and a runner takes one job at
       # a time.
-      - name: Install pre-commit and build
+      - name: Install pre-commit, build and tox
         run: |
           python3 -m venv "${RUNNER_TEMP}/venv-ci"
           "${RUNNER_TEMP}/venv-ci/bin/pip" install --quiet \
-              --disable-pip-version-check pre-commit build
+              --disable-pip-version-check pre-commit build tox
 
       # On PATH rather than called by absolute path, so the steps below
       # read as the commands a developer runs locally, and so the
@@ -74,6 +72,10 @@ jobs:
       - name: Run the pre-commit hooks
         run: |
           pre-commit run --all-files --show-diff-on-failure
+
+      - name: Run the unit tests
+        run: |
+          tox -epy3
 
       - name: Build the sdist and wheel
         run: |
