@@ -105,8 +105,8 @@ is the *last* tar member, after the disks. OVF 1.1 section 5.3 says it
 should come straight after the descriptor, so VirtualBox does not
 follow the order, and the importer must not assume it.
 
-`instar-testdata` (`~/src/shakenfist/instar-testdata`, a private GitLab
-repository, about 9.2GB of LFS) holds disks taken from three vendor
+`instar-testdata` (a private GitLab repository, about 9.2GB of LFS)
+holds disks taken from three vendor
 OVAs: VyOS 1.2.1 and Splunk DCN 4.0.6, both written by VMware ovftool,
 and Wazuh 4.9.1, written by AWS VM Export. instar does not parse OVA,
 so only the disks were kept and the `.ovf` descriptors were thrown
@@ -129,9 +129,8 @@ for a 2.x schema returned 404.
 
 instar's CI reaches `instar-testdata` through
 `tools/ci/prepare-testdata.sh`. That script clones over HTTPS with a
-`GITLAB_TESTDATA_TOKEN` repository secret, caches the clone at
-`/srv/ci/cached/instar-testdata` on the runner, materialises the LFS
-objects explicitly, and then runs a guard that fails the job when a
+`GITLAB_TESTDATA_TOKEN` repository secret, caches the clone on the
+runner, materialises the LFS objects explicitly, and then runs a guard that fails the job when a
 required fixture is missing. instar learned in its issue #451 that
 tests which skip when their file is absent quietly shrink the suite
 when the checkout goes wrong.
@@ -202,16 +201,32 @@ Out of scope, and deliberately so:
    is still the package the Python documentation recommends for
    untrusted XML. This removes two runtime dependencies and adds one.
 4. **Strictness stays, but follows the specification.** An element
-   the parser does not understand stops the import, unless OVF says a
-   consumer may ignore it: the element carries `ovf:required="false"`,
-   or it is one of the informational sections that only describe the
-   appliance to a person (`Info`, `AnnotationSection`,
-   `ProductSection`, `EulaSection`, `OperatingSystemSection` and the
-   like), listed once in the code with the reason. A hardware item of
-   an unknown resource type stops the import unless it is marked
-   not required. This changes a documented convention, so the phase
-   that implements it updates `AGENTS.md` and "When an import stops" in
-   `docs/usage.md` in the same pull request.
+   the parser does not understand stops the import, unless the element
+   carries `ovf:required="false"`, which OVF says a consumer may
+   ignore. The only elements ignored unread are `Info` and
+   `AnnotationSection`. They describe the appliance to a person and
+   nothing reads them; that list is closed and lives in one place in
+   the code, with the reason. Three sections look informational but
+   are not, so they are parsed into the model instead:
+   - `ProductSection` carries `Property` elements. A property with
+     `ovf:userConfigurable="true"` and no `ovf:value` is input the
+     appliance expects at first boot. The Ubuntu cloud image OVA takes
+     its cloud-init configuration this way. Shaken Fist has no way to
+     deliver an OVF environment yet (see Future work), so the command
+     names each such property in a warning, rather than either dropping
+     it silently or refusing an import whose disks are still useful.
+   - `EulaSection` carries a licence that OVF expects a consumer to
+     present for acceptance. The command prints it and refuses to
+     continue without `--accept-eula`, the same choice VMware's
+     ovftool makes with `--acceptAllEulas`.
+   - `OperatingSystemSection` carries the guest OS's CIM id and
+     `osType`. Instance creation will need them, so they go into the
+     model.
+
+   A hardware item of an unknown resource type stops the import unless
+   it is marked not required. This changes a documented convention, so
+   the phase that implements it updates `AGENTS.md` and "When an
+   import stops" in `docs/usage.md` in the same pull request.
 5. **There are two test tiers.**
    - The *unit* tier runs on every pull request and needs no secrets.
      It uses descriptor fixtures committed to this repository, plus
@@ -227,14 +242,23 @@ Out of scope, and deliberately so:
    repository is public, and vendor descriptors carry licence and
    product prose. `tools/trim-ovf-descriptor.py` replaces the text of
    the prose elements (`License`, `Annotation`, `Description`, product
-   and vendor strings) with a fixed placeholder. Every element and
-   attribute is kept, so the structure the parser sees is unchanged.
-   Each fixture starts with an XML comment recording where it came
-   from, the SHA-256 of the original descriptor, and that it was
+   and vendor strings) with a fixed placeholder, keeping every element
+   and attribute. It reads vendor files, so it parses them through
+   `defusedxml` like the importer does. Re-serialising can still lose
+   things the parser might see (comments, namespace prefixes), so
+   "structure unchanged" is checked rather than claimed: the corpus
+   tier asserts that the parser's model of each original descriptor
+   equals its model of the trimmed fixture, apart from the placeholder
+   text. Each fixture starts with an XML comment recording where it
+   came from, the SHA-256 of the original descriptor, and that it was
    trimmed. The full descriptors stay in the private `instar-testdata`.
 7. **Expected parses are data, not code.** Each fixture has a
-   `<name>.expected.json` beside it: the parser's model serialised to
-   JSON, or the error a fixture is meant to provoke. One test
+   `<name>.expected.json` beside it: either the parser's model
+   serialised to JSON, or, for a fixture meant to be refused,
+   `{"error": "<OVFError subclass name>", "message_contains": "<a
+   stable fragment of the message>"}`. Matching a fragment rather than
+   the whole message lets wording improve without rewriting every
+   expected file, while still pinning which failure it was. One test
    parameterises over the directory, so supporting a new appliance is
    a data change, and a behaviour change shows up as a reviewed diff
    to an expected file.
@@ -242,8 +266,9 @@ Out of scope, and deliberately so:
    descriptor and manifest of larger ones.** This follows the
    descriptor-only precedent `instar-testdata` already set for the
    Wazuh and Splunk disks. A descriptor-only entry is re-tarred from
-   the original's `.ovf` and `.mf` members, so manifest verification
-   is exercised only on the full ones. The `instar-testdata` README
+   the original's `.ovf` and `.mf` members. The descriptor's own
+   manifest entry is still verified on every entry, while disk hashes
+   are verified only on the full ones. The `instar-testdata` README
    gains a provenance table: URL, download date, original size,
    SHA-256 and producer.
 
@@ -296,45 +321,97 @@ as a pull request.
 - Write `tools/trim-ovf-descriptor.py` and commit a trimmed fixture
   for every corpus descriptor under
   `shakenfist_client_ova/tests/fixtures/ovf/`.
-- Hand-write the edge cases no real appliance in the corpus covers: an
-  OVF 2.x envelope, a `required="false"` extension section, a gzip
-  compressed file reference, a chunked file reference, two disks on
-  different controllers, an unknown required section, and a descriptor
-  declaring an entity.
+- Hand-write the edge cases no real appliance in the corpus covers:
+  - an OVF 2.x envelope;
+  - a `required="false"` extension section, and an unknown required
+    one;
+  - a gzip compressed file reference, and a chunked one;
+  - two disks on different controllers;
+  - a descriptor declaring an entity;
+  - a `ProductSection` with a user-configurable property that has no
+    default, and an `EulaSection`;
+  - `References` hrefs that are an absolute URL, contain `../`, name a
+    missing member, or name a duplicated member.
+
+  Some archive-level cases are built as synthetic OVAs in phase 4's
+  tests rather than committed: a manifest whose entry for the
+  descriptor does not match, a manifest with no entry for a referenced
+  file, no manifest at all, and a `.cert` member.
 
 ### 2. Extract the parser
 
-A behaviour-preserving refactor: no user-visible output changes.
+A behaviour-preserving refactor, with one named exception.
 
 - Move the descriptor and manifest parsing out of the Click command
   into `shakenfist_client_ova/ovf/`, still on `xmltodict`, returning
-  the dataclass model and raising `OVFError` subclasses. The command
-  catches those errors and prints exactly what it prints today.
+  the dataclass model and raising `OVFError` subclasses. Where today's
+  code prints a message and exits, the command catches the error and
+  prints exactly that message. The exception is where today's code
+  dies with an unhandled `KeyError` traceback, such as on an OVF 2.x
+  descriptor. There the parser raises a named `OVFError` subclass
+  and the command prints one line. That is the only output change in
+  the phase, and the pull request lists every path it affects.
 - Add the parameterised golden test over the phase 1 fixtures, with
-  expected files recording *today's* behaviour, including today's
-  failures on the OVF 2.x and `required="false"` fixtures. Those
-  expected files are the safety net phase 3 is reviewed against.
+  expected files recording *today's* behaviour in decision 7's form,
+  including today's failures on the OVF 2.x and `required="false"`
+  fixtures. Those expected files are the safety net phase 3 is
+  reviewed against.
+- Update `ARCHITECTURE.md` for the new shape: the subpackage and its
+  import boundary, the error hierarchy, the model, and the split
+  between parser and command. The document says all the code is in
+  `__init__.py`, which stops being true in this phase.
 
 ### 3. ElementTree and the specification
 
 - Reimplement the parser on `defusedxml.ElementTree` (decision 3),
   covering both envelope namespaces and the OVF 2 `EthernetPortItem`
   and `StorageItem`, with the strictness of decision 4.
+- Parse `ProductSection`, `EulaSection` and `OperatingSystemSection`
+  into the model. Add the command's property warning and its
+  `--accept-eula` refusal (decision 4).
 - Every change to an expected file in this phase's diff is an
   intended behaviour change, explained in the pull request.
-- Drop `xmltodict` and `dpath` from `pyproject.toml`, and update
-  `AGENTS.md`, `ARCHITECTURE.md` and `docs/usage.md` for the new
-  convention.
+- Drop `xmltodict` and `dpath` from `pyproject.toml`. Update
+  `AGENTS.md` and `docs/usage.md` for the new convention, and the
+  parsing section of `ARCHITECTURE.md`, which still describes parsing
+  by consumption.
 
 ### 4. Archive correctness
 
 - Find disks from `References` and the `DiskSection`, not by suffix.
+  An `ovf:href` is untrusted input that now selects archive members,
+  so it must be a relative name that matches exactly one tar member
+  (each chunk's member, for a chunked file). An absolute URL, a `../`
+  component, a missing member and a duplicated member are each an
+  explicit refusal, never a `KeyError` and never a fetch. The importer
+  never extracts to disk, so this is about refusing clearly, not about
+  path traversal.
 - Reject an archive with more than one descriptor.
-- Verify the manifest while the disk streams to the server, and stop
-  before the artifact is created if a hash does not match. Check
-  `shakenfist_client.util` first: if verifying in-stream needs a hook
-  that the upload helper lacks, that is an upstream change in
-  `client-python` and is named as one.
+- Read the manifest before anything else, wherever it sits in the tar,
+  and verify the descriptor against it *before* parsing. The
+  descriptor decides which members are trusted as disks, so verifying
+  only the disks would let an altered descriptor redirect the import.
+  Refuse when a manifest is present but has no entry for the
+  descriptor or for a referenced file. With no manifest at all, warn
+  and continue: OVF makes the manifest optional, and refusing would
+  reject appliances that are valid. Record that policy in
+  `docs/usage.md`.
+- Verify each disk's manifest digest in a single pre-upload pass that
+  the plugin owns, computing the manifest's SHA-1 or SHA-256 alongside
+  the SHA-512 that blob deduplication searches by. Then stop before
+  any upload when a hash does not match. With `blob-search-by-hash`,
+  this pass replaces the read `checksum_with_progress_from_file_like_object()`
+  makes today, so there is no extra read. Without it, the pass costs
+  one extra read of each disk. That is accepted, because the
+  alternative cannot work with today's helper:
+  `upload_artifact_with_progress_file_like_object()` uploads and
+  creates the artifact in one call, so there is nowhere to stop
+  between the two. It also seeks back on a retried chunk, which
+  would corrupt a digest computed by a stream wrapper. Verifying
+  during the upload is Future work, upstream in `client-python`.
+- Ignore a `.cert` member with a printed notice that the signature was
+  not checked, and document it in `docs/usage.md`. Verifying it is
+  Future work.
 - Handle `ovf:compression="gzip"` and chunked files. If either turns
   out to be uncommon enough to refuse cleanly instead, record that
   choice in `docs/usage.md`.
@@ -353,8 +430,15 @@ A behaviour-preserving refactor: no user-visible output changes.
   every appliance, and a guard that fails when the corpus is missing,
   never one that skips.
 - Add the job to `ci.yml` on the runner labels open question 3
-  settles, after the operator has added the secret. It cannot run for
-  pull requests from forks, which receive no secrets.
+  settles, after the operator has added the secret. Fork pull requests
+  receive no secrets, so the job is gated at the workflow level
+  (`if: github.event_name != 'pull_request' ||
+  github.event.pull_request.head.repo.full_name == github.repository`)
+  and does not run for them at all. Inside the job the guard stays
+  fail-closed. The gate keeps forks out; it is never a reason to
+  soften the guard. Same-repository branches run the job, and that
+  includes Renovate's, since Renovate pushes its branches to this
+  repository.
 
 ### 6. Push audit
 
@@ -844,6 +928,13 @@ chosen to defer to here, so that we do not forget them.
   the specification's.
 - Publish `shakenfist_client_ova/ovf/` as its own package once a
   second consumer needs it.
+- Verify manifest digests during the upload, to save the extra read
+  phase 4 accepts on servers without `blob-search-by-hash`. That needs
+  `shakenfist_client.util`'s upload helper to offer a hook between
+  uploading and creating the artifact, and digesting that survives its
+  seek-back on retry: an upstream change in `client-python`.
+- Verify an OVA's `.cert` signature over the manifest, which phase 4
+  ignores with a notice.
 - Test the declared `requires-python` floor, which nothing exercises
   today. client-python-k3s#82 has the same gap.
 
