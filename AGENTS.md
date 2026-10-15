@@ -52,3 +52,5 @@ releasing.
 - Update `ARCHITECTURE.md` only when the shape of the import changes.
 - Large `.ova` files used for manual testing are gitignored; keep it
   that way.
+- Plans live in `docs/plans/`, start from `PLAN-TEMPLATE.md`, and are
+  registered in `docs/plans/index.md`.

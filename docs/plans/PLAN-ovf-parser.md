@@ -1,0 +1,1097 @@
+# OVF parser: a tested, specification-following descriptor parser
+
+## Prompt
+
+Before responding to questions or discussion points in this
+document, explore the client-python-ova codebase thoroughly. Read
+relevant source files, understand existing patterns (the
+`shakenfist_client.plugin` entry point and Click command group in
+`__init__.py`, how the OVA archive is read member by member without
+extracting it, how the OVF descriptor is parsed, and how disks are
+checksummed and uploaded through `shakenfist_client.util`), and
+ground your answers in what the code actually does today. Do not
+speculate about the codebase when you could read it instead. Where a
+question touches on external concepts (the DMTF OVF specifications
+in `specifications/`, the CIM resource allocation schemas, VMDK
+formats, the Shaken Fist API), research as needed to give a
+confident answer. Flag any uncertainty explicitly rather than
+guessing.
+
+Consult `ARCHITECTURE.md` for the import pipeline and how the
+descriptor is parsed. Consult `AGENTS.md` for build and test
+commands and project conventions. Remember that an import can only
+be fully validated against a live Shaken Fist cluster; unit tests
+use descriptor fixtures and mock the API surface.
+
+<!-- shared-block: plan-file-conventions v2 -->
+Plan file conventions (shared block; do not edit -- the canonical
+copy lives in shakenfist/development at
+`templates/shared-blocks/plan-file-conventions.md`):
+
+- All planning documents live in `docs/plans/`.
+- Detailed planning gets one plan file per phase. Phase files are
+  named for their master plan, sit in the same directory as it,
+  and append `-phase-NN-descriptive` before the `.md` extension.
+- The master plan tracks its phases in a table under its Execution
+  section. `Merged` is last, and the push audit is the last row,
+  for the reasons given in `plan-push-audit-phase`:
+
+  | Phase | Plan | Status | Merged |
+  |-------|------|--------|--------|
+  | 1. Schema migration | PLAN-thing-phase-01-schema.md | Not started | |
+  | 2. Public API | PLAN-thing-phase-02-api.md | Not started | |
+  | 3. Push audit | - | Not started | |
+
+- One commit per logical change, and at minimum one commit per
+  phase. Unrelated changes are not batched into a single commit.
+  Each commit is self-contained: it builds, passes tests, and has
+  a message explaining what changed and why.
+<!-- shared-block-end -->
+
+## Situation
+
+`ova import` is a single Click command in
+`shakenfist_client_ova/__init__.py`. It classifies the archive's tar
+members by suffix, reads the manifest, parses the OVF descriptor and
+uploads each disk, all inline, talking to the user through `print()`
+and stopping with `sys.exit(1)`. Because nothing below the command can
+be called on its own, the only unit test in the repository covers
+`_parse_alloc_units_to_bytes()`, which was pulled out to fix issue #1.
+
+The descriptor is parsed with `xmltodict` and walked with `dpath`.
+Each section the code understands is deleted from the parsed
+dictionary as it is read, and anything left at the end stops the
+import. That strictness is deliberate and documented (`AGENTS.md`,
+"When an import stops" in `docs/usage.md`), and it is worth keeping:
+an appliance the importer half-understands is worse than one it
+refuses. But the parser has drifted from the specification it was
+written against, in ways a survey of the code turned up:
+
+1. **OVF 2.x descriptors cannot be imported.** `NAMESPACES` maps the
+   `http://schemas.dmtf.org/ovf/envelope/2` namespace to `v2`, but
+   every lookup is written against `v1:`, so a 2.x descriptor gets
+   past the optional reads and then dies with an unhandled `KeyError`
+   at `References`. OVF 2 also moves Ethernet ports and storage onto
+   `EthernetPortItem` and `StorageItem`, in the `epasd` and `sasd` CIM
+   namespaces, which the dispatcher has never heard of.
+2. **`ovf:required="false"` is ignored for sections.** OVF says a
+   consumer may skip a section that carries it. The code instead hard
+   codes lists of sections to delete unread, so any optional section
+   from an unfamiliar producer stops the import. Only hardware items
+   of resource type 1 ("Other") honour the attribute.
+3. **The manifest is parsed but never verified.** Hashes are read into
+   `element_hashes` and nothing reads them back.
+4. **Disks are found by file suffix, not from the descriptor.** The
+   upload loop walks archive members ending in `.vmdk` rather than the
+   `References` the `DiskSection` points at, so a descriptor naming a
+   disk in another format would be parsed and then never uploaded.
+   `ovf:compression="gzip"` and `ovf:chunkSize` (a file split across
+   several members) are not handled at all.
+5. **One descriptor is assumed but not enforced.** An OVA carries
+   exactly one descriptor. The code loops over every `.ovf` member,
+   and a second one silently overwrites the first one's disks and
+   networks.
+6. **Smaller defects:** every disk artifact is given the VM's name;
+   `print(hardware)` sits inside the per-disk upload loop; and the
+   descriptor, which comes from an untrusted file, is parsed with no
+   protection against entity-expansion attacks.
+
+### Test data
+
+The appliances the parser was developed against are two VirtualBox
+6.1.10 exports, CyberOps Workstation and CyberOps Security Onion, which
+exist only as untracked files in a working copy. In both, the manifest
+is the *last* tar member, after the disks. OVF 1.1 section 5.3 says it
+should come straight after the descriptor, so VirtualBox does not
+follow the order, and the importer must not assume it.
+
+`instar-testdata` (a private GitLab repository, about 9.2GB of LFS)
+holds disks taken from three vendor
+OVAs: VyOS 1.2.1 and Splunk DCN 4.0.6, both written by VMware ovftool,
+and Wazuh 4.9.1, written by AWS VM Export. instar does not parse OVA,
+so only the disks were kept and the `.ovf` descriptors were thrown
+away. As a result there is no VMware-produced or AWS-produced
+descriptor anywhere we can test against. These public OVAs were
+confirmed downloadable on 2026-10-15:
+
+| Appliance | Source | Size |
+|-----------|--------|------|
+| Ubuntu 24.04 server cloud image | `cloud-images.ubuntu.com/releases/noble/release/` | 595MB |
+| Flatcar Container Linux, stable, VMware | `stable.release.flatcar-linux.net/amd64-usr/current/` | 590MB |
+| Fedora CoreOS, stable, VMware | `builds.coreos.fedoraproject.org`, via the stable stream's `vmware` artifact | 1.2GB |
+| Wazuh 4.9.1 | `packages.wazuh.com/4.x/vm/` | 3.95GB |
+
+Further candidates that have not been checked: VMware Photon OS, the
+GNS3 VM (VMware and VirtualBox variants), and TurnKey Linux. DMTF
+publishes the OVF 1.1 envelope schema at
+`schemas.dmtf.org/ovf/envelope/1/dsp8023_1.1.0.xsd`. The obvious URL
+for a 2.x schema returned 404.
+
+instar's CI reaches `instar-testdata` through
+`tools/ci/prepare-testdata.sh`. That script clones over HTTPS with a
+`GITLAB_TESTDATA_TOKEN` repository secret, caches the clone on the
+runner, materialises the LFS objects explicitly, and then runs a guard that fails the job when a
+required fixture is missing. instar learned in its issue #451 that
+tests which skip when their file is absent quietly shrink the suite
+when the checkout goes wrong.
+
+### The server side
+
+Shaken Fist identifies an uploaded image with `qemu-img info`
+(`shakenfist/util/image.py`), and transcodes cached images to qcow2.
+No allow-list of input formats turned up, so a streamOptimized VMDK
+artifact is probably usable as it is. No import has been booted live
+to prove it.
+
+## Mission and problem statement
+
+Turn the OVF parsing into a tested, specification-following component,
+so that the next feature work (creating an instance from the parsed
+hardware) builds on a parser we trust rather than on one we are afraid
+to touch. Specifically:
+
+- Separate parsing from the command, behind a boundary clean enough
+  that the parser could be published as its own package later without
+  a rewrite.
+- Build a corpus of real descriptors from several producers, test
+  every pull request against trimmed copies of them, and test against
+  the full appliances in CI.
+- Fix the gaps listed under Situation.
+
+Out of scope, and deliberately so:
+
+- **Creating an instance from the parsed hardware.** That is the
+  feature this plan prepares for, and it gets its own plan.
+- **Converting the guest** (installing virtio drivers, fixing the
+  bootloader), which is what `virt-v2v -i ova` does. Whether the
+  importer should offer it is a product question for the
+  instance-creation plan.
+- **Spinning the parser out into its own package.** The boundary is
+  designed for it. The move waits until a second consumer exists.
+
+## Decisions
+
+1. **The parser lives in this repository, inside a boundary built for
+   spin-out.** It goes in a `shakenfist_client_ova/ovf/` subpackage
+   that imports only the standard library and `defusedxml`. It never
+   imports `click` or `shakenfist_client`, never prints and never
+   exits. It reports failure by raising subclasses of one `OVFError`,
+   and returns plain dataclasses (available from Python 3.7). The
+   command in `__init__.py` does all of the talking to the user.
+   Spinning the parser out later is then a directory move and a
+   `pyproject.toml`. A separate repository now was rejected: it would
+   need the whole consistency-audit adoption (CI, renovate, release,
+   CodeQL, documentation) before a line of parser code, for an API
+   whose shape we will only know once instance creation uses it.
+2. **No third-party OVF library.** The only real candidate on PyPI is
+   `cot` (the Common OVF Tool). Its last release was in December 2019,
+   it depends on `pyvmomi`, and its metadata targets Python 2.7
+   through 3.7. The PyPI packages named `ovf`, `pyovf` and `ovf2io`
+   read OOMMF micromagnetics files, an unrelated format that shares
+   the name.
+3. **`xml.etree.ElementTree` through `defusedxml` replaces `xmltodict`
+   and `dpath`.** Namespace-aware element lookups remove the
+   dictionary-or-list ambiguity that `_coerce_to_list()` exists to
+   paper over, and make supporting both the OVF 1 and OVF 2 envelope
+   namespaces a matter of a lookup table rather than of duplicated
+   paths. `defusedxml` refuses the DTD entity tricks an untrusted
+   descriptor could otherwise use; no legitimate OVF descriptor
+   declares entities. It is pure Python and supports 3.7. Its last
+   stable release, 0.7.1, dates from 2021, which is a weakness, but it
+   is still the package the Python documentation recommends for
+   untrusted XML. This removes two runtime dependencies and adds one.
+   ElementTree's `ParseError` and defusedxml's `DefusedXmlException`
+   are both caught inside the parser and re-raised as named `OVFError`
+   subclasses, so that a malformed or entity-declaring descriptor gets
+   the same one-line refusal as any other.
+4. **Strictness stays, but follows the specification.** An element
+   the parser does not understand stops the import, unless the element
+   carries `ovf:required="false"`, which OVF says a consumer may
+   ignore. The only elements ignored unread are `Info` and
+   `AnnotationSection`. They describe the appliance to a person and
+   nothing reads them; that list is closed and lives in one place in
+   the code, with the reason. Three sections look informational but
+   are not, so they are parsed into the model instead:
+   - `ProductSection` carries `Property` elements. A property with
+     `ovf:userConfigurable="true"` and no `ovf:value` is input the
+     appliance expects at first boot. The Ubuntu cloud image OVA takes
+     its cloud-init configuration this way. Shaken Fist has no way to
+     deliver an OVF environment yet (see Future work), so the command
+     names each such property in a warning, rather than either dropping
+     it silently or refusing an import whose disks are still useful.
+   - `EulaSection` carries a licence that OVF expects a consumer to
+     present for acceptance. The command prints it and refuses to
+     continue without `--accept-eula`, the same choice VMware's
+     ovftool makes with `--acceptAllEulas`.
+   - `OperatingSystemSection` carries the guest OS's CIM id and
+     `osType`. Instance creation will need them, so they go into the
+     model.
+
+   Deleting from a dictionary is how today's code notices what it has
+   not read. ElementTree has no equivalent, so the parser records every
+   element and attribute it reads. At the end it walks the tree and
+   refuses anything left unread that is neither marked
+   `ovf:required="false"` nor on the closed ignore list.
+
+   Attributes follow the specification's extensibility rule rather
+   than the element rule. DSP0243 (1.1 section 7.3, 2.1.1 section 7.3)
+   says the information in a custom attribute "shall not be required
+   for correct behavior". An attribute from a namespace OVF does not
+   define, such as `vmw:buildId`, is therefore ignored by rule.
+   Attributes in the OVF and CIM namespaces, and unqualified attributes
+   on OVF elements, are read or refused like elements. The ignore list
+   adds the namespace declarations, `xml:lang` and
+   `xsi:schemaLocation`, none of which carry data.
+
+   Today's code deletes several things unread. Each one is decided
+   here, not left for the implementer to discover:
+
+   | What | Decision |
+   |------|----------|
+   | `vmware:buildId` and other custom attributes | Ignored by the attribute rule above |
+   | `vbox:Machine`, `vmware:Config`, `vmware:IpAssignmentSection` and other custom elements | Ignored when marked `ovf:required="false"`, as VirtualBox marks `vbox:Machine`; refused otherwise, as the specification requires. Phase 1 records which producers mark them |
+   | `ovf:transport` on `VirtualHardwareSection` | Read into the model. It names how the appliance expects to receive its OVF environment, which goes with the `ProductSection` properties |
+   | `ovf:required` on `VirtualHardwareSection` | Read and honoured, like any other `ovf:required` |
+   | `vssd:System` | Read into the model: the virtual system type (`vmx-13`, `virtualbox-2.2`) and identifier |
+   | `VirtualSystem/Name` | Read into the model as the display name |
+   | `DeploymentOptionSection` | Read into the model. Items carrying `ovf:configuration` apply only to the configurations they name, and today's code applies every item at once. The parser builds the default configuration (`ovf:default="true"`, else the first). Choosing another is the instance-creation plan's business |
+   | `AnnotationSection`, `Info` | The closed ignore list |
+
+   A hardware item of an unknown resource type stops the import unless
+   it is marked not required. This changes a documented convention, so
+   the phase that implements it updates `AGENTS.md` and "When an
+   import stops" in `docs/usage.md` in the same pull request.
+5. **There are two test tiers.**
+   - The *unit* tier runs on every pull request and needs no secrets.
+     It uses descriptor fixtures committed to this repository, plus
+     small synthetic OVAs built by the tests themselves. The parser
+     never reads disk contents, so a synthetic disk member can be a
+     few bytes of anything.
+   - The *corpus* tier runs the importer's parse, archive and manifest
+     paths over every appliance in `instar-testdata`, in CI on the
+     self-hosted pool. It follows instar's `prepare-testdata.sh`
+     pattern, including the guard that fails when a fixture is
+     missing.
+6. **Committed fixtures are trimmed copies of real descriptors.** This
+   repository is public, and vendor descriptors carry licence and
+   product prose. `tools/trim-ovf-descriptor.py` replaces the text of
+   the prose elements (`License`, `Annotation`, `Description`, product
+   and vendor strings) with a fixed placeholder, keeping every element
+   and attribute. It reads vendor files, so it parses them through
+   `defusedxml` like the importer does. Re-serialising can still lose
+   things the parser might see (comments, namespace prefixes), so
+   "structure unchanged" is checked rather than claimed: the corpus
+   tier asserts that the parser's model of each original descriptor
+   equals its model of the trimmed fixture, apart from the placeholder
+   text. Each fixture carries an XML comment, straight after its XML
+   declaration (which must stay first, or the file stops being XML),
+   recording where it came from, the SHA-256 of the original descriptor, and that it was
+   trimmed. The full descriptors stay in the private `instar-testdata`.
+7. **Expected parses are data, not code.** Each fixture has a
+   `<name>.expected.json` beside it: either the parser's model
+   serialised to JSON, or, for a fixture meant to be refused,
+   `{"error": "<OVFError subclass name>", "message_contains": "<a
+   stable fragment of the message>"}`. Matching a fragment rather than
+   the whole message lets wording improve without rewriting every
+   expected file, while still pinning which failure it was. One test
+   parameterises over the directory, so supporting a new appliance is
+   a data change, and a behaviour change shows up as a reviewed diff
+   to an expected file.
+8. **The corpus keeps full appliances up to about 1GB, and only the
+   descriptor and manifest of larger ones.** This follows the
+   descriptor-only precedent `instar-testdata` already set for the
+   Wazuh and Splunk disks. A descriptor-only entry is re-tarred from
+   the original's `.ovf` and `.mf` members. The descriptor's own
+   manifest entry is still verified on every entry, while disk hashes
+   are verified only on the full ones. The importer will refuse a
+   descriptor-only entry, because its `References` name disks that are
+   absent, and that refusal has no opt-out. The corpus tier instead
+   asserts it: each descriptor-only entry declares, as test input, the
+   members that are deliberately absent. The test checks that list
+   against `References`, parses the descriptor, and requires the
+   archive check to fail with the missing-member error, naming exactly
+   those members. The `instar-testdata` README
+   gains a provenance table: URL, download date, original size,
+   SHA-256 and producer.
+
+## Open questions
+
+1. **Does Shaken Fist boot an uploaded streamOptimized VMDK?** The
+   server code suggests it does (see "The server side"). Phase 4 ends
+   with one live import of the Ubuntu cloud image OVA to settle it. If
+   it does not, conversion moves into the instance-creation plan,
+   because it changes what the importer is rather than how it parses.
+2. **Do the original VyOS 1.2.1 and Splunk DCN 4.0.6 OVAs still
+   exist?** They are the only ovftool-written appliances we know of.
+   VyOS 1.2.x images are no longer freely downloadable, and Splunk's
+   need a login. If copies survive locally, their descriptors are the
+   most valuable additions to the corpus. If not, a Photon OS OVA is
+   the next candidate to check for ovftool output.
+3. **Which runner labels reach the private GitLab with git-lfs
+   installed?** Phase 5 reads instar's `functional-tests.yml` for the
+   answer rather than guessing. Adding `GITLAB_TESTDATA_TOKEN` as a
+   secret on this repository is the operator's step, not an agent's.
+
+## Execution
+
+| Phase | Plan | Status | Merged |
+|-------|------|--------|--------|
+| 1. Corpus and fixtures | - | Not started | |
+| 2. Extract the parser | - | Not started | |
+| 3. ElementTree and the specification | - | Not started | |
+| 4. Archive correctness | - | Not started | |
+| 5. Corpus CI tier | - | Not started | |
+| 6. Push audit | - | Not started | |
+
+Phase plans are written when each phase starts, from this plan and
+from what the previous phase learned, rather than all now.
+
+### 1. Corpus and fixtures
+
+This phase lands partly in `instar-testdata`, as direct commits, and
+partly here as a pull request. Its `Merged` cell therefore holds both
+records, as `instar-testdata <first>..<last>; <merge sha>`. This
+departs from the shared block's `<repo> <sha> (#pr)` deliberately:
+`instar-testdata` takes direct commits, so its record is a range, which
+checklist item 1 accepts. A direct landing has no pull request to audit
+it, so the `instar-testdata` range is audited as part of this phase's
+own pull request. The things to check are that only `downloaded/ova/`,
+the fetch script and the README changed, and that the provenance table
+matches the files. This repository is public, so its record of that
+audit holds only the verdict and the range. Detailed findings stay in
+`instar-testdata`.
+
+- Download the appliances listed under Situation, plus any that open
+  question 2 recovers, into `instar-testdata`'s `downloaded/ova/`,
+  following decision 8, with a fetch script and the provenance table.
+  The descriptor is the first member of every OVA we have seen, so a
+  descriptor-only copy of a large remote appliance can be taken by
+  streaming the start of the download and stopping. The manifest may
+  not be near the start (see the VirtualBox note under Situation), so
+  check before relying on that for the `.mf`.
+- Write `tools/trim-ovf-descriptor.py` and commit a trimmed fixture
+  for every corpus descriptor under
+  `shakenfist_client_ova/tests/fixtures/ovf/`.
+- Hand-write the edge cases no real appliance in the corpus covers:
+  - an OVF 2.x envelope;
+  - a `required="false"` extension section, and an unknown required
+    one;
+  - a gzip compressed file reference, and a chunked one, both of
+    which phase 4 refuses;
+  - two disks on different controllers;
+  - a descriptor declaring an entity;
+  - a `ProductSection` with a user-configurable property that has no
+    default, and an `EulaSection`;
+  - `References` hrefs that are an absolute URL, contain `../`, name a
+    missing member, or name a duplicated member;
+  - a `VirtualSystemCollection`, which phase 3 refuses by name;
+  - an unknown OVF-namespace attribute on a known element, and a
+    custom-namespace one, which are refused and ignored respectively;
+  - an ovftool-style descriptor carrying `vmw:buildId`,
+    `xsi:schemaLocation`, a `vmw:Config` marked not required,
+    `ovf:transport` and a `DeploymentOptionSection` with two
+    configurations. The corpus has no ovftool descriptor (open question
+    2), so this stands in for one.
+
+  Some archive-level cases are built as synthetic OVAs in phase 4's
+  tests rather than committed: a manifest whose entry for the
+  descriptor does not match, a manifest with no entry for a referenced
+  file, no manifest at all, two manifests, a manifest listing the same
+  file twice, a `.cert` member, hrefs naming a symlink, a hardlink and a
+  directory member, and members stored as `./name`, including two
+  that normalise to the same name.
+
+### 2. Extract the parser
+
+A behaviour-preserving refactor, with one named exception.
+
+- Move the descriptor and manifest parsing out of the Click command
+  into `shakenfist_client_ova/ovf/`, still on `xmltodict`, returning
+  the dataclass model and raising `OVFError` subclasses. The model is
+  defined in its final shape here, including the `ProductSection`,
+  `EulaSection` and `OperatingSystemSection` fields phase 3 fills, left
+  empty for now. It is serialised deterministically, with sorted keys
+  and lists in document order. Phase 3's expected-file diffs then show
+  behaviour changes, not a change of shape. Where today's
+  code prints a message and exits, the command catches the error and
+  prints exactly that message. The exception is where today's code
+  dies with an unhandled `KeyError` traceback, such as on an OVF 2.x
+  descriptor. There the parser raises a named `OVFError` subclass
+  and the command prints one line. That is the only output change in
+  the phase, and the pull request lists every path it affects.
+- Add the parameterised golden test over the phase 1 fixtures, with
+  expected files recording *today's* behaviour in decision 7's form,
+  including today's failures on the OVF 2.x and `required="false"`
+  fixtures. Those expected files are the safety net phase 3 is
+  reviewed against.
+- Update `ARCHITECTURE.md` for the new shape: the subpackage and its
+  import boundary, the error hierarchy, the model, and the split
+  between parser and command. The document says all the code is in
+  `__init__.py`, which stops being true in this phase.
+
+### 3. ElementTree and the specification
+
+- Reimplement the parser on `defusedxml.ElementTree` (decision 3),
+  covering both envelope namespaces and the OVF 2 `EthernetPortItem`
+  and `StorageItem`, with the strictness of decision 4.
+- Parse `ProductSection`, `EulaSection` and `OperatingSystemSection`
+  into the model. Add the command's property warning and its
+  `--accept-eula` refusal (decision 4).
+- Refuse a `VirtualSystemCollection` with a named error, instead of
+  letting it fail as an unknown section. An envelope holding several
+  systems is a multi-instance import, which belongs to the
+  instance-creation plan.
+- Test the command layer, not only the parser, with
+  `click.testing.CliRunner` and the client and `shakenfist_client.util`
+  mocked. Cover the `--accept-eula` refusal, the property warning, and
+  the turning of each `OVFError` into one line and exit code 1.
+- Every change to an expected file in this phase's diff is an
+  intended behaviour change, explained in the pull request. Phase 2
+  will probably record most vendor fixtures as refusals, so many
+  expected files go from an error to a whole model, with nothing to
+  compare against. Each newly successful one is checked field by field
+  against its descriptor: disk capacities, controllers, NICs and
+  memory units. Each vendor fixture also gains a small hand-written
+  assertion of those values, so the expected file is not the only
+  record of what correct looks like.
+- Drop `xmltodict` and `dpath` from `pyproject.toml`. Update
+  `AGENTS.md` and `docs/usage.md` for the new convention, and the
+  parsing section of `ARCHITECTURE.md`, which still describes parsing
+  by consumption.
+
+### 4. Archive correctness
+
+- Find disks from `References` and the `DiskSection`, not by suffix.
+  An `ovf:href` is untrusted input that now selects archive members,
+  so it must be a relative name that matches exactly one tar member,
+  and that member must be a regular file (`TarInfo.isfile()`). Member
+  names are compared after stripping a single leading `./`, which some
+  tar writers add, and two members that strip to the same name are
+  refused as duplicates.
+  `extractfile()` follows symlink and hardlink members to *other*
+  members, which would upload something other than what the manifest
+  entry names, and it returns `None` for directories and devices. An
+  absolute URL, a `../` component, a missing or duplicated member, and
+  a member that is not a regular file are each an explicit refusal,
+  never a `KeyError`, an `AttributeError` or a fetch. The importer
+  never extracts to disk, so this is about refusing clearly, not about
+  path traversal.
+- Reject an archive with more than one descriptor, or more than one
+  manifest, and a manifest that lists the same file twice. Today a
+  later `.mf` entry silently replaces an earlier one, the same flaw
+  as with descriptors, and the manifest is now what the descriptor and
+  disks are checked against. A single manifest whose base name differs
+  from the descriptor's gets a warning, not a refusal: OVF names them
+  alike, but nothing is ambiguous when there is only one.
+- Read the manifest before anything else, wherever it sits in the tar,
+  and verify the descriptor against it *before* parsing. The
+  descriptor decides which members are read as disks, so a corrupt
+  descriptor that went unchecked would send the import after the wrong
+  members.
+  Refuse when a manifest is present but has no entry for the
+  descriptor or for a referenced file. With no manifest at all, warn
+  and continue: OVF makes the manifest optional, and refusing would
+  reject appliances that are valid.
+- Be explicit about what the manifest does not do, both here and in
+  `docs/usage.md`. It detects corruption and accidental mismatch. It
+  does not detect tampering: the manifest travels in the same unsigned
+  archive, so anyone who can change the descriptor can rewrite the
+  manifest to match, or remove it. Tamper evidence needs `.cert`
+  verification, which is Future work. Nothing in the code, docs or
+  output may describe the manifest check as a security control.
+- Verify each disk's manifest digest in a single pre-upload pass that
+  the plugin owns, computing the manifest's SHA-1 or SHA-256 alongside
+  the SHA-512 that blob deduplication searches by. Then stop before
+  any upload when a hash does not match. With `blob-search-by-hash`,
+  this pass replaces the read `checksum_with_progress_from_file_like_object()`
+  makes today, so there is no extra read. Without it, the pass costs
+  one extra read of each disk. That is accepted, because the
+  alternative cannot work with today's helper:
+  `upload_artifact_with_progress_file_like_object()` uploads and
+  creates the artifact in one call, so there is nowhere to stop
+  between the two. It also seeks back on a retried chunk, which
+  would corrupt a digest computed by a stream wrapper. Verifying
+  during the upload is Future work, upstream in `client-python`.
+- Ignore a `.cert` member with a printed notice that the signature was
+  not checked, and document it in `docs/usage.md`. Verifying it is
+  Future work.
+- Refuse `ovf:compression="gzip"` and chunked (`ovf:chunkSize`)
+  references with named errors, documented in `docs/usage.md`. Both
+  are rare in practice, and supporting either properly is a design of
+  its own. The upload helpers need the size before they start, and for
+  a gzip file only a full decompression gives it: the ISIZE trailer is
+  the size modulo 2^32, so it is wrong for any disk over 4GiB. The
+  manifest digest covers the compressed bytes while dedup needs the
+  decompressed ones. Decompressing an untrusted file also needs a cap.
+  Support waits until a corpus appliance needs it (see Future work).
+- Name each disk artifact after its disk, and move the stray
+  `print(hardware)` out of the upload loop.
+- Test with synthetic OVAs built in the tests, which needs no
+  cluster. That includes `CliRunner` tests showing the no-manifest
+  warning, the `.cert` notice, and that nothing is uploaded after a
+  digest mismatch. Then perform the live import that answers open
+  question 1, as an operator step recorded in the phase plan.
+
+### 5. Corpus CI tier
+
+- Adapt instar's `prepare-testdata.sh` into `tools/ci/`. Pull only
+  `downloaded/ova/` from LFS (`git lfs pull --include`), not the whole
+  9GB.
+- Add a corpus test that runs the parse and the archive checks over
+  every appliance, and a guard that fails when the corpus is missing,
+  never one that skips.
+- Add the job to `ci.yml` on the runner labels open question 3
+  settles, after the operator has added the secret. Fork pull requests
+  receive no secrets, so the job is gated at the workflow level
+  (`if: github.event_name != 'pull_request' ||
+  github.event.pull_request.head.repo.full_name == github.repository`)
+  and does not run for them at all. Inside the job the guard stays
+  fail-closed. The gate keeps forks out; it is never a reason to
+  soften the guard. Same-repository branches run the job, and that
+  includes Renovate's, since Renovate pushes its branches to this
+  repository.
+- A Renovate branch changes which dependency code the job installs and
+  runs, so `GITLAB_TESTDATA_TOKEN` must never be visible to that code:
+  - the token is a read-only deploy token scoped to `instar-testdata`
+    alone, not a personal token;
+  - the clone happens in its own step, before any `pip install`, and
+    only that step's `env` carries the secret;
+  - once the fetch is done, the credential is removed from the clone's
+    remote URL. instar's script leaves it in `.git/config`, and in a
+    runner cache that outlives the job, any later step could read it.
+
+  These steps keep the token away from dependency code. They do not
+  keep it from someone who can push a branch: the clone step runs
+  `tools/ci/` from the branch under test, so anyone with write access
+  can read the token. That is accepted, because the token is read-only
+  and reaches one repository of test data. The private data then sits
+  in a runner cache that other jobs on the pool can read. instar
+  already accepts that exposure for the same data, and it is accepted
+  here on the same terms. The phase plan records the token's scope,
+  who rotates it, and every trigger that can reach the job: pull
+  requests, `workflow_dispatch`, and the re-test workflow.
+
+### 6. Push audit
+
+This repository has no `PUSH-AUDIT.md`, so the phase applies the
+checklist in the `plan-push-audit-phase` block of `PLAN-TEMPLATE.md`
+to the recorded ranges, plus three questions specific to this plan:
+
+- Does any committed fixture still carry vendor prose that trimming
+  missed?
+- Does the corpus CI path put the private GitLab hostname anywhere
+  new? It already appears in the public `shakenfist/instar`, so
+  carrying it here is not a new disclosure, but the audit records the
+  verdict rather than assuming it.
+- Does `shakenfist_client_ova/ovf/` still import nothing outside the
+  standard library and `defusedxml` (decision 1)?
+
+<!-- shared-block: plan-push-audit-phase v4 -->
+Push audit phase (shared block; do not edit -- the canonical
+copy lives in shakenfist/development at
+`templates/shared-blocks/plan-push-audit-phase.md`):
+
+- Every master plan ends with a phase that runs the repository's
+  `PUSH-AUDIT.md` over the whole plan's work. It is the last row of
+  the Execution table and it is not optional. The rule binds every
+  plan that carries the phase, which is decidable from the plan file
+  alone: a plan that is already `Complete`, `Abandoned` or
+  `Superseded` and does not carry the phase is not reopened to
+  acquire one, and a plan that has the phase runs it even if it
+  reaches `Complete` before the phase does.
+- That phase audits the accumulated diff of every phase in the plan
+  against the default branch, not the diff of the last phase alone.
+  Auditing one phase at a time would miss what the phases did to
+  each other -- the duplicated helper that only exists once phases
+  three and six have both landed, the doc page that phase two made
+  wrong and phase five never revisited.
+- Once the plan's phases have merged, a diff against the default
+  branch is empty and would read as a clean audit. The range is not
+  reliably derivable after the fact either: unrelated work lands on
+  the default branch between phases, so anything anchored on "since
+  the plan file appeared" is far too wide. It has to be recorded. As
+  each phase lands, what put it on the default branch goes into the
+  plan: the merge commit of its pull request, whose diff against its
+  first parent is the whole of what landed, or -- where the phase
+  landed directly -- every commit of the phase, or its `first..last`
+  range. A single commit is only ever enough when it is a merge
+  commit.
+- Where the Execution phases are a table, that record is a `Merged`
+  column, added last so that a row which omits it still reaches
+  `Status`; where they are prose sections it is a `Merged:` line in
+  the phase's own section. The `Status` column keeps its single
+  vocabulary term and nothing else (see `plan-status-vocabulary`).
+  A phase that landed in another repository records `<repo> <sha>
+  (#pr)` and is audited against that repository's default branch, as
+  part of the pull request that lands it; the plan's own push-audit
+  phase cites that audit rather than re-running it.
+- Phases that landed before the plan started recording them are
+  reconstructed rather than left blank. Recover what you can from
+  `gh pr list --state merged` and `git rev-list --first-parent`, and
+  say in the plan that the range was reconstructed. Do not trust a
+  path-filtered `git log` on its own: it lists the commits that
+  touched a path without saying which arrived directly and which
+  arrived inside a pull request, and recording a commit that came in
+  under a merge audits one commit of that pull request rather than
+  the pull request. A reconstructed record may be a summary table in
+  the audit phase's own section rather than a column or a line in
+  the Execution table, which keeps retrospective archaeology out of
+  a table that tracks live status. Where a phase accreted over
+  months of unrelated commits and no range is recoverable, say that
+  instead and name the paths the audit read -- an audit that says
+  what it could not scope is a result; one that silently audits
+  nothing is not.
+- Findings land as their own pull request against the default
+  branch, and the plan is not complete until they are resolved or
+  explicitly declined in writing. A finding that is declined says
+  why, in the plan, where the next reader will find it.
+- Where the audit finds nothing, record that in the plan in one
+  sentence. It is a real result, and a run of them is the evidence
+  for making the phase conditional rather than mandatory.
+- A repository with no `PUSH-AUDIT.md` still carries the phase, and
+  the phase says that the runbook does not exist yet and what was
+  done instead. Silently omitting it is what let the audit go
+  untriggered for as long as it did. What is done instead is at
+  least the checklist below, applied to the recorded ranges: it is
+  a floor, not a substitute for a runbook, and a plan adds the
+  questions its own repository's blast radius raises. Each item
+  gets a verdict, or a sentence saying why it does not apply.
+  Do not borrow another repository's runbook instead: a runbook is
+  written for one repository's blast radius.
+  1. Every recorded landing takes one of the forms above: a merge
+     commit with two parents, whose diff is read against its first
+     parent; every commit of a direct landing, or its `first..last`
+     range; a landing in another repository, whose own audit is
+     cited; or a statement that no range is recoverable, naming the
+     paths the audit read.
+  2. Anything the diff added that runs unattended -- cron, a timer,
+     a scheduled workflow, a self-update -- reports its own failure
+     somewhere a human sees, or is named as not doing so.
+  3. No secret or token entered any repository, and no private
+     hostname or IP address entered a repository more public than
+     the one it came from.
+  4. Anything the diff removed or renamed has no consumer left,
+     checked by grep across every repository that could consume it
+     rather than by assumption, with the greps stated.
+  5. Where the repository publishes something -- an image, a
+     release, a package -- a broken change fails closed: one that
+     publishes nothing is recoverable, one that publishes something
+     wrong is not.
+<!-- shared-block-end -->
+
+!!! note "In this project"
+
+    The Execution phases are a table, so the record goes in a
+    `Merged` column after `Status`. Phases here land as pull
+    requests against `develop`, so the cell normally holds the
+    single merge commit of that pull request.
+
+<!-- shared-block: plan-phase-landing v1 -->
+Phase landing (shared block; do not edit -- the canonical copy
+lives in shakenfist/development at
+`templates/shared-blocks/plan-phase-landing.md`):
+
+A plan's status and a repository's review state both live in files
+that every branch would otherwise rewrite. Left alone, that turns
+each of them into a merge-conflict hot spot, and it spends a pull
+request and a full CI run on a change that is entirely prose.
+Three rules keep them out of the way.
+
+- **A phase is closed out in the first commit of the next phase,
+  not in a pull request of its own.** By the time the next phase
+  branches, the previous one has merged, so its merge commit is
+  known and its `Merged` cell can record the thing the push-audit
+  phase actually needs. This is the only ordering that works: a
+  phase cannot record its own merge commit, and a separate
+  close-out pull request buys that record at the price of a round
+  trip. The close-out sets the finished phase's `Status` and
+  `Merged` cells and the plan's row in `docs/plans/index.md`, and
+  it is committed before the next phase's own work, so that the
+  branch never claims the plan is further along than the default
+  branch is.
+
+- **The last phase closes itself out.** The push-audit phase is
+  the last row of every plan, so no next phase will carry its
+  close-out. Where the audit raises findings, the plan is not
+  complete until they are resolved or declined, and those land as
+  their own pull request after the audit phase has merged -- so
+  that pull request is the carrier, and it can record the audit
+  phase's merge commit, which by then is known. Where the audit
+  finds nothing there is no carrier, and no follow-up pull
+  request is opened for the sake of one cell: the phase sets its
+  own `Status`, and the plan's index row, to `Complete` in its
+  own pull request, and records no `Merged` cell. It is the only
+  row permitted to omit one. The column exists so that the
+  push-audit phase can reconstruct what to audit; the audit phase
+  is last, so nothing ever reads its own row.
+
+- **`REVIEWS.md` is not pruned or regenerated in a pull request
+  that changes code or documentation.** Editing a reviewed file
+  stales its mark, and adding or removing an in-scope file moves
+  the header count, but neither is the landing pull request's
+  business. `prune` regenerates the file whether or not it dropped
+  anything, so the `prune-reviews` workflow heals both on the next
+  push to the default branch. Pruning from a branch is also wrong
+  more often than it is right, though not for the reason it first
+  appears: `prune` compares each stamp against `HEAD`, which on a
+  branch is the branch tip, so it drops the marks for the files the
+  pull request itself touched while keeping marks the default
+  branch has already pruned. Committing that state merges a review
+  file computed from a stale tree, and can resurrect marks
+  `prune-reviews` has already removed. Accumulated staleness is
+  reported by the `review-coverage` audit, which recomputes
+  coverage against `HEAD` and raises an issue once the backlog is
+  worth a review session.
+
+  **A review session is the exception**, and it is not optional
+  tidiness: `stamp` regenerates `REVIEWS.md` as well as writing the
+  marks, and the rows, the sidecars and the marks are committed
+  together (see `docs/code-review-tracking.md`). Where a repository
+  requires a pull request to reach its default branch, that is how
+  a review session lands, so "not in a pull request" is about the
+  kind of change, not the mechanism.
+
+These rules assume phases land one after another. Where two phase
+branches are open at once, each closes out only the phase it
+directly follows.
+<!-- shared-block-end -->
+
+!!! note "In this project"
+
+    This repository does not deploy review tracking: there is no
+    `REVIEWS.md` and no `prune-reviews` workflow, so the third rule
+    has nothing to act on here. The first two apply as written.
+
+<!-- shared-block: plan-status-vocabulary v1 -->
+Plan status vocabulary (shared block; do not edit -- the canonical
+copy lives in shakenfist/development at
+`templates/shared-blocks/plan-status-vocabulary.md`):
+
+A status cell -- in the master plan's own Execution phase table, and
+in the row `docs/plans/index.md` carries for the plan -- holds
+exactly one of these terms and nothing else:
+
+- `Proposed` -- written down as a concept, not yet scheduled.
+- `Not started` -- scheduled, but no work has begun.
+- `In progress` -- work has begun and has not finished.
+- `Blocked` -- cannot proceed until something outside the plan
+  changes. Say what, in the plan.
+- `Complete` -- the work is done.
+- `Abandoned` -- deliberately dropped without being done.
+- `Superseded` -- replaced by another plan, which the plan names.
+
+The term is the whole cell. No dates, no phase arithmetic, no
+parenthetical qualifiers, no summary of what happened: a status is
+read to decide whether a plan still wants attention, and prose in
+that column has repeatedly grown until it could no longer be read
+either by a person scanning the table or by tooling. Detail belongs
+in the plan file, and a one-line summary belongs in the index's own
+Intent column.
+
+Matching is case-insensitive, so `In Progress` is accepted, but the
+spelling above is the one to write.
+<!-- shared-block-end -->
+
+## Agent guidance
+
+### Execution model
+
+<!-- shared-block: subagent-execution-model v1 -->
+Sub-agent execution model (shared block; do not edit -- the
+canonical copy lives in shakenfist/development at
+`templates/shared-blocks/subagent-execution-model.md`):
+
+All implementation work is done by sub-agents, never in the
+management session. The management session is reserved for
+planning, review, and decision-making. This keeps the management
+context lean and avoids drowning it in implementation diffs.
+
+The workflow is:
+
+1. **Plan** at high effort in the management session.
+2. **Spawn a sub-agent** for each implementation step with the
+   brief from the plan, at the recommended effort level and model.
+3. **Review** the sub-agent's output in the management session.
+   Check the actual files -- the sub-agent's summary describes
+   what it intended, not necessarily what it did.
+4. **Fix or retry** if the output is wrong. Diagnose whether the
+   brief was insufficient (improve it) or the model was too light
+   (upgrade it), then re-run.
+5. **Commit** once the management session is satisfied.
+
+This applies to all steps, including high-effort ones. If a
+sub-agent cannot succeed even with a detailed brief and the right
+model, that is a signal the brief needs improving, not that the
+management session should do the implementation itself.
+
+Use `isolation: "worktree"` for sub-agents when the change is
+risky or experimental; the worktree is discarded if the output is
+unsatisfactory. For safe, well-understood changes, sub-agents can
+work directly in the main tree.
+<!-- shared-block-end -->
+
+### Planning effort
+
+<!-- shared-block: plan-planning-effort v1 -->
+Planning effort (shared block; do not edit -- the canonical copy
+lives in shakenfist/development at
+`templates/shared-blocks/plan-planning-effort.md`):
+
+The master plan itself is always created at **high effort** -- it
+requires broad codebase understanding, cross-referencing several
+source files, and judgment calls about scope and sequencing.
+
+Each phase plan states the recommended effort level for planning
+that phase. Phases that turn on design decisions, cross-component
+coordination, protocol changes, or subtle correctness questions
+should be planned at high effort. Phases that are mechanical, or
+that follow a pattern already established elsewhere in the
+codebase, can be planned at medium effort.
+<!-- shared-block-end -->
+
+!!! note "In this project"
+
+    Phases that change what the OVF parser accepts or rejects,
+    or how hardware maps onto a Shaken Fist instance, should be
+    planned at high effort -- these are the places where a
+    mistake shows up only with an appliance nobody has tried
+    yet, or only against a live Shaken Fist cluster. Phases that
+    mirror an already established pattern -- adding a fixture
+    and its expected parse, for example -- can be planned at
+    medium effort.
+
+### Step-level guidance
+
+<!-- shared-block: subagent-step-guidance v1 -->
+Sub-agent step guidance (shared block; do not edit -- the
+canonical copy lives in shakenfist/development at
+`templates/shared-blocks/subagent-step-guidance.md`):
+
+Each phase plan includes a table like this:
+
+| Step | Effort | Model | Isolation | Brief for sub-agent |
+|------|--------|-------|-----------|---------------------|
+| 1a | medium | sonnet | none | One-sentence summary of what to do and which files to touch |
+| 1b | high | opus | worktree | Why this needs high effort: requires understanding X to do Y |
+
+**Effort levels**, from cheapest to most thorough:
+
+- **low** -- Purely mechanical changes: rename, reformat, add a
+  log line, regenerate generated code. The brief is a complete
+  instruction.
+- **medium** -- The plan provides enough context to follow a clear
+  brief. The sub-agent may read a few files, but the approach is
+  already decided.
+- **high** -- Requires reading several files, making judgment
+  calls, or understanding non-obvious invariants. The sub-agent
+  needs to think about edge cases.
+- **xhigh** -- The setting for hard coding and agentic steps:
+  long-horizon changes, or steps where the sub-agent must both
+  research and implement.
+- **max** -- Correctness matters more than cost. Expect
+  diminishing returns and occasional overthinking; reserve it for
+  steps where a wrong answer would be expensive to detect.
+
+**Brief for sub-agent:** this is the key field. Write it as if
+briefing a colleague who has never seen the codebase. Include what
+to change, which files to touch, what patterns to follow, and any
+non-obvious constraints.
+
+A good brief front-loads the research the planner already did, so
+the implementing agent does not repeat it. Instead of "add storage
+functions for the new object", name the functions to add, the file
+they belong in, the existing equivalent to mirror (with line
+numbers), and any registration the change also needs.
+
+The better the brief, the lower the effort level needed and the
+lighter the model that can succeed.
+<!-- shared-block-end -->
+
+!!! note "In this project"
+
+    A brief should say explicitly whether a step can be verified
+    by unit tests alone or needs a live cluster, because the
+    sub-agent cannot reach one and should not pretend otherwise.
+
+    A worked brief for this codebase: instead of "support
+    another appliance", write "add the trimmed descriptor for the
+    appliance to `shakenfist_client_ova/tests/fixtures/ovf/`, record
+    its expected parse beside it, and extend the parser in
+    `shakenfist_client_ova/ovf/` until it matches. Fail on any
+    section the parser does not understand and the descriptor does
+    not mark `ovf:required="false"`."
+
+### Model choice
+
+<!-- shared-block: subagent-model-roster v1 -->
+Sub-agent model roster (shared block; do not edit -- the canonical
+copy lives in shakenfist/development at
+`templates/shared-blocks/subagent-model-roster.md`):
+
+The planner recommends which model is best suited to each step.
+This is a judgment call, not a rigid rule -- the right model
+depends on what the step requires, not on whether it is "planning"
+or "implementation". The models available to sub-agents are:
+
+- **fable** -- The most capable model available, for the hardest
+  reasoning and the longest-horizon work: multi-step changes a
+  single sub-agent must carry end to end, or steps whose
+  correctness depends on holding a whole subsystem in mind at
+  once. It costs materially more than opus, so reserve it for
+  steps that have already defeated opus or are expected to.
+- **opus** -- The default for steps needing deep reasoning,
+  architectural understanding, subtle correctness judgment
+  (locking, state machines, migrations), or intricate
+  implementation that would be costly to debug if it were wrong.
+- **sonnet** -- A good default for well-briefed implementation
+  work. Faster and cheaper than opus, and effective when the plan
+  front-loads the research and the brief leaves no broad judgment
+  calls to make.
+- **haiku** -- Suitable for purely mechanical tasks:
+  search-and-replace, regenerating generated code, adding log
+  lines, running commands. The brief must be a near-complete
+  instruction.
+
+Model choice interacts with effort level and brief quality. A
+detailed brief compensates for a lighter model -- sonnet at medium
+effort with a thorough brief often matches opus at medium effort
+with a vague brief. The planner's job is to write briefs good
+enough that the recommended model can succeed.
+
+The model also determines the context window: fable, opus and
+sonnet have 1M tokens, haiku has 200K. A step that must hold many
+files in context at once may need one of the larger-context models
+for that reason alone, even when the reasoning itself is
+straightforward.
+
+**When in doubt, skew to the more capable model.** Saving money
+only matters if the outcome is still acceptable. A failed or
+low-quality implementation wastes more time -- and therefore more
+money -- than the heavier model would have cost. Recommend a
+lighter model only when you are confident the brief is detailed
+enough for it to succeed.
+<!-- shared-block-end -->
+
+### Management session review checklist
+
+<!-- shared-block: plan-review-checklist v1 -->
+Management session review checklist (shared block; do not edit --
+the canonical copy lives in shakenfist/development at
+`templates/shared-blocks/plan-review-checklist.md`):
+
+After a sub-agent completes, the management session verifies:
+
+- [ ] The files that were supposed to change actually changed --
+      read them, do not trust the summary.
+- [ ] No unrelated files were modified.
+- [ ] The changes match the intent of the brief: not merely
+      syntactically correct, but semantically right.
+- [ ] The project's own pre-merge checks pass, including any
+      generated code that has to be regenerated and committed
+      (see the project-specific checks below).
+- [ ] The commit message follows project conventions, including
+      the `Co-Authored-By` line recording model, context window,
+      and effort level.
+<!-- shared-block-end -->
+
+!!! note "In this project"
+
+    The project-specific checks referred to above are:
+
+    - [ ] The code passes `tox -epy3` and
+          `pre-commit run --all-files`.
+    - [ ] The plugin still imports cleanly (`python3 -c 'import
+          shakenfist_client_ova'`) -- a broken import takes the
+          whole `sf-client` CLI down.
+
+## Administration and logistics
+
+### Success criteria
+
+We will know when this plan has been successfully implemented
+because the following statements will be true:
+
+* The code passes `tox -epy3` and `pre-commit run --all-files`.
+* New code is compatible with Python >= 3.7 and the plugin still
+  imports cleanly (`python3 -c 'import shakenfist_client_ova'`) --
+  a broken import takes the whole `sf-client` CLI down.
+* There are unit tests for new parsing and error-handling
+  behaviour, in the existing testtools/stestr style, driven by
+  descriptor fixtures with external APIs mocked.
+* Lines are wrapped at 120 characters, single quotes for strings,
+  double quotes for docstrings, no triple single quotes.
+* Behaviour which can only be validated against a live Shaken
+  Fist cluster has been exercised there (manually or via the
+  functional CI) before merge.
+* Documentation follows the rules in `AGENTS.md`: user-visible
+  behaviour in `docs/`, and `ARCHITECTURE.md` only when the shape of
+  the import changes.
+
+!!! note "In this project"
+
+    The close-out sections below apply as written, with one
+    addition: when scanning the issue tracker for related bugs,
+    remember that issues for this plugin sometimes belong
+    upstream (for example `shakenfist/shakenfist` or
+    `shakenfist/client-python`). Reference cross-repository
+    issues explicitly.
+
+<!-- shared-block: plan-closeout-sections v1 -->
+Plan close-out sections (shared block; do not edit -- the
+canonical copy lives in shakenfist/development at
+`templates/shared-blocks/plan-closeout-sections.md`):
+
+### Future work
+
+We should list obvious extensions, known issues, unrelated bugs we
+encountered, and anything else we should one day do but have
+chosen to defer to here, so that we do not forget them.
+
+- Create an instance from the parsed hardware: the feature this plan
+  prepares for, with its own plan.
+- Decide whether the importer should offer guest conversion through
+  `virt-v2v -i ova`, which matters most for Windows and for appliances
+  without virtio drivers.
+- Map an OVF environment onto Shaken Fist user data. The Ubuntu cloud
+  image OVA, for one, takes its cloud-init configuration through
+  `ProductSection` properties.
+- Validate the hand-written fixtures against the DMTF OVF 1.1 envelope
+  schema, so that our idea of a valid descriptor is checked against
+  the specification's.
+- Publish `shakenfist_client_ova/ovf/` as its own package once a
+  second consumer needs it.
+- Verify manifest digests during the upload, to save the extra read
+  phase 4 accepts on servers without `blob-search-by-hash`. That needs
+  `shakenfist_client.util`'s upload helper to offer a hook between
+  uploading and creating the artifact, and digesting that survives its
+  seek-back on retry: an upstream change in `client-python`.
+- Verify an OVA's `.cert` signature over the manifest, which phase 4
+  ignores with a notice. Until then the manifest is corruption
+  detection, not tamper evidence.
+- Support gzip compressed and chunked file references, which phase 4
+  refuses. The design has to settle three things: the digest is taken
+  over the compressed bytes, the decompressed size comes from one
+  decompressing pass capped at `ovf:size` or the disk's capacity (not
+  from ISIZE), and that pass must not cost a second full read.
+- Test the declared `requires-python` floor, which nothing exercises
+  today. client-python-k3s#82 has the same gap.
+
+### Bugs fixed during this work
+
+This section should list any bugs we encounter during development
+that we fixed. You should also scan the project's issue tracker,
+where one exists, for directly related issues that we should
+either resolve as part of this master plan or at least be aware of
+while planning it.
+
+- #1, allocation units of the form `byte * 2^N` computed with XOR, was
+  fixed before this plan began, by the pull request that also
+  introduced the unit-test suite. It is listed because it is the only
+  issue the tracker held when the plan was written.
+
+### Back brief
+
+Before executing any step of this plan, please back brief the
+operator as to your understanding of the plan and how the work you
+intend to do aligns with that plan.
+<!-- shared-block-end -->
