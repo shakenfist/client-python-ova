@@ -14,7 +14,7 @@
 # requires approval for all external contributors, so a fork's
 # workflows do not run until a maintainer has looked. If that setting is
 # ever relaxed, this job belongs on the throwaway vm pool, as
-# supply-chain.yml already is.
+# secret-scan.yml already is.
 #
 # There are no unit tests yet. When there are, they run in this job.
 name: CI
