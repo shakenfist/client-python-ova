@@ -128,10 +128,12 @@ no OVF plugfest results turned up. What exists instead:
   work, but the descriptors were written by many third parties and no
   per-file licence is stated.
 - **Small fixture sets in other importers.** Glance's
-  `glance/tests/var/` has five negative-case OVAs (not a tar, no
-  descriptor, no disk, a bad descriptor) under Apache-2.0. COT's
-  `COT/tests/` has eleven trimmed descriptors, including OVF 0.9 and
-  2.0, under MIT. virt-v2v (GPL), VirtualBox's ValidationKit (GPL) and
+  `glance/tests/var/` has five small test OVAs under Apache-2.0: a
+  valid one (`testserver.ova`) and four negative cases
+  (`testserver-not-tar.ova`, `-no-ovf`, `-no-disk` and `-bad-ovf`).
+  COT's `COT/tests/` has ten trimmed descriptors and two manifests,
+  including OVF 0.9 and 2.0 and Cisco CSR1000v and IOSv appliances,
+  under MIT. virt-v2v (GPL), VirtualBox's ValidationKit (GPL) and
   Proxmox's `ovf_manifests/` (AGPL) cannot be copied into an
   Apache-2.0 repository, but their designs are worth borrowing:
   virt-v2v pairs one tiny descriptor per feature with an expected
@@ -202,8 +204,8 @@ to touch. Specifically:
   a rewrite.
 - Build a corpus of real descriptors from several producers, test
   every pull request against trimmed copies of them and against
-  govmomi's descriptor collection, and test against the appliances in
-  CI.
+  govmomi's and COT's descriptor collections, and test against the
+  appliances in CI.
 - Fix the gaps listed under Situation.
 
 Out of scope, and deliberately so:
@@ -311,36 +313,53 @@ Out of scope, and deliberately so:
    import stops" in `docs/usage.md` in the same pull request.
 5. **There are three test tiers.**
    - The *unit* tier runs on every pull request, offline, and needs no
-     secrets. It uses descriptor fixtures committed to this repository,
-     plus small synthetic OVAs built by the tests themselves. The
-     parser never reads disk contents, so a synthetic disk member can
-     be a few bytes of anything.
+     secrets. It is what `tox -epy3` runs. It uses the fixtures
+     committed to this repository (decision 6), plus small synthetic
+     OVAs built by the tests themselves. The parser never reads disk
+     contents, so a synthetic disk member can be a few bytes of
+     anything.
    - The *descriptor corpus* tier parses every descriptor in govmomi's
-     `ovf/fixtures/`, fetched at a commit pinned in this repository
-     rather than copied into it. Fetching sidesteps the question of
-     redistributing third-party descriptors, and needs no secret, so
-     the tier runs on every pull request, forks included. With 958
-     descriptors, hand-written expected files for each are not
-     realistic, so the tier asserts three things instead:
-     - every descriptor yields a model or a named `OVFError` subclass,
-       never any other exception;
-     - a committed ledger maps each descriptor's path to its outcome,
-       `model` or the error's class name. The test regenerates the ledger
-       and fails on any difference, so a behaviour change across the
-       whole collection shows up as a reviewed diff;
+     `ovf/fixtures/` and COT's `COT/tests/`, each fetched at a commit
+     pinned in this repository rather than copied into it. Both
+     collections hold descriptors written by third parties: govmomi's
+     come from many vendors, and COT's include Cisco appliance
+     descriptors. Fetching them leaves redistribution with their
+     owners, and needs no secret, so the tier runs on every pull
+     request, forks included. It needs the network, so it is not part
+     of `tox -epy3`. It runs in its own tox environment, `tox
+     -edescriptor-corpus`, which runs the fetch script into a
+     gitignored cache and then only the corpus tests, which `py3`'s
+     discovery does not reach. With nearly 1,000 descriptors,
+     hand-written expected files for each are not realistic, so the
+     tier asserts three things instead:
+     - a committed ledger maps each descriptor's path to its outcome:
+       `model`, or the class name of the exception raised. The test
+       regenerates the ledger and fails on any difference, so a
+       behaviour change across the whole collection shows up as a
+       reviewed diff. In phase 2 the ledger records today's parser as
+       it is, raw `KeyError` and `TypeError` included.
+     - from phase 3, every descriptor yields a model or a named
+       `OVFError` subclass, never any other exception. Phase 3's
+       ledger diff then shows exactly which descriptors that fixed.
      - a curated subset of about 50, chosen for shape coverage, has
        full expected files in decision 7's form, committed here and
-       keyed by govmomi path. They hold our parse, not govmomi's text.
+       keyed by upstream path. They hold our parse, not the upstream
+       text: before an expected file is written or compared, the test
+       replaces every prose field in the model with the placeholder
+       decision 6 uses. The list of prose fields is defined once, in
+       the parser package, and both the trim tool and this test use it.
    - The *appliance corpus* tier runs the importer's parse, archive and
      manifest paths over every appliance in `instar-testdata`, in CI on
-     the self-hosted pool. It follows instar's `prepare-testdata.sh`
+     the self-hosted pool. It has its own tox environment too, `tox
+     -eappliance-corpus`. It follows instar's `prepare-testdata.sh`
      pattern, including the guard that fails when a fixture is
      missing.
 
    The two corpus tiers fail the same way when their data is missing:
-   the guard fails, it never skips.
-6. **Committed fixtures are trimmed copies of real descriptors.** This
-   repository is public, and vendor descriptors carry licence and
+   the guard fails, it never skips. `docs/development.md` describes
+   both environments from the phase that adds each.
+6. **Committed fixtures from vendor appliances are trimmed copies.**
+   This repository is public, and vendor descriptors carry licence and
    product prose. `tools/trim-ovf-descriptor.py` replaces the text of
    the prose elements (`License`, `Annotation`, `Description`, product
    and vendor strings) with a fixed placeholder, keeping every element
@@ -348,12 +367,22 @@ Out of scope, and deliberately so:
    `defusedxml` like the importer does. Re-serialising can still lose
    things the parser might see (comments, namespace prefixes), so
    "structure unchanged" is checked rather than claimed: the appliance
-   corpus tier asserts that the parser's model of each original descriptor
-   equals its model of the trimmed fixture, apart from the placeholder
-   text. Each fixture carries an XML comment, straight after its XML
-   declaration (which must stay first, or the file stops being XML),
-   recording where it came from, the SHA-256 of the original descriptor, and that it was
-   trimmed. The full descriptors stay in the private `instar-testdata`.
+   corpus tier asserts that the parser's model of each original
+   descriptor equals its model of the trimmed fixture, apart from the
+   placeholder text. Each trimmed fixture carries an XML comment,
+   straight after its XML declaration (which must stay first, or the
+   file stops being XML), recording where it came from, the SHA-256 of
+   the original descriptor, and that it was trimmed. The full
+   descriptors stay in the private `instar-testdata`.
+
+   Two other kinds of committed fixture are not trimmed. Hand-written
+   fixtures carry no vendor prose to remove. Glance's five test OVAs
+   were written for Glance's own tests, contain no vendor descriptor,
+   and are Apache-2.0, so they are committed verbatim under
+   `shakenfist_client_ova/tests/fixtures/ova/imported/glance/`, with
+   their origin and licence in a `NOTICE` file there instead of a
+   comment. They are archives, so phase 4's archive tests use them; the
+   descriptor golden test does not.
 7. **Expected parses are data, not code.** Each fixture has a
    `<name>.expected.json` beside it: either the parser's model
    serialised to JSON, or, for a fixture meant to be refused,
@@ -366,29 +395,33 @@ Out of scope, and deliberately so:
    to an expected file.
 8. **The appliance corpus keeps a whole appliance only where the
    archive brings a shape nothing else does, and the descriptor and
-   manifest of the rest.** Descriptor shapes are govmomi's job (decision
-   5). A whole appliance earns its place through what only a whole
-   archive shows: a manifest's digest type checked against real disk
-   bytes, a `.cert` member, a disk member with no extension, or no
-   manifest at all. On the Situation table that is VyOS 1.2.1, both
-   Photon OS images, Talos, Oracle Linux and ArchiveTeam Warrior, about
-   2.1GB in all. Every other appliance there is descriptor-only. This
-   follows the precedent `instar-testdata` already set for the Wazuh
-   and Splunk disks, and keeps the CI pull small. A descriptor-only
-   entry records the original's full member listing in the provenance
-   table, so the archive layout is still on record. It is re-tarred from
-   the original's `.ovf` and `.mf` members. The descriptor's own
-   manifest entry is still verified on every entry, while disk hashes
-   are verified only on the full ones. The importer will refuse a
-   descriptor-only entry, because its `References` name disks that are
-   absent, and that refusal has no opt-out. The appliance corpus tier
-   instead asserts it: each descriptor-only entry declares, as test input, the
-   members that are deliberately absent. The test checks that list
-   against `References`, parses the descriptor, and requires the
-   archive check to fail with the missing-member error, naming exactly
-   those members. The `instar-testdata` README
-   gains a provenance table: URL, download date, original size,
-   SHA-256 and producer.
+   manifest of the rest.** Descriptor shapes are the descriptor corpus
+   tier's job (decision 5). A whole appliance earns its place through
+   what only a whole archive shows: a manifest's digest type checked
+   against real disk bytes, a `.cert` member, a disk member with no
+   extension, or no manifest at all. From the "Test data" table that
+   is VyOS 1.2.1, both Photon OS images, Talos, Oracle Linux and
+   ArchiveTeam Warrior, about 2.1GB in all. Every other appliance there
+   is descriptor-only, and so are the two local VirtualBox 6.1.10
+   exports (3.1GB and 3.8GB). Their one archive-level shape, the
+   manifest stored last, after the disks, is reproduced by a synthetic
+   OVA in phase 4's tests, and their descriptor-only copies keep the
+   manifest. This follows the precedent `instar-testdata` already set
+   for the Wazuh and Splunk disks, and keeps the CI pull small. A
+   descriptor-only entry records the original's full member listing,
+   in order, in the provenance table, so the archive layout is still
+   on record. It is re-tarred from the original's `.ovf` and `.mf`
+   members. The descriptor's own manifest entry is still verified on
+   every entry, while disk hashes are verified only on the whole ones.
+   The importer will refuse a descriptor-only entry, because its
+   `References` name disks that are absent, and that refusal has no
+   opt-out. The appliance corpus tier instead asserts it: each
+   descriptor-only entry declares, as test input, the members that are
+   deliberately absent. The test checks that list against
+   `References`, parses the descriptor, and requires the archive check
+   to fail with the missing-member error, naming exactly those members.
+   The `instar-testdata` README gains a provenance table: URL, download
+   date, original size, SHA-256 and producer.
 
 ## Open questions
 
@@ -448,10 +481,15 @@ audit holds only the verdict and the range. Detailed findings stay in
   streaming the start of the download and stopping. The manifest may
   not be near the start (see the VirtualBox note under Situation), so
   check before relying on that for the `.mf`.
-- Pin a govmomi commit for the descriptor corpus tier, and write the
-  fetch as a script in `tools/` that takes only `ovf/fixtures/` (a
-  sparse, blob-filtered clone), so a contributor runs the same thing
-  CI does. Choose the curated subset for decision 5, covering at least
+- Write the descriptor corpus fetch as a script in `tools/` that takes
+  only govmomi's `ovf/fixtures/` and COT's `COT/tests/` (sparse,
+  blob-filtered clones), so a contributor runs the same thing CI does.
+  The pinned commits are variables at the top of that script and
+  nowhere else. Bumping them is a deliberate, hand-made pull request
+  whose ledger diff is the thing reviewed; Renovate does not track
+  them, because a bump changes test expectations, not a dependency.
+  COT is abandoned, so its pin should never need to move. Choose the
+  curated subset for decision 5, covering at least
   OVF 0.9, 1.0, 1.1 and 2.0, `MultiVmVapps`, `SignedOVF`,
   `VM_with_nvram`, `NonAsciiChars`, the `property-types` and
   `virtualsystemcollection` cases and the invalid ones. Note in the
@@ -459,10 +497,8 @@ audit holds only the verdict and the range. Detailed findings stay in
   whether a hand-written one is still needed.
 - Write `tools/trim-ovf-descriptor.py` and commit a trimmed fixture
   for every appliance corpus descriptor under
-  `shakenfist_client_ova/tests/fixtures/ovf/`. Commit COT's eleven test
-  descriptors and Glance's five negative-case OVAs as they are: their
-  licences (MIT and Apache-2.0) allow it, and a `NOTICE` file beside
-  them records each one's origin and licence.
+  `shakenfist_client_ova/tests/fixtures/ovf/`. Commit Glance's five
+  test OVAs verbatim, with their `NOTICE` (decision 6).
 - Hand-write the edge cases neither corpus covers in a small, readable
   form:
   - an OVF 2.x envelope;
@@ -491,10 +527,10 @@ audit holds only the verdict and the range. Detailed findings stay in
   tests rather than committed: a manifest whose entry for the
   descriptor does not match, a manifest with no entry for a referenced
   file, no manifest at all, two manifests, a manifest listing the same
-  file twice, a SHA512 manifest, a `.cert` member, hrefs naming a
-  symlink, a hardlink and a
-  directory member, and members stored as `./name`, including two
-  that normalise to the same name.
+  file twice, a SHA512 manifest, a manifest stored last after the
+  disks (the VirtualBox order, decision 8), a `.cert` member, hrefs
+  naming a symlink, a hardlink and a directory member, and members
+  stored as `./name`, including two that normalise to the same name.
 
 ### 2. Extract the parser
 
@@ -517,10 +553,13 @@ A behaviour-preserving refactor, with one named exception.
 - Add the parameterised golden test over the phase 1 fixtures, with
   expected files recording *today's* behaviour in decision 7's form,
   including today's failures on the OVF 2.x and `required="false"`
-  fixtures. Add the descriptor corpus tier (decision 5) with its ledger
-  and curated expected files, also recording today's behaviour. Those
+  fixtures. Add the descriptor corpus tier (decision 5) and its tox
+  environment, with the ledger and curated expected files also
+  recording today's behaviour, unhandled exceptions included. They
+  are not part of this phase's named output change: the ledger shows
+  what today's parser does, and fixing it is phase 3's work. Those
   expected files and the ledger are the safety net phase 3 is reviewed
-  against.
+  against. Describe the new tox environment in `docs/development.md`.
 - Update `ARCHITECTURE.md` for the new shape: the subpackage and its
   import boundary, the error hierarchy, the model, and the split
   between parser and command. The document says all the code is in
@@ -551,6 +590,11 @@ A behaviour-preserving refactor, with one named exception.
   memory units. Each vendor fixture also gains a small hand-written
   assertion of those values, so the expected file is not the only
   record of what correct looks like.
+- Turn on the descriptor corpus tier's second assertion (decision 5):
+  every descriptor yields a model or a named `OVFError` subclass. The
+  ledger diff in this phase's pull request lists each descriptor whose
+  outcome changed, which is the review of what the reimplementation
+  fixed and of anything it broke.
 - Drop `xmltodict` and `dpath` from `pyproject.toml`. Update
   `AGENTS.md` and `docs/usage.md` for the new convention, and the
   parsing section of `ARCHITECTURE.md`, which still describes parsing
@@ -633,14 +677,17 @@ A behaviour-preserving refactor, with one named exception.
 
 This phase covers the appliance corpus tier only. The descriptor
 corpus tier runs from phase 2 onwards, needs no secret, and is not
-gated.
+gated. Its CI job runs `tox -edescriptor-corpus` on every pull
+request.
 
 - Adapt instar's `prepare-testdata.sh` into `tools/ci/`. Pull only
   `downloaded/ova/` from LFS (`git lfs pull --include`), about 2GB,
   not the whole 9GB.
 - Add a corpus test that runs the parse and the archive checks over
   every appliance, and a guard that fails when the corpus is missing,
-  never one that skips.
+  never one that skips. Run it as `tox -eappliance-corpus` (decision
+  5), outside `py3`'s discovery, and describe that environment in
+  `docs/development.md`.
 - Add the job to `ci.yml` on the runner labels open question 3
   settles, after the operator has added the secret. Fork pull requests
   receive no secrets, so the job is gated at the workflow level
@@ -678,11 +725,12 @@ This repository has no `PUSH-AUDIT.md`, so the phase applies the
 checklist in the `plan-push-audit-phase` block of `PLAN-TEMPLATE.md`
 to the recorded ranges, plus four questions specific to this plan:
 
-- Does any committed fixture still carry vendor prose that trimming
+- Does any trimmed fixture still carry vendor prose that trimming
   missed?
-- Does anything committed copy govmomi's descriptor text, rather than
-  refer to it by path, and does every imported COT and Glance file
-  appear in `NOTICE`?
+- Does anything committed copy govmomi's or COT's descriptor text,
+  rather than refer to it by path? Are the curated expected files free
+  of upstream prose, and does every Glance file appear in its
+  `NOTICE`?
 - Does the corpus CI path put the private GitLab hostname anywhere
   new? It already appears in the public `shakenfist/instar`, so
   carrying it here is not a new disclosure, but the audit records the
