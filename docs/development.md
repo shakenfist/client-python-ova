@@ -27,11 +27,21 @@ The hooks are skillsaw over the agent context, actionlint over the
 workflows, shellcheck over the shell scripts, and flake8 over the
 Python, wrapped at 120 characters.
 
+## Unit tests
+
+The tests live in `shakenfist_client_ova/tests/` and follow the
+client-python pattern of testtools run by stestr:
+
+```bash
+pip install tox
+tox -epy3
+```
+
 ## CI
 
 | Workflow | Runs | What it does |
 |----------|------|--------------|
-| `ci.yml` | Pull requests, pushes to `develop`, dispatch | The pre-commit hooks and an sdist and wheel build, then the automated reviewer on pull requests. |
+| `ci.yml` | Pull requests, pushes to `develop`, dispatch | The pre-commit hooks, the unit tests and an sdist and wheel build, then the automated reviewer on pull requests. |
 | `secret-scan.yml` | Pull requests, pushes to `develop`, dispatch | gitleaks over the history, after a positive control. `tools/gitleaks-scan.sh` runs the same scan locally. |
 | `codeql-analysis.yml` | Pull requests, pushes, weekly | CodeQL. |
 | `pr-re-review.yml` | A "please re-review" comment | Another automated review. |
@@ -39,8 +49,6 @@ Python, wrapped at 120 characters.
 | `renovate.yml` | Hourly | Dependency and pre-commit hook bumps. |
 | `export-repo-config.yml` | Daily | Exports the repository settings to `.github/exported-config/`. |
 | `release.yml` | A `v*` tag | The release, as below. |
-
-There are no unit tests yet.
 
 ## Releasing
 
