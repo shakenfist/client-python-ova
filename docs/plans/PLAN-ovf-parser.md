@@ -69,11 +69,12 @@ written against, in ways a survey of the code turned up:
 
 1. **OVF 2.x descriptors cannot be imported.** `NAMESPACES` maps the
    `http://schemas.dmtf.org/ovf/envelope/2` namespace to `v2`, but
-   every lookup is written against `v1:`, so a 2.x descriptor gets
-   past the optional reads and then dies with an unhandled `KeyError`
-   at `References`. OVF 2 also moves Ethernet ports and storage onto
-   `EthernetPortItem` and `StorageItem`, in the `epasd` and `sasd` CIM
-   namespaces, which the dispatcher has never heard of.
+   every lookup is written against `v1:`. So a 2.x descriptor dies at
+   the walk's first step, `dpath.delete(ovf, '**/v1:Info')`, which
+   matches nothing and raises dpath's `PathNotFound` as a traceback
+   (phase 2 survey finding 3). OVF 2 also moves Ethernet ports and
+   storage onto `EthernetPortItem` and `StorageItem`, in the `epasd`
+   and `sasd` CIM namespaces, which the dispatcher has never heard of.
 2. **`ovf:required="false"` is ignored for sections.** OVF says a
    consumer may skip a section that carries it. The code instead hard
    codes lists of sections to delete unread, so any optional section
@@ -339,9 +340,10 @@ Out of scope, and deliberately so:
      `test_path`, so `py3` never collects them and their fail-closed
      guard cannot fire offline. Each corpus environment runs `stestr
      --test-path` on its own directory, and `pyproject.toml` excludes
-     the directory from the wheel as it does `tests`. CI runs the
-     environment on one pinned Python version, because exception class
-     names can differ between versions. With nearly 1,000 descriptors,
+     the directory from the wheel as it does `tests`. The exception
+     class names the ledger records must not drift under it, so the
+     test environments pin `xmltodict` and `dpath` exactly (phase 2
+     decision 7). With nearly 1,000 descriptors,
      hand-written expected files for each are not realistic, so the
      tier asserts three things instead:
      - a committed ledger maps each descriptor's path to its outcome:
@@ -349,10 +351,12 @@ Out of scope, and deliberately so:
        regenerates the ledger and fails on any difference, so a
        behaviour change across the whole collection shows up as a
        reviewed diff. In phase 2 the ledger records today's parser as
-       it is, raw `KeyError`, `TypeError` and `xmltodict`'s entity
-       `ValueError` included. Until phase 3 removes `xmltodict`, a
-       Renovate bump of it may change the ledger, and that diff is
-       reviewed like any other.
+       it is. A descriptor that today ends in a raw exception is
+       recorded as the named wrapper with that exception's class in
+       brackets, such as `UnsupportedDescriptorError(KeyError)`. Until
+       phase 3 removes `xmltodict`, a Renovate bump of the pinned
+       version may change the ledger, and that diff is reviewed like
+       any other.
      - from phase 3, every descriptor yields a model or a named
        `OVFError` subclass, never any other exception. Phase 3's
        ledger diff then shows exactly which descriptors that fixed.
@@ -498,7 +502,7 @@ attribute tables; the evidence is in the phase 1 plan's survey finding
 | Phase | Plan | Status | Merged |
 |-------|------|--------|--------|
 | 1. Corpus and fixtures | [PLAN-ovf-parser-phase-01-corpus.md](PLAN-ovf-parser-phase-01-corpus.md) | Complete | instar-testdata 18a5ea5421..cf67642bbb; db7bdaa |
-| 2. Extract the parser | - | Not started | |
+| 2. Extract the parser | [PLAN-ovf-parser-phase-02-extract.md](PLAN-ovf-parser-phase-02-extract.md) | In progress | |
 | 3. ElementTree and the specification | - | Not started | |
 | 4. Archive correctness | - | Not started | |
 | 5. Corpus CI tier | - | Not started | |
@@ -594,7 +598,9 @@ audit holds only the verdict and the range. Detailed findings stay in
 
 ### 2. Extract the parser
 
-A behaviour-preserving refactor, with one named exception.
+A behaviour-preserving refactor, with two named output changes. The
+phase plan's survey corrected this section: see its "Corrections made
+to the master plan".
 
 - Move the descriptor and manifest parsing out of the Click command
   into `shakenfist_client_ova/ovf/`, still on `xmltodict`, returning
@@ -605,25 +611,31 @@ A behaviour-preserving refactor, with one named exception.
   and lists in document order. Phase 3's expected-file diffs then show
   behaviour changes, not a change of shape. Where today's
   code prints a message and exits, the command catches the error and
-  prints exactly that message. The exception is where today's code
-  dies with an unhandled `KeyError` traceback, such as on an OVF 2.x
-  descriptor. There the parser raises a named `OVFError` subclass
-  and the command prints one line. That is the only output change in
-  the phase, and the pull request lists every path it affects.
+  prints exactly that message. The first output change is where
+  today's code dies with an unhandled traceback: `KeyError`, dpath's
+  `PathNotFound`, `TypeError`, `ExpatError` or `ValueError`, such as
+  on an OVF 2.x descriptor. There the parser raises a named `OVFError`
+  subclass, chained from the original, and the command prints one
+  line. The second is the progress output. Today the walk prints as it
+  goes, much of it as reprs of `xmltodict`'s structures. A parser that
+  never prints cannot reproduce that, so the command prints a summary
+  from the model once the parse succeeds. The pull request lists every
+  path each change affects.
 - Add the parameterised golden test over the phase 1 fixtures, with
   expected files recording *today's* behaviour in decision 7's form,
   including today's failures on the OVF 2.x and `required="false"`
   fixtures. Add the descriptor corpus tier (decision 5) and its tox
   environment, with the ledger and curated expected files also
-  recording today's behaviour, unhandled exceptions included. They
+  recording today's behaviour, each formerly unhandled exception
+  named in brackets after the wrapper that now carries it. They
   are not part of this phase's named output change: the ledger shows
   what today's parser does, and fixing it is phase 3's work. Those
   expected files and the ledger are the safety net phase 3 is reviewed
   against. Describe the new tox environment in `docs/development.md`.
 - Add a `descriptor-corpus` job to `ci.yml` that runs `tox
-  -edescriptor-corpus` on every pull request, forks included, on a
-  GitHub-hosted runner, so the safety net is in CI from the phase that
-  builds it.
+  -edescriptor-corpus` on every pull request, forks included, on the
+  static self-hosted pool like every other job here, so the safety net
+  is in CI from the phase that builds it.
 - Update `ARCHITECTURE.md` for the new shape: the subpackage and its
   import boundary, the error hierarchy, the model, and the split
   between parser and command. The document says all the code is in
@@ -647,15 +659,20 @@ A behaviour-preserving refactor, with one named exception.
   the turning of each `OVFError` into one line and exit code 1.
 - Every change to an expected file in this phase's diff is an
   intended behaviour change, explained in the pull request. Phase 2
-  will probably record most vendor fixtures as refusals, so many
-  expected files go from an error to a whole model, with nothing to
-  compare against. Each newly successful one is checked field by field
+  records 12 of the 16 vendor fixtures as refusals, so many expected
+  files go from an error to a whole model, with nothing to compare
+  against. Three of those refusals are #11, the `byte` allocation
+  unit, which this phase fixes unless it has been fixed already. Each newly successful one is checked field by field
   against its descriptor: disk capacities, controllers, NICs and
   memory units. Each vendor fixture also gains a small hand-written
   assertion of those values, so the expected file is not the only
-  record of what correct looks like.
+  record of what correct looks like. Before the curated expected file
+  is committed, read it for vendor text in fields the prose list does
+  not cover, such as deployment option labels: they are filled for the
+  first time in this phase.
 - Turn on the descriptor corpus tier's second assertion (decision 5):
-  every descriptor yields a model or a named `OVFError` subclass. The
+  every descriptor yields a model or a named `OVFError` subclass, and
+  phase 2's `UnsupportedDescriptorError` wrapper is deleted. The
   ledger diff in this phase's pull request lists each descriptor whose
   outcome changed, which is the review of what the reimplementation
   fixed and of anything it broke.
