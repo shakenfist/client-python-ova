@@ -490,9 +490,8 @@ string there is published.
    resparsifies image extensions, not `.ova`. 1c files an issue on
    shakenfist/instar proposing `git lfs pull --exclude
    downloaded/ova`, and this phase does not wait for it.
-4. **The CyberOps exports' origin and terms are not recorded
-   anywhere.** They are the operator's local copies of Cisco Networking
-   Academy course appliances. See open question 1.
+4. **The CyberOps exports' origin and terms were not recorded
+   anywhere.** Open question 1 now records them.
 5. **The upstream corpora move under the pins.** They cannot: a commit
    hash is immutable. The risk is the reverse, a pin going stale, and
    the master plan accepts that (pins are bumped by hand).
@@ -500,11 +499,15 @@ string there is published.
 ## Open questions
 
 1. **Where did the two CyberOps appliances come from, and on what
-   terms?** The provenance records `local`, plus whatever the operator
-   can say about where they were downloaded. Only their descriptor and
-   manifest are kept, and only trimmed descriptors are published, so
-   this does not block the phase. It is recorded so that nobody has to
-   ask again.
+   terms?** Answered on 2026-10-16: they are training VMs from Cisco's
+   CyberOps courseware. The operator is licensed to possess them but
+   not to redistribute them, so their `.ova` files stay in
+   `instar-testdata` and are never republished. Their trimmed
+   descriptors are published like any other: a descriptor with its
+   prose removed is the envelope, not the courseware. `sources.json`
+   records this in a `redistributable` field on every entry (`true`,
+   `false`, or `null` where nobody has checked), and only a `true`
+   entry's `.ova` may be copied anywhere public.
 
 The survey's three new questions for phase 3 (survey finding 4) are
 recorded in the master plan as its open questions 4 to 6.
@@ -560,8 +563,9 @@ Phase 1 ran on 2026-10-16. Where it departed from the text above:
 * Decision 4 gained the four details step 1d settled, and the prose
   list gained `ProductSection/Info` in step 1e; both are recorded
   there.
-* The `instar-testdata` commits are `18a5ea5421..3a6d14f823`, pushed
-  to `main` after the path and README-table audit passed. The instar
+* The `instar-testdata` commits are `18a5ea5421..cf67642bbb`, pushed
+  to `main` after the path and README-table audit passed; the last of
+  them adds the `redistributable` field (open question 1). The instar
   issue for risk 3 is shakenfist/instar#672.
 * A sub-agent's `pre-commit run --all-files` skips untracked files, so
   new files were staged before every check.

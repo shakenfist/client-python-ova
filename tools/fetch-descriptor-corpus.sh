@@ -37,7 +37,9 @@ fetch_corpus() {
 
     if [ -d "$final" ]; then
         local have
-        have=$(git -C "$final" rev-parse HEAD)
+        # --git-dir, not -C: the cache is inside this repository, so -C on a
+        # broken cache directory would find and report this repository's HEAD.
+        have=$(git --git-dir="$final/.git" rev-parse HEAD 2>/dev/null || echo "an unreadable checkout")
         if [ "$have" != "$sha" ]; then
             echo "$final is at $have, not the pin $sha; delete it and re-run" >&2
             exit 1
@@ -56,7 +58,7 @@ fetch_corpus() {
     git -C "$tmp" checkout --quiet FETCH_HEAD
 
     local got
-    got=$(git -C "$tmp" rev-parse HEAD)
+    got=$(git --git-dir="$tmp/.git" rev-parse HEAD)
     if [ "$got" != "$sha" ]; then
         echo "$repo: fetched $got, expected the pin $sha" >&2
         exit 1

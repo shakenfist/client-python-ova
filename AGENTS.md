@@ -56,6 +56,8 @@ releasing.
 - Large `.ova` files used for manual testing are gitignored; keep it
   that way. The one exception is the small, deliberate fixtures under
   `shakenfist_client_ova/tests/fixtures/ova/`, unignored by a negation
-  in `.gitignore`.
+  in `.gitignore`, and only from sources whose terms allow it: an
+  instar-testdata appliance whose `redistributable` is not `true` never
+  goes there.
 - Plans live in `docs/plans/`, start from `PLAN-TEMPLATE.md`, and are
   registered in `docs/plans/index.md`.

@@ -65,6 +65,14 @@ original. It splices bytes rather than re-serialising, so prefixes,
 comments and whitespace are the original's. `--check` proves that
 nothing else changed.
 
+`--check` needs the original, which only `instar-testdata` holds, so
+CI instead runs a unit test over the committed files alone: each must
+carry the provenance comment, every prose span must be exactly
+`TRIMMED`, and every emptied element must be empty and keep only its
+allowed attributes. The fixtures are marked `-text` in
+`.gitattributes` so that git never rewrites their line endings, and
+any whitespace hook added later must exclude them.
+
 A leak in an ignored vendor element is fixed by adding an entry to
 `EMPTIED_ELEMENTS` and re-running the tool, never by editing a
 fixture. The prose list (`PROSE_ELEMENTS`) is a defect to fix in the
@@ -86,8 +94,14 @@ To add an appliance:
 
 1. Add an entry to `downloaded/ova/sources.json` in `instar-testdata`
    (`name`, `url` or `local_path`, `kind`, `producer`,
-   `vendor_checksum` or `null`, and a `note`). The vendor checksum is
-   a literal; the script never fetches one.
+   `vendor_checksum` or `null`, `redistributable`, and a `note`). The
+   vendor checksum is a literal; the script never fetches one.
+   `redistributable` is `true` only where an open-source licence or the
+   vendor's stated terms plainly allow republishing the appliance,
+   `false` where they do not, and `null` until someone checks. Only a
+   `true` entry's `.ova` may be copied anywhere public, this
+   repository's `tests/fixtures/ova/` included. A trimmed descriptor is
+   not the appliance, so it is published for every entry.
 2. Run `scripts/fetch-ova-corpus.py --only <name>`. It streams the
    archive once, verifies the vendor checksum and the archive's own
    manifest, and writes the `.ova` and provenance file. A second run

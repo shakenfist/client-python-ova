@@ -191,9 +191,12 @@ def load(directory):
 
 def named_directory(descriptor):
     """The named directory a descriptor sits in, or None."""
+    # A named directory is a top-level directory or file (qualifiers.ovf),
+    # or a directory directly under external/. The match is exact, so that a
+    # later upstream vmware-foo.ovf does not count as being in vmware.
     parts = descriptor.path.split('/')
     for name in NAMED_DIRECTORIES:
-        if name in parts[:2] or descriptor.path.startswith(name):
+        if parts[0] in (name, name + '.ovf') or (parts[0] == 'external' and len(parts) > 2 and parts[1] == name):
             return name
     return None
 

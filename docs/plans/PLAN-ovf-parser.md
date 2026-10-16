@@ -497,7 +497,7 @@ attribute tables; the evidence is in the phase 1 plan's survey finding
 
 | Phase | Plan | Status | Merged |
 |-------|------|--------|--------|
-| 1. Corpus and fixtures | [PLAN-ovf-parser-phase-01-corpus.md](PLAN-ovf-parser-phase-01-corpus.md) | Complete | instar-testdata 18a5ea5421..3a6d14f823 |
+| 1. Corpus and fixtures | [PLAN-ovf-parser-phase-01-corpus.md](PLAN-ovf-parser-phase-01-corpus.md) | Complete | instar-testdata 18a5ea5421..cf67642bbb |
 | 2. Extract the parser | - | Not started | |
 | 3. ElementTree and the specification | - | Not started | |
 | 4. Archive correctness | - | Not started | |

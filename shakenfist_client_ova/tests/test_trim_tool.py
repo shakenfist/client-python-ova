@@ -429,3 +429,62 @@ class CommandLineTestCase(testtools.TestCase):
     def test_bad_source_exits_non_zero(self):
         self.assertEqual(1, tool.main(['--source', 'a--b', self.original, self.output]))
         self.assertFalse(os.path.exists(self.output))
+
+
+VENDOR_FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures', 'ovf', 'vendor')
+
+
+class CommittedFixturesTestCase(testtools.TestCase):
+    """The committed vendor fixtures still look trimmed, without their originals.
+
+    --check needs the original, which lives in instar-testdata, so CI cannot run
+    it. This test checks what the trimmed file alone can show: the provenance
+    comment is where the tool puts it, every prose span is exactly TRIMMED, and
+    every emptied element is empty and keeps only the attributes its list
+    allows. A hand edit that puts prose back, or a descriptor committed without
+    the tool, fails here.
+    """
+
+    def _problems(self, name, data):
+        try:
+            descriptor = tool.find_spans(data)
+        except tool.TrimError as e:
+            return ['%s: cannot be read: %s' % (name, e)]
+
+        problems = []
+        start = descriptor.insertion_point + (1 if descriptor.insert_after_declaration else 0)
+        end = data.find(b'-->', start)
+        if end < 0 or not tool.COMMENT_RE.fullmatch(data, start, end + 3):
+            problems.append('%s: no provenance comment at offset %d' % (name, start))
+        for span in descriptor.spans:
+            element = span.element
+            if span.kind == 'prose':
+                if data[span.start:span.end] != tool.PLACEHOLDER:
+                    problems.append('%s: offset %d, %s: prose is not TRIMMED' % (name, span.start, element.path()))
+                continue
+            if not element.self_closing:
+                problems.append('%s: offset %d, %s: emptied element has content' % (name, span.start, element.path()))
+            kept = tool._EMPTIED[element.name]
+            for resolved, qname, _, _ in element.attributes:
+                if resolved is not None and resolved not in kept:
+                    problems.append('%s: offset %d, %s: attribute %s is not kept'
+                                    % (name, span.start, element.path(), qname.decode('utf-8')))
+        return problems
+
+    def test_vendor_fixtures_are_trimmed(self):
+        names = sorted(n for n in os.listdir(VENDOR_FIXTURES) if n.endswith('.ovf'))
+        self.assertNotEqual([], names)
+        problems = []
+        for name in names:
+            with open(os.path.join(VENDOR_FIXTURES, name), 'rb') as f:
+                problems.extend(self._problems(name, f.read()))
+        self.assertEqual([], problems)
+
+    def test_untrimmed_descriptor_is_caught(self):
+        # The guard itself: the original OVF1 has prose, a full Machine element
+        # and no provenance comment, so all three problems are reported.
+        problems = self._problems('ovf1', OVF1.encode('utf-8'))
+        self.assertTrue(any('no provenance comment' in p for p in problems), problems)
+        self.assertTrue(any('prose is not TRIMMED' in p for p in problems), problems)
+        self.assertTrue(any('emptied element has content' in p for p in problems), problems)
+        self.assertTrue(any('snapshotFolder' in p for p in problems), problems)
