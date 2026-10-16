@@ -517,7 +517,8 @@ departs from the shared block's `<repo> <sha> (#pr)` deliberately:
 checklist item 1 accepts. A direct landing has no pull request to audit
 it, so the `instar-testdata` range is audited as part of this phase's
 own pull request. The things to check are that only `downloaded/ova/`,
-the fetch script and the README changed, and that the provenance table
+`scripts/` (the fetch script and its test), `.gitattributes` (the
+`*.ova` LFS rule) and the README changed, and that the provenance table
 matches the files. This repository is public, so its record of that
 audit holds only the verdict and the range. Detailed findings stay in
 `instar-testdata`.
