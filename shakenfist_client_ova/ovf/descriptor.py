@@ -95,10 +95,10 @@ DISK_DRIVE = 17
 OTHER_STORAGE_CONTROLLER = 20
 
 # The controllers the parser reads, by resource type, and for "other storage
-# controller" by subtype.
+# controller" by subtype. A subtype is matched in any case: producers write
+# both AHCI and ahci.
 CONTROLLER_BUSES = {IDE_CONTROLLER: 'ide', SCSI_CONTROLLER: 'scsi'}
 OTHER_STORAGE_BUSES = {
-    'AHCI': 'sata',
     'ahci': 'sata',
     'vmware.sata.ahci': 'sata',
     'vmware.nvme.controller': 'nvme',
@@ -125,6 +125,14 @@ _INTEGER_RE = re.compile(r'^[0-9]{1,30}$')
 
 # xs:boolean's values.
 _BOOLEANS = {'true': True, '1': True, 'false': False, '0': False}
+
+# A Property's types, from DSP0243's table of property types, which are CIM
+# datatypes. They are matched in any case: CIM's datatype names are, and
+# DSP0243 2.x's table writes String and Boolean where 1.x's writes string and
+# boolean.
+PROPERTY_TYPES = frozenset([
+    'uint8', 'sint8', 'uint16', 'sint16', 'uint32', 'sint32', 'uint64', 'sint64', 'string', 'boolean', 'real32',
+    'real64'])
 
 
 def _split_tag(tag):
@@ -161,14 +169,30 @@ def _name(text, default_namespace):
     return namespace, local
 
 
-def _required_false(element, key):
-    """Whether an element carries ovf:required="false", or an unqualified required="false" on an OVF element."""
+def _required_false(element, key, path):
+    """Whether an element carries ovf:required="false", or an unqualified required="false" on an OVF element.
+
+    The value is an xs:boolean, and any other value is refused.
+    """
+    required_false = False
     for attribute, value in element.attrib.items():
         namespace, local = _attribute_key(attribute)
         if local == 'required' and (namespace == OVF or (not namespace and key[0] == OVF)):
-            if _BOOLEANS.get(value.strip()) is False:
-                return True
-    return False
+            result = _BOOLEANS.get(value.strip())
+            if result is None:
+                raise InvalidValueError('%s@%s is "%s", which is neither true nor false' % (
+                    path, 'ovf:required' if namespace else 'required', value))
+            if result is False:
+                required_false = True
+    return required_false
+
+
+def _unique(seen, value, where):
+    """Record that where gives value, refusing it if an earlier element already gave the same value in seen."""
+    first = seen.get(value)
+    if first is not None:
+        raise InvalidValueError('%s repeats "%s", already given by %s' % (where, value, first))
+    seen[value] = where
 
 
 class _Reader(object):
@@ -229,18 +253,21 @@ class _Node(object):
         self.key = _element_key(element)
         reader.read.add(id(element))
 
+    def entries(self):
+        """Each child element as (child, key, path)."""
+        return [(child, key, '%s/%s' % (self.path, step)) for child, key, step in self.reader.steps(self.element)]
+
     def children(self, *names):
         """Every child with one of the names, in document order, each recorded as read."""
         wanted = [_name(name, OVF) for name in names]
-        return [_Node(self.reader, child, '%s/%s' % (self.path, step))
-                for child, key, step in self.reader.steps(self.element) if key in wanted]
+        return [_Node(self.reader, child, path) for child, key, path in self.entries() if key in wanted]
 
     def child(self, name):
         """The first child with the name, recorded as read, or None. Any second one is left unread."""
         wanted = _name(name, OVF)
-        for child, key, step in self.reader.steps(self.element):
+        for child, key, path in self.entries():
             if key == wanted:
-                return _Node(self.reader, child, '%s/%s' % (self.path, step))
+                return _Node(self.reader, child, path)
         return None
 
     def required_child(self, name):
@@ -302,7 +329,7 @@ class _Node(object):
 
     def mark_children(self, namespace, names):
         """Record as read every child in the namespace whose local name is in names."""
-        for child, key, _ in self.reader.steps(self.element):
+        for child, key, _ in self.entries():
             if key[0] == namespace and key[1] in names:
                 self.reader.read.add(id(child))
 
@@ -311,6 +338,38 @@ class _Node(object):
         if name.startswith('@'):
             return '%s@%s' % (self.path, self.reader.display(*_name(name[1:], ''), attribute=True))
         return '%s/%s' % (self.path, self.reader.display(*_name(name, OVF)))
+
+
+class _CombinedItem(_Node):
+    """Hardware items sharing an InstanceID in one configuration, read as the one item DSP0243 combines them into.
+
+    Each child is taken from the last item that has a child of its name, and
+    the like-named children of the items before it are passed over, as DSP0243
+    says. Attributes are read from the last item, and so is the path that
+    messages name, but each child's path names the item it came from.
+    """
+
+    def __init__(self, items):
+        last = items[-1]
+        super(_CombinedItem, self).__init__(last.reader, last.element, last.path)
+        self.items = items
+        picked = {}
+        for item in items:
+            by_key = {}
+            for entry in item.entries():
+                by_key.setdefault(entry[1], []).append(entry)
+            for key, entries in by_key.items():
+                for overridden in picked.get(key, []):
+                    self.reader.read_whole.add(id(overridden[0]))
+                picked[key] = entries
+        self._entries = [entry for entries in picked.values() for entry in entries]
+
+    def entries(self):
+        return self._entries
+
+    def skip(self):
+        for item in self.items:
+            item.skip()
 
 
 def _integer(value, where):
@@ -367,27 +426,34 @@ class _Configurations(object):
     """The DeploymentOptionSection's configurations, and the default one, which the parser builds."""
 
     def __init__(self, options):
-        self.ids = set(option.id for option in options)
+        self.ids = [option.id for option in options]
         self.default = next((option.id for option in options if option.default), None)
 
-    def applies(self, node, required=False):
-        """Whether an element applies to the default configuration, by its ovf:configuration list.
+    def selected(self, node, required=False):
+        """The ids of the configurations an element applies to, by its ovf:configuration list, each once.
 
         An element without one applies to every configuration, unless required
-        says it must have one. A name in the list that is not a configuration's
-        id is refused, because DSP0243 allows only those.
+        says it must have one. With no DeploymentOptionSection, that is the
+        one configuration there is, given as None. A name in the list that is
+        not a configuration's id is refused, because DSP0243 allows only those.
         """
         name = 'ovf:configuration'
         configuration = node.required_attribute(name) if required else node.attribute(name)
         if configuration is None:
-            return True
-        names = configuration.split()
-        for configuration_id in names:
+            return list(self.ids) or [None]
+        names = []
+        for configuration_id in configuration.split():
             if configuration_id not in self.ids:
                 raise BrokenReferenceError(
                     '%s names the configuration "%s", which DeploymentOptionSection does not hold'
                     % (node.describe('@' + name), configuration_id))
-        return self.default in names
+            if configuration_id not in names:
+                names.append(configuration_id)
+        return names
+
+    def applies(self, node, required=False):
+        """Whether an element applies to the default configuration, by its ovf:configuration list."""
+        return self.default in self.selected(node, required=required)
 
 
 def _read_tree(data):
@@ -416,6 +482,9 @@ def _read_tree(data):
             'The descriptor refers to an external entity, which the parser refuses: no OVF descriptor needs one'
         ) from None
     except defusedxml.DTDForbidden:
+        # Defensive: iterparse is called with forbid_dtd=False, so this is not
+        # raised today. A DOCTYPE without entities is deliberately allowed, and
+        # an entity declaration is refused through EntitiesForbidden above.
         raise EntityDeclarationError(
             'The descriptor declares a document type, which the parser refuses: no OVF descriptor needs one') from None
     except (LookupError, ValueError):
@@ -447,9 +516,12 @@ def _check_envelope(root):
 
 def _read_files(envelope):
     files = []
+    ids = {}
     for node in envelope.required_child('References').children('File'):
+        file_id = node.required_attribute('ovf:id')
+        _unique(ids, file_id, node.describe('@ovf:id'))
         files.append(File(
-            id=node.required_attribute('ovf:id'),
+            id=file_id,
             href=node.required_attribute('ovf:href'),
             size=_integer_attribute(node, 'ovf:size'),
             compression=node.attribute('ovf:compression'),
@@ -464,9 +536,12 @@ def _read_deployment_options(envelope):
         return []
 
     options = []
+    ids = {}
     for node in section.children('Configuration'):
+        option_id = node.required_attribute('ovf:id')
+        _unique(ids, option_id, node.describe('@ovf:id'))
         options.append(DeploymentOption(
-            id=node.required_attribute('ovf:id'),
+            id=option_id,
             default=_boolean_attribute(node, 'ovf:default', False),
             label=node.child_text('Label'),
             description=node.child_text('Description')))
@@ -480,9 +555,13 @@ def _read_deployment_options(envelope):
 
 def _read_property(node, category, configurations):
     value = node.attribute('ovf:value')
-    # A Value child gives the property's value in the configurations it names.
+    # A Value child gives the property's value in the configurations it names,
+    # and no two may name the same one.
+    configured_by = {}
     for value_node in node.children('Value'):
         configured = value_node.required_attribute('ovf:value')
+        for configuration_id in configurations.selected(value_node, required=True):
+            _unique(configured_by, configuration_id, value_node.describe('@ovf:configuration'))
         if configurations.applies(value_node, required=True):
             value = configured
 
@@ -493,9 +572,14 @@ def _read_property(node, category, configurations):
     password = _boolean_attribute(node, 'ovf:password', False)
     password = _boolean_attribute(node, 'ovf:isPassword', False) or password
 
+    property_type = node.required_attribute('ovf:type')
+    if property_type.strip().lower() not in PROPERTY_TYPES | quirks.PROPERTY_TYPES:
+        raise InvalidValueError('%s is "%s", which is not a property type' % (
+            node.describe('@ovf:type'), property_type))
+
     return Property(
         key=node.required_attribute('ovf:key'),
-        type=node.required_attribute('ovf:type'),
+        type=property_type,
         user_configurable=_boolean_attribute(node, 'ovf:userConfigurable', False),
         password=password,
         value=value,
@@ -510,8 +594,14 @@ def _full_key(product_class, key, instance):
     return '.'.join(part for part in (product_class, key, instance) if part)
 
 
-def _read_product(node, configurations, excluded):
-    """Read a ProductSection, adding to excluded the keys of properties the default configuration leaves out."""
+def _read_product(node, configurations, excluded, full_keys):
+    """Read a ProductSection, adding to excluded the keys of properties the default configuration leaves out.
+
+    full_keys holds the full key of every property in the VirtualSystem's
+    earlier ProductSections, with the path that gives it, and this section's
+    are added. A ${key} reference is resolved by full key, so each must be
+    unique across the VirtualSystem, as each key must be within its section.
+    """
     product = Product(
         product_class=node.attribute('ovf:class'),
         instance=node.attribute('ovf:instance'),
@@ -532,16 +622,28 @@ def _read_product(node, configurations, excluded):
 
     # A Category heads the properties after it.
     category = None
+    keys = {}
     for child in node.children('Category', 'Property'):
         if child.key[1] == 'Category':
             category = child.text()
-        elif configurations.applies(child):
-            product.properties.append(_read_property(child, category, configurations))
+            continue
+        if configurations.applies(child):
+            prop = _read_property(child, category, configurations)
+            product.properties.append(prop)
+            key = prop.key
         else:
             key = child.attribute('ovf:key')
             if key:
                 excluded.update([key, _full_key(product.product_class, key, product.instance)])
             child.skip()
+        if key:
+            where = child.describe('@ovf:key')
+            _unique(keys, key, where)
+            full_key = _full_key(product.product_class, key, product.instance)
+            if full_key in full_keys:
+                raise InvalidValueError('%s gives the property the full key "%s", already given by %s' % (
+                    where, full_key, full_keys[full_key]))
+            full_keys[full_key] = where
     return product
 
 
@@ -616,26 +718,47 @@ def _read_disks(envelope, files, property_values, excluded_properties):
         return []
 
     file_ids = set(file.id for file in files)
+    disk_ids = {}
+    file_refs = {}
+    nodes = section.children('Disk')
     disks = []
-    for node in section.children('Disk'):
+    for node in nodes:
         disk_id = node.required_attribute('ovf:diskId')
+        _unique(disk_ids, disk_id, node.describe('@ovf:diskId'))
         capacity = _capacity(node, property_values, excluded_properties)
         unit = node.attribute('ovf:capacityAllocationUnits')
         factor = 1 if unit is None else _bytes_per_unit(unit, node.describe('@ovf:capacityAllocationUnits'))
 
         file_ref = node.attribute('ovf:fileRef')
-        if file_ref is not None and file_ref not in file_ids:
-            raise BrokenReferenceError('%s names the file "%s", which References does not hold' % (
-                node.describe('@ovf:fileRef'), file_ref))
+        if file_ref is not None:
+            if file_ref not in file_ids:
+                raise BrokenReferenceError('%s names the file "%s", which References does not hold' % (
+                    node.describe('@ovf:fileRef'), file_ref))
+            # DSP0243: different Disk elements shall not name the same file.
+            _unique(file_refs, file_ref, node.describe('@ovf:fileRef'))
+
+        # DSP0243: the populated size may be an estimate, but is never larger
+        # than the capacity.
+        populated_size = _integer_attribute(node, 'ovf:populatedSize')
+        if populated_size is not None and populated_size > capacity * factor:
+            raise InvalidValueError('%s is %d bytes, more than the disk\'s capacity of %d bytes' % (
+                node.describe('@ovf:populatedSize'), populated_size, capacity * factor))
 
         disks.append(Disk(
             disk_id=disk_id,
             capacity_bytes=capacity * factor,
             file_ref=file_ref,
             format=node.attribute('ovf:format'),
-            populated_size=_integer_attribute(node, 'ovf:populatedSize'),
+            populated_size=populated_size,
             parent_ref=node.attribute('ovf:parentRef'),
             boot=_disk_boot(node)))
+
+    # A delta disk's parent is checked once every disk is known, so that the
+    # parent may come after it.
+    for node, disk in zip(nodes, disks):
+        if disk.parent_ref is not None and disk.parent_ref not in disk_ids:
+            raise BrokenReferenceError('%s names the disk "%s", which DiskSection does not hold' % (
+                node.describe('@ovf:parentRef'), disk.parent_ref))
     return disks
 
 
@@ -645,10 +768,14 @@ def _read_networks(envelope, configurations):
         return []
 
     networks = []
+    names = {}
     for node in section.children('Network'):
+        # A name is unique within the envelope, whatever configurations its
+        # networks apply to.
+        name = node.required_attribute('ovf:name')
+        _unique(names, name, node.describe('@ovf:name'))
         if configurations.applies(node):
-            networks.append(Network(
-                name=node.required_attribute('ovf:name'), description=node.child_text('Description')))
+            networks.append(Network(name=name, description=node.child_text('Description')))
         else:
             node.skip()
     return networks
@@ -670,21 +797,23 @@ def _host_resource(item, cim_class, disk_ids, file_ids):
     return first
 
 
-def _read_item(item, hardware, drives, disk_ids, file_ids):
-    """Read a hardware item that applies into hardware, collecting a disk drive in drives with its item."""
+def _read_item(item, instance_id, resource_type, hardware, drives, references):
+    """Read a hardware item that applies into hardware, collecting a disk drive in drives with its item.
+
+    references holds the ids of the descriptor's disks and files, and the
+    names of the networks in the default configuration, by kind.
+    """
     cim_class = ITEMS[item.key[1]]
 
     def name(local):
         return '%s:%s' % (cim_class, local)
 
-    item.mark_children(cim_class, _CIM_READ[cim_class])
-    resource_type = _integer_text(item, name('ResourceType'), required=True)
     subtype = item.child_text(name('ResourceSubType'))
     required = _boolean_attribute(item, 'ovf:required', True)
 
     bus = CONTROLLER_BUSES.get(resource_type)
     if resource_type == OTHER_STORAGE_CONTROLLER:
-        bus = OTHER_STORAGE_BUSES.get(subtype)
+        bus = OTHER_STORAGE_BUSES.get((subtype or '').lower())
     if bus is None and resource_type not in KNOWN_TYPES:
         if not required:
             item.skip()
@@ -695,7 +824,7 @@ def _read_item(item, hardware, drives, disk_ids, file_ids):
         raise UnsupportedHardwareError(
             '%s is a hardware item of %s, which the parser does not support' % (item.path, kind))
 
-    host_resource = _host_resource(item, cim_class, disk_ids, file_ids)
+    host_resource = _host_resource(item, cim_class, references['disk'], references['file'])
 
     if resource_type == CPU:
         hardware.vcpus = _integer_text(item, name('VirtualQuantity'), required=True)
@@ -712,9 +841,15 @@ def _read_item(item, hardware, drives, disk_ids, file_ids):
         factor = 1 if unit is None else _bytes_per_unit(unit, item.describe(unit_name))
         hardware.memory_bytes = quantity * factor
     elif bus is not None:
-        hardware.controllers.append(Controller(instance_id=item.required_child_text(name('InstanceID')), bus=bus))
+        hardware.controllers.append(Controller(instance_id=instance_id, bus=bus))
     elif resource_type == ETHERNET_ADAPTER:
-        hardware.nics.append(Nic(resource_subtype=subtype, connection=item.child_text(name('Connection'))))
+        # DSP0243: a Connection naming a network names one in the
+        # NetworkSection.
+        connection = item.child_text(name('Connection'))
+        if connection is not None and connection not in references['network']:
+            raise BrokenReferenceError('%s names the network "%s", which NetworkSection does not hold' % (
+                item.describe(name('Connection')), connection))
+        hardware.nics.append(Nic(resource_subtype=subtype, connection=connection))
     elif resource_type == DISK_DRIVE:
         drive = DiskDrive(
             parent=item.required_child_text(name('Parent')),
@@ -725,7 +860,43 @@ def _read_item(item, hardware, drives, disk_ids, file_ids):
         drives.append((item, drive))
 
 
-def _read_hardware(section, configurations, disk_ids, file_ids):
+def _check_instance_id(item, instance_id, resource_type, bound, configurations, seen):
+    """Refuse an item whose InstanceID clashes with an earlier item's in its VirtualHardwareSection.
+
+    DSP0243 lets several items share an InstanceID: normal items, to be
+    combined into one, and the range markers of that one. seen records the
+    resource type of each InstanceID given so far, under 'types', and the
+    range marker giving each InstanceID in each configuration, under
+    'markers', so that two of DSP0243's rules are checked:
+
+    * Items sharing an InstanceID agree on their resource type.
+    * A range has at most one ovf:bound="min" and one ovf:bound="max" range
+      marker in any one configuration. A second would leave the range
+      ambiguous.
+    """
+    first = seen['types'].get(instance_id)
+    if first is None:
+        seen['types'][instance_id] = (resource_type, item.path)
+    elif first[0] != resource_type:
+        raise InvalidValueError(
+            '%s repeats the InstanceID "%s" of %s, but with the resource type %d rather than %d'
+            % (item.path, instance_id, first[1], resource_type, first[0]))
+
+    if bound == 'normal':
+        return
+    for configuration_id in configurations.selected(item):
+        key = (configuration_id, bound, instance_id)
+        first = seen['markers'].get(key)
+        if first is None:
+            seen['markers'][key] = item.path
+            continue
+        where = '' if configuration_id is None else ' in the configuration "%s"' % configuration_id
+        raise InvalidValueError(
+            '%s is a second ovf:bound="%s" range marker for the InstanceID "%s", after %s%s'
+            % (item.path, bound, instance_id, first, where))
+
+
+def _read_hardware(section, configurations, references):
     transport = section.attribute('ovf:transport')
     hardware = VirtualHardware(transport=transport.split() if transport else [])
 
@@ -735,21 +906,39 @@ def _read_hardware(section, configurations, disk_ids, file_ids):
         hardware.system_type = system.child_text('vssd:VirtualSystemType')
         hardware.system_identifier = system.child_text('vssd:VirtualSystemIdentifier')
 
-    drives = []
+    # The normal items of the default configuration, grouped by InstanceID in
+    # the order each InstanceID first appears, each with its resource type.
+    groups = {}
+    instance_ids = {'types': {}, 'markers': {}}
     for item in section.children(*ITEMS):
+        # Every item has an InstanceID and a resource type, whichever
+        # configuration it applies to.
+        cim_class = ITEMS[item.key[1]]
+        item.mark_children(cim_class, _CIM_READ[cim_class])
+        instance_id = item.required_child_text('%s:InstanceID' % cim_class)
+        resource_type = _integer_text(item, '%s:ResourceType' % cim_class, required=True)
+        bound = item.attribute('ovf:bound')
+        if bound not in (None, 'normal', 'min', 'max'):
+            raise InvalidValueError(
+                '%s is "%s", which is not min, normal or max' % (item.describe('@ovf:bound'), bound))
+        _check_instance_id(item, instance_id, resource_type, bound or 'normal', configurations, instance_ids)
+
         if not configurations.applies(item):
             item.skip()
             continue
-        bound = item.attribute('ovf:bound')
         if bound in ('min', 'max'):
             # A range for a deployment tool to tune within. The parser reads
             # the normal value, which is the item without a bound.
             item.skip()
             continue
-        if bound not in (None, 'normal'):
-            raise InvalidValueError(
-                '%s is "%s", which is not min, normal or max' % (item.describe('@ovf:bound'), bound))
-        _read_item(item, hardware, drives, disk_ids, file_ids)
+        groups.setdefault(instance_id, (resource_type, []))[1].append(item)
+
+    # Normal items sharing an InstanceID are one device, as DSP0243 says, so
+    # that a reference to that InstanceID names one thing.
+    drives = []
+    for instance_id, (resource_type, items) in groups.items():
+        item = items[0] if len(items) == 1 else _CombinedItem(items)
+        _read_item(item, instance_id, resource_type, hardware, drives, references)
 
     controller_ids = set(controller.instance_id for controller in hardware.controllers)
     for item, drive in drives:
@@ -786,14 +975,24 @@ def _ignored_attribute(namespace, local, element_key):
     return namespace not in _CIM_NAMESPACES
 
 
+# How much of what the end-of-parse check finds unread inside an element marked
+# ovf:required="false" is ignored. Inside a hardware item or System so marked,
+# everything is. Inside any other element so marked, such as a
+# VirtualHardwareSection, everything is except a CIM property its class does
+# not hold or the parser refuses, which is refused as it would be elsewhere.
+_OPTIONAL_WHOLE = 'whole'
+_OPTIONAL_INHERITED = 'inherited'
+
+
 def _unread(reader, root):
     """The sorted path of every unread element and attribute no rule ignores, each unread subtree once, at its root."""
     found = []
 
     def walk(element, key, path, optional):
         # Anything inside an element marked ovf:required="false" is ignored
-        # when it is not understood, as OVF permits.
-        optional = optional or _required_false(element, key)
+        # when it is not understood, as OVF permits, within the limits above.
+        if _required_false(element, key, path):
+            optional = _OPTIONAL_WHOLE if optional == _OPTIONAL_WHOLE or key in _CIM_PARENTS else _OPTIONAL_INHERITED
         for attribute in element.attrib:
             if optional or (id(element), attribute) in reader.read_attributes:
                 continue
@@ -806,10 +1005,18 @@ def _unread(reader, root):
                 continue
             if id(child) in reader.read:
                 walk(child, child_key, child_path, optional)
-            elif not (optional or _required_false(child, child_key) or _ignored_element(child_key, key)):
-                found.append(child_path)
+                continue
+            # An unread element marked ovf:required="false" itself is ignored
+            # with its whole subtree, wherever it is.
+            if _required_false(child, child_key, child_path) or _ignored_element(child_key, key):
+                continue
+            if optional == _OPTIONAL_WHOLE:
+                continue
+            if optional == _OPTIONAL_INHERITED and child_key[0] not in _CIM_NAMESPACES:
+                continue
+            found.append(child_path)
 
-    walk(root, _element_key(root), 'Envelope', False)
+    walk(root, _element_key(root), 'Envelope', None)
     return sorted(found)
 
 
@@ -850,8 +1057,18 @@ def parse_descriptor(data):
         name=system_node.child_text('Name'),
         description=system_node.child_text('Description'))
     excluded_properties = set()
+    full_keys = {}
+    products = {}
     for node in system_node.children('ProductSection'):
-        system.products.append(_read_product(node, configurations, excluded_properties))
+        # Each ProductSection has its own ovf:class and ovf:instance pair, each
+        # defaulting to an empty string.
+        pair = (node.attribute('ovf:class') or '', node.attribute('ovf:instance') or '')
+        if pair in products:
+            raise InvalidValueError(
+                '%s repeats the ovf:class "%s" and ovf:instance "%s", already given by %s'
+                % (node.path, pair[0], pair[1], products[pair]))
+        products[pair] = node.path
+        system.products.append(_read_product(node, configurations, excluded_properties, full_keys))
     for node in system_node.children('EulaSection'):
         system.eulas.append(Eula(license=_license(node)))
     operating_system = system_node.child('OperatingSystemSection')
@@ -861,10 +1078,13 @@ def parse_descriptor(data):
     disks = _read_disks(envelope, files, _property_values(system.products), excluded_properties)
     networks = _read_networks(envelope, configurations)
 
-    disk_ids = set(disk.disk_id for disk in disks)
-    file_ids = set(file.id for file in files)
+    references = {
+        'disk': set(disk.disk_id for disk in disks),
+        'file': set(file.id for file in files),
+        'network': set(network.name for network in networks),
+    }
     for node in system_node.children('VirtualHardwareSection'):
-        system.hardware.append(_read_hardware(node, configurations, disk_ids, file_ids))
+        system.hardware.append(_read_hardware(node, configurations, references))
     if not system.hardware:
         raise MissingContentError('%s has no VirtualHardwareSection' % system_node.path)
 

@@ -4,6 +4,7 @@ descriptor() builds a valid descriptor, and each test replaces one part of it.
 The golden tests in test_ovf_golden.py cover whole fixtures.
 """
 
+import itertools
 import os
 import re
 from unittest import mock
@@ -50,10 +51,22 @@ TEMPLATE = '''<?xml version="1.0" encoding="UTF-8"?>
 '''
 
 
+# The InstanceIDs item() gives the items it is not given one for.
+_INSTANCE_IDS = itertools.count(100)
+
+
 def item(resource_type, *properties, **kwargs):
-    """A hardware item: properties are (name, text) pairs in the item's CIM namespace."""
+    """A hardware item: properties are (name, text) pairs in the item's CIM namespace.
+
+    An item given no InstanceID property is given a new one, unless
+    instance_id=None says it has none.
+    """
     element = kwargs.get('element', 'Item')
     cim = {'Item': 'rasd', 'StorageItem': 'sasd', 'EthernetPortItem': 'epasd'}[element]
+    if not any(name in ('InstanceID', 'InstanceId') for name, _ in properties):
+        instance_id = kwargs.get('instance_id', str(next(_INSTANCE_IDS)))
+        if instance_id is not None:
+            properties += (('InstanceID', instance_id),)
     body = ''.join('<%s:%s>%s</%s:%s>' % (cim, name, text, cim, name) for name, text in properties)
     if resource_type is not None:
         body += '<%s:ResourceType>%s</%s:ResourceType>' % (cim, resource_type, cim)
@@ -206,10 +219,10 @@ class BasicsTestCase(DescriptorTestCase):
                          parse(files=files).files)
 
     def test_disk_attributes(self):
-        disks = ('<Disk ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:capacity="1" ovf:format="vmdk" '
+        disks = ('<Disk ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:capacity="10" ovf:format="vmdk" '
                  'ovf:populatedSize="7"/><Disk ovf:diskId="delta" ovf:capacity="1" ovf:parentRef="vmdisk1"/>')
         self.assertEqual(
-            [ovf.Disk(disk_id='vmdisk1', file_ref='file1', capacity_bytes=1, format='vmdk', populated_size=7),
+            [ovf.Disk(disk_id='vmdisk1', file_ref='file1', capacity_bytes=10, format='vmdk', populated_size=7),
              ovf.Disk(disk_id='delta', capacity_bytes=1, parent_ref='vmdisk1')],
             parse(disks=disks).disks)
 
@@ -283,7 +296,7 @@ class EnvelopeTestCase(DescriptorTestCase):
                 ({'items': item(3)}, 'VirtualHardwareSection/Item has no rasd:VirtualQuantity'),
                 ({'items': SCSI + item(17, ('AddressOnParent', '0'))}, 'Item[2] has no rasd:Parent'),
                 ({'items': SCSI + item(17, ('Parent', '3'))}, 'Item[2] has no rasd:AddressOnParent'),
-                ({'items': item(5)}, 'VirtualHardwareSection/Item has no rasd:InstanceID'),
+                ({'items': item(5, instance_id=None)}, 'VirtualHardwareSection/Item has no rasd:InstanceID'),
                 ({'items': item(5, ('InstanceID', ' '))}, 'VirtualHardwareSection/Item/rasd:InstanceID is empty')):
             self.assertRefused(ovf.MissingContentError, fragment, descriptor(**parts))
         data = descriptor().replace(b'<VirtualSystem ovf:id="vm">', b'<VirtualSystem>')
@@ -478,8 +491,8 @@ class CimTestCase(DescriptorTestCase):
 
 class HardwareTestCase(DescriptorTestCase):
     def test_storage_controller_subtypes(self):
-        for subtype, bus in (('AHCI', 'sata'), ('ahci', 'sata'), ('vmware.sata.ahci', 'sata'),
-                             ('vmware.nvme.controller', 'nvme')):
+        for subtype, bus in (('AHCI', 'sata'), ('ahci', 'sata'), ('Ahci', 'sata'), ('vmware.sata.ahci', 'sata'),
+                             ('VMware.SATA.AHCI', 'sata'), ('vmware.nvme.controller', 'nvme')):
             items = item(20, ('InstanceID', '3'), ('ResourceSubType', subtype)) + DISK
             self.assertEqual([ovf.Controller(instance_id='3', bus=bus)],
                              parse(items=items).virtual_system.hardware[0].controllers, subtype)
@@ -787,9 +800,11 @@ class OvirtTestCase(DescriptorTestCase):
 
     def test_without_the_declaration_an_ovirt_element_is_refused_instead(self):
         # Removing the declaration leaves ovirt:id unbound, which is not XML,
-        # so that attribute goes too.
+        # so that attribute goes too. oVirt's empty ovf:parentRef names no
+        # disk, which would be refused before any hardware, so it goes as well.
         data = self._oracle()
         stripped = data.replace(b' xmlns:ovirt="http://www.ovirt.org/ovf"', b'').replace(b' ovirt:id="5007"', b'')
+        stripped = stripped.replace(b' ovf:parentRef=""', b'')
         self.assertNotEqual(data, stripped)
         self.assertNotIn(namespaces.OVIRT.encode('utf-8'), stripped)
         # The first oVirt element the parser reaches is oVirt's video device.
@@ -807,3 +822,268 @@ class OvirtTestCase(DescriptorTestCase):
         for path in ('Envelope/DiskSection/Disk@ovf:disk-interface',
                      'Envelope/VirtualSystem/ClusterCompatibilityVersion'):
             self.assertIn('\n    %s\n' % path, str(e))
+
+
+class UniquenessTestCase(DescriptorTestCase):
+    def test_file_ids(self):
+        files = '<File ovf:id="file1" ovf:href="disk1.vmdk"/><File ovf:id="file1" ovf:href="disk2.vmdk"/>'
+        self.assertRefused(
+            ovf.InvalidValueError,
+            'Envelope/References/File[2]@ovf:id repeats "file1", already given by Envelope/References/File[1]@ovf:id',
+            descriptor(files=files))
+
+    def test_disk_ids(self):
+        disks = '<Disk ovf:diskId="vmdisk1" ovf:capacity="1"/><Disk ovf:diskId="vmdisk1" ovf:capacity="2"/>'
+        self.assertRefused(
+            ovf.InvalidValueError,
+            'Envelope/DiskSection/Disk[2]@ovf:diskId repeats "vmdisk1", already given by '
+            'Envelope/DiskSection/Disk[1]@ovf:diskId',
+            descriptor(disks=disks))
+
+    def test_disk_file_refs(self):
+        disks = ('<Disk ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:capacity="1"/>'
+                 '<Disk ovf:diskId="vmdisk2" ovf:fileRef="file1" ovf:capacity="1"/>')
+        self.assertRefused(
+            ovf.InvalidValueError,
+            'Envelope/DiskSection/Disk[2]@ovf:fileRef repeats "file1", already given by '
+            'Envelope/DiskSection/Disk[1]@ovf:fileRef',
+            descriptor(disks=disks))
+
+    def test_network_names_whatever_their_configurations(self):
+        for networks in ('<Network ovf:name="net"/><Network ovf:name="net"/>',
+                         '<Network ovf:name="net"/><Network ovf:name="net" ovf:configuration="small"/>'):
+            self.assertRefused(
+                ovf.InvalidValueError,
+                'Envelope/NetworkSection/Network[2]@ovf:name repeats "net", already given by '
+                'Envelope/NetworkSection/Network[1]@ovf:name',
+                descriptor(networks=networks, envelope_sections=DEPLOYMENT_OPTIONS))
+
+    def test_configuration_ids(self):
+        options = DEPLOYMENT_OPTIONS.replace('ovf:id="huge"', 'ovf:id="small"')
+        self.assertRefused(
+            ovf.InvalidValueError,
+            'Envelope/DeploymentOptionSection/Configuration[3]@ovf:id repeats "small", already given by '
+            'Envelope/DeploymentOptionSection/Configuration[1]@ovf:id',
+            descriptor(envelope_sections=options))
+
+    def test_property_keys_within_a_product_section(self):
+        for second in ('<Property ovf:key="a" ovf:type="string"/>',
+                       '<Property ovf:key="a" ovf:type="string" ovf:configuration="small"/>'):
+            product = '<ProductSection><Property ovf:key="a" ovf:type="string"/>%s</ProductSection>' % second
+            self.assertRefused(
+                ovf.InvalidValueError,
+                'Envelope/VirtualSystem/ProductSection/Property[2]@ovf:key repeats "a", already given by '
+                'Envelope/VirtualSystem/ProductSection/Property[1]@ovf:key',
+                descriptor(system_sections=product, envelope_sections=DEPLOYMENT_OPTIONS))
+
+    def test_property_keys_in_different_classes(self):
+        products = ('<ProductSection ovf:class="one"><Property ovf:key="a" ovf:type="string"/></ProductSection>'
+                    '<ProductSection ovf:class="two"><Property ovf:key="a" ovf:type="string"/></ProductSection>')
+        self.assertEqual(['a', 'a'], [product.properties[0].key
+                                      for product in parse(system_sections=products).virtual_system.products])
+
+    def test_full_property_keys_across_product_sections(self):
+        # class.key.instance: one.a.b both ways.
+        products = ('<ProductSection ovf:class="one" ovf:instance="b"><Property ovf:key="a" ovf:type="string"/>'
+                    '</ProductSection><ProductSection ovf:class="one.a"><Property ovf:key="b" ovf:type="string"/>'
+                    '</ProductSection>')
+        self.assertRefused(
+            ovf.InvalidValueError,
+            'Envelope/VirtualSystem/ProductSection[2]/Property@ovf:key gives the property the full key "one.a.b", '
+            'already given by Envelope/VirtualSystem/ProductSection[1]/Property@ovf:key',
+            descriptor(system_sections=products))
+
+    def test_product_sections_with_one_class_and_instance(self):
+        for attributes, fragment in ((' ovf:class="c" ovf:instance="1"', 'ovf:class "c" and ovf:instance "1"'),
+                                     ('', 'ovf:class "" and ovf:instance ""')):
+            section = '<ProductSection%s><Info>x</Info></ProductSection>' % attributes
+            self.assertRefused(
+                ovf.InvalidValueError,
+                'Envelope/VirtualSystem/ProductSection[2] repeats the %s, already given by '
+                'Envelope/VirtualSystem/ProductSection[1]' % fragment,
+                descriptor(system_sections=section * 2))
+
+    def test_value_configurations(self):
+        product = ('<ProductSection><Property ovf:key="b" ovf:type="string"><Value ovf:configuration="large" '
+                   'ovf:value="x"/><Value ovf:configuration="small large" ovf:value="y"/></Property>'
+                   '</ProductSection>')
+        self.assertRefused(
+            ovf.InvalidValueError,
+            'Envelope/VirtualSystem/ProductSection/Property/Value[2]@ovf:configuration repeats "large", already '
+            'given by Envelope/VirtualSystem/ProductSection/Property/Value[1]@ovf:configuration',
+            descriptor(system_sections=product, envelope_sections=DEPLOYMENT_OPTIONS))
+
+
+class InstanceIdTestCase(DescriptorTestCase):
+    def test_every_item_has_an_instance_id(self):
+        items = CPU + item(3, ('VirtualQuantity', '4'), attributes=' ovf:configuration="small"', instance_id=None)
+        self.assertRefused(ovf.MissingContentError, 'VirtualHardwareSection/Item[2] has no rasd:InstanceID',
+                           descriptor(envelope_sections=DEPLOYMENT_OPTIONS, items=items))
+
+    def test_items_sharing_an_instance_id_agree_on_the_resource_type(self):
+        items = CPU + item(17, ('AddressOnParent', '0'), ('InstanceID', '1'), ('Parent', '3'),
+                           attributes=' ovf:configuration="small"') + SCSI
+        self.assertRefused(
+            ovf.InvalidValueError,
+            'Envelope/VirtualSystem/VirtualHardwareSection/Item[2] repeats the InstanceID "1" of '
+            'Envelope/VirtualSystem/VirtualHardwareSection/Item[1], but with the resource type 17 rather than 3',
+            descriptor(envelope_sections=DEPLOYMENT_OPTIONS, items=items))
+
+    def test_normal_items_sharing_an_instance_id_are_combined(self):
+        # A base item for every configuration, overridden in the default one,
+        # as DSP0243's own example does: the later item's properties win, and
+        # the earlier's others are kept.
+        items = (CPU + MEMORY + SCSI + DISK
+                 + item(10, ('Connection', 'net'), ('ElementName', 'Network adapter 1'), ('InstanceID', '5'),
+                        ('ResourceSubType', 'E1000'))
+                 + item(10, ('InstanceID', '5'), ('ResourceSubType', 'VirtIO'), ('Unknown', 'passed over'),
+                        attributes=' ovf:configuration="small"')
+                 + item(10, ('InstanceID', '5'), ('ResourceSubType', 'VmxNet3'),
+                        attributes=' ovf:configuration="large"')
+                 + item(6, ('InstanceID', '3'), ('ResourceSubType', 'VirtualSCSI')))
+        hardware = parse(envelope_sections=DEPLOYMENT_OPTIONS, items=items).virtual_system.hardware[0]
+        self.assertEqual([ovf.Nic(resource_subtype='VmxNet3', connection='net')], hardware.nics)
+        self.assertEqual([ovf.Controller(instance_id='3', bus='scsi')], hardware.controllers)
+
+    def test_combined_items_refuse_what_is_not_understood(self):
+        items = CPU + item(3, ('InstanceID', '1'), ('Unknown', 'x'), ('VirtualQuantity', '4'))
+        self.assertUnread(['Envelope/VirtualSystem/VirtualHardwareSection/Item[2]/rasd:Unknown'],
+                          descriptor(items=items))
+
+    def test_range_markers(self):
+        minimum = item(4, ('InstanceID', '2'), ('Reservation', '512'), attributes=' ovf:bound="min"')
+        maximum = item(4, ('InstanceID', '2'), ('Reservation', '4096'), attributes=' ovf:bound="max"')
+        for markers, bound in ((minimum * 2, 'min'), (maximum + minimum + maximum, 'max')):
+            self.assertRefused(
+                ovf.InvalidValueError,
+                'is a second ovf:bound="%s" range marker for the InstanceID "2", after' % bound,
+                descriptor(items=CPU + MEMORY + markers))
+
+    def test_range_markers_of_different_configurations(self):
+        markers = ''.join(item(4, ('InstanceID', '2'), ('Reservation', '512'),
+                               attributes=' ovf:bound="min" ovf:configuration="%s"' % configuration)
+                          for configuration in ('small', 'large'))
+        self.assertEqual(2 ** 30, parse(envelope_sections=DEPLOYMENT_OPTIONS,
+                                        items=CPU + MEMORY + markers).virtual_system.hardware[0].memory_bytes)
+        markers = ''.join(item(4, ('InstanceID', '2'), ('Reservation', '512'),
+                               attributes=' ovf:bound="min" ovf:configuration="%s"' % configuration)
+                          for configuration in ('small huge', 'huge'))
+        self.assertRefused(ovf.InvalidValueError, 'range marker for the InstanceID "2", after',
+                           descriptor(envelope_sections=DEPLOYMENT_OPTIONS, items=CPU + MEMORY + markers))
+
+
+class DiskChecksTestCase(DescriptorTestCase):
+    def test_populated_size_is_not_more_than_the_capacity(self):
+        disks = ('<Disk ovf:diskId="vmdisk1" ovf:capacity="1" ovf:capacityAllocationUnits="byte * 2^10" '
+                 'ovf:populatedSize="%d"/>')
+        self.assertEqual(1024, parse(disks=disks % 1024).disks[0].populated_size)
+        self.assertRefused(
+            ovf.InvalidValueError,
+            'Envelope/DiskSection/Disk@ovf:populatedSize is 1025 bytes, more than the disk\'s capacity of 1024 bytes',
+            descriptor(disks=disks % 1025))
+
+    def test_parent_ref_names_a_disk(self):
+        disks = ('<Disk ovf:diskId="delta" ovf:capacity="1" ovf:parentRef="%s"/>'
+                 '<Disk ovf:diskId="base" ovf:capacity="1"/>')
+        self.assertEqual('base', parse(disks=disks % 'base', items=CPU + MEMORY).disks[0].parent_ref)
+        for parent in ('elsewhere', ''):
+            self.assertRefused(
+                ovf.BrokenReferenceError,
+                'Envelope/DiskSection/Disk[1]@ovf:parentRef names the disk "%s", which DiskSection does not hold'
+                % parent,
+                descriptor(disks=disks % parent, items=CPU + MEMORY))
+
+
+class NetworkReferenceTestCase(DescriptorTestCase):
+    def test_connection_names_a_network(self):
+        items = CPU + item(10, ('Connection', 'elsewhere'))
+        self.assertRefused(
+            ovf.BrokenReferenceError,
+            'Envelope/VirtualSystem/VirtualHardwareSection/Item[2]/rasd:Connection names the network "elsewhere", '
+            'which NetworkSection does not hold',
+            descriptor(items=items))
+
+    def test_connection_names_a_network_of_the_default_configuration(self):
+        networks = '<Network ovf:name="net"/><Network ovf:name="small-only" ovf:configuration="small"/>'
+        items = CPU + item(10, ('Connection', 'small-only'))
+        self.assertRefused(ovf.BrokenReferenceError, 'names the network "small-only"',
+                           descriptor(envelope_sections=DEPLOYMENT_OPTIONS, networks=networks, items=items))
+
+
+class PropertyTypeTestCase(DescriptorTestCase):
+    def _types(self, *types):
+        product = '<ProductSection>%s</ProductSection>' % ''.join(
+            '<Property ovf:key="p%d" ovf:type="%s"/>' % (n, property_type) for n, property_type in enumerate(types))
+        return [prop.type for prop in parse(system_sections=product).virtual_system.products[0].properties]
+
+    def test_the_specification_s_types_in_any_case(self):
+        types = ('uint8', 'sint8', 'uint16', 'sint16', 'uint32', 'sint32', 'uint64', 'sint64', 'string', 'boolean',
+                 'real32', 'real64', 'String', 'Boolean')
+        self.assertEqual(list(types), self._types(*types))
+
+    def test_vmware_types(self):
+        self.assertEqual(['int', 'real'], self._types('int', 'real'))
+
+    def test_other_types_are_refused(self):
+        for property_type in ('nosuchtype', '', 'integer'):
+            self.assertRefused(
+                ovf.InvalidValueError,
+                'Envelope/VirtualSystem/ProductSection/Property@ovf:type is "%s", which is not a property type'
+                % property_type,
+                descriptor(system_sections='<ProductSection><Property ovf:key="k" ovf:type="%s"/></ProductSection>'
+                           % property_type))
+
+
+class OptionalSectionTestCase(DescriptorTestCase):
+    """What is still refused inside a section marked ovf:required="false" that the parser reads."""
+
+    def _hardware(self, items, **parts):
+        return descriptor(namespace=namespaces.OVF_2, hardware_attributes=' ovf:required="false"', items=items,
+                          **parts)
+
+    def test_unmarked_custom_content_is_ignored(self):
+        parse(namespace=namespaces.OVF_2, hardware_attributes=' ovf:required="false"',
+              items=CPU + MEMORY + '<vmw:Config vmw:key="firmware" vmw:value="efi"/>'
+              + item(15, extra='<vmw:Config vmw:key="x" vmw:value="y"/><Unknown/>'))
+
+    def test_refused_cim_properties_are_refused(self):
+        items = (SCSI + item(17, ('Access', '1'), ('AddressOnParent', '0'), ('Parent', '3'), element='StorageItem')
+                 + item(10, ('Connection', 'net'), ('PortVID', '7'), element='EthernetPortItem'))
+        self.assertUnread(['Envelope/VirtualSystem/VirtualHardwareSection/EthernetPortItem/epasd:PortVID',
+                           'Envelope/VirtualSystem/VirtualHardwareSection/StorageItem/sasd:Access'],
+                          self._hardware(items))
+
+    def test_names_that_are_not_properties_of_the_class_are_refused(self):
+        items = CPU + item(15, ('Unknown', 'x'))
+        self.assertUnread(['Envelope/VirtualSystem/VirtualHardwareSection/Item[2]/rasd:Unknown',
+                           'Envelope/VirtualSystem/VirtualHardwareSection/System/vssd:Unknown'],
+                          self._hardware(items, system='<vssd:Unknown>x</vssd:Unknown>'))
+
+    def test_unused_properties_are_still_ignored(self):
+        parse(namespace=namespaces.OVF_2, hardware_attributes=' ovf:required="false"',
+              items=CPU + item(15, ('Caption', 'x'), ('Limit', '1')))
+
+    def test_an_item_marked_not_required_is_wholly_ignored(self):
+        items = CPU + item(15, ('Unknown', 'x'), attributes=' ovf:required="false"')
+        parse(namespace=namespaces.OVF_2, hardware_attributes=' ovf:required="false"', items=items)
+        parse(namespace=namespaces.OVF_2, items=items)
+
+    def test_a_property_marked_not_required_is_ignored(self):
+        parse(namespace=namespaces.OVF_2, hardware_attributes=' ovf:required="false"',
+              items=CPU + item(15, extra='<rasd:Unknown ovf:required="false">x</rasd:Unknown>'))
+
+
+class RequiredValueTestCase(DescriptorTestCase):
+    def test_required_is_a_boolean(self):
+        for value in ('0', 'false'):
+            parse(envelope_sections='<ext:Section ovf:required="%s"/>' % value)
+        for value in ('1', '0', 'true', 'false', ' true '):
+            parse(hardware_attributes=' ovf:required="%s"' % value)
+        for parts, fragment in (
+                ({'envelope_sections': '<ext:Section ovf:required="no"/>'},
+                 'Envelope/ext:Section@ovf:required is "no", which is neither true nor false'),
+                ({'hardware_attributes': ' required="yes"'},
+                 'Envelope/VirtualSystem/VirtualHardwareSection@required is "yes", which is neither true nor false'),
+                ({'items': CPU + item(15, extra='<rasd:Caption ovf:required="False">x</rasd:Caption>')},
+                 'VirtualHardwareSection/Item[2]/rasd:Caption@ovf:required is "False"')):
+            self.assertRefused(ovf.InvalidValueError, fragment, descriptor(**parts))

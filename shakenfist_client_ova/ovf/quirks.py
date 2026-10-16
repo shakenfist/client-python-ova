@@ -66,6 +66,17 @@ HOST_RESOURCE_PREFIXES = ('ovf:', '')
 # anywhere is refused as an oVirt export rather than read in part.
 OVIRT_NAMESPACE = namespaces.OVIRT
 
+# Property types outside the specification's table, accepted as well as its
+# own. They are written here in lower case and matched in any case. They are
+# vSphere's vApp property types, which VMware's tooling writes as a Property's
+# ovf:type: int for an integer and real for a floating-point number. govmomi's
+# corpus fixtures carry int in qualifiers.ovf, property-types.ovf,
+# deployment-configs.ovf, disk-capacity-property.ovf, uber.ovf and
+# multiple_disks.ovf, and real in qualifiers.ovf; govmomi's ovf/configspec.go
+# maps int to vSphere's type with the comment "common in OVF although not in
+# DSP0243 Table 6".
+PROPERTY_TYPES = frozenset(['int', 'real'])
+
 # The attribute in which a producer marks a disk as the boot disk. The
 # specification does not define it, but the parser reads it into Disk.boot
 # rather than refusing it; every other undefined attribute in an OVF namespace

@@ -6,8 +6,10 @@ dataclass refuses a field without a default after one with a default; to_json
 sorts keys, so the order never reaches an expected file.
 
 A field that is not Optional always holds a value: the parser refuses a
-descriptor that does not give it. An element's text is stripped of surrounding
-whitespace, and empty text is None; an attribute's value is kept as written.
+descriptor that does not give it. The converse does not hold: an Optional
+field may still always be filled, as VirtualSystem.id is, and its comment then
+says so. An element's text is stripped of surrounding whitespace, and empty
+text is None; an attribute's value is kept as written.
 """
 
 import dataclasses
@@ -128,7 +130,7 @@ class DeploymentOption:                         # DeploymentOptionSection/Config
 
 @dataclass
 class VirtualSystem:
-    id: Optional[str] = None
+    id: Optional[str] = None                    # ovf:id: the parser always fills it, as the attribute is required
     name: Optional[str] = None                  # VirtualSystem/Name
     description: Optional[str] = None           # VirtualSystem/Description
     hardware: List[VirtualHardware] = field(default_factory=list)  # every VirtualHardwareSection; at least one

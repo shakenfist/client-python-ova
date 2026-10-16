@@ -45,6 +45,11 @@ with `--namespace <name>`.
 
 The import does not yet create an instance from what it has parsed.
 
+Everything it prints that comes from the OVA, such as member names,
+the summary, a licence, or an error quoting the descriptor, has its
+control characters written as visible escapes, such as `\x1b` for
+ESC, so that an OVA cannot send escape sequences to your terminal.
+
 ## When an import stops
 
 The OVF parser is deliberately strict. Anything it does not read is
@@ -52,7 +57,9 @@ either ignored or refused. It is ignored when it is:
 
 * inside an element marked `ovf:required="false"`, including unread
   content within a section the parser does read, if that section is
-  marked not required;
+  marked not required. Inside such a section, a hardware item's CIM
+  properties are still checked as they are elsewhere, unless the item
+  itself is marked not required;
 * `Info`, `AnnotationSection` or `Strings`, or an `ovf:msgid`
   attribute;
 * `xml:lang` or `xsi:schemaLocation`;
@@ -73,10 +80,11 @@ Other refusals are named, and each prints one line and exits 1:
   machines: `VirtualSystemCollectionError`.
 * oVirt exports, such as Oracle Linux's OLVM templates:
   `UnsupportedProducerError`. A reader is future work.
-* A reference to a file, disk, controller or configuration that does
-  not exist: `BrokenReferenceError`.
+* A reference to a file, disk, controller, network or configuration
+  that does not exist: `BrokenReferenceError`.
 * Required content missing: `MissingContentError`.
-* A value that does not parse: `InvalidValueError`.
+* A value that does not parse, or an id or key repeated where it must
+  be unique: `InvalidValueError`.
 * An allocation unit that is not a byte count:
   `UnknownAllocationUnitError`.
 * A hardware resource type the parser does not know, unless the item
@@ -89,9 +97,10 @@ partly understood would otherwise become an instance that is subtly
 different from the appliance its author built. Some producers write
 descriptors that deviate from the schema; the parser accepts the known
 ones (VirtualBox's `.xsd`-suffixed CIM namespaces, `InstanceId` for
-`InstanceID`, VMware's unqualified attributes, a drive's disk
-reference written without its `ovf:` prefix, and the non-standard
-`ovf:boot` on a disk, read from Home Assistant OS's build). The plan
+`InstanceID`, VMware's unqualified attributes and its `int` and
+`real` property types, a drive's disk reference written without its
+`ovf:` prefix, and the non-standard `ovf:boot` on a disk, read from
+Home Assistant OS's build). The plan
 for what remains is in [the OVF parser
 plan](plans/PLAN-ovf-parser.md).
 

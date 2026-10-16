@@ -212,6 +212,59 @@ class ImportCommandTestCase(CommandTestCase):
         self.assertIn('    dns (DNS)', result.output)
 
 
+class UntrustedTextTestCase(CommandTestCase):
+    """Text from the OVA reaches the terminal with its control characters made visible."""
+
+    def _licence_import(self, licence):
+        envelope = ovf.parse_descriptor(_fixture(PRODUCT_AND_EULA))
+        envelope.virtual_system.eulas[0].license = licence
+        with mock.patch('shakenfist_client_ova.ovf.parse_descriptor', return_value=envelope):
+            return self._import(_fixture(PRODUCT_AND_EULA))
+
+    def assertNoControlCharacters(self, output):
+        for character in output:
+            if character not in '\n\t':
+                self.assertFalse(ord(character) < 0x20 or 0x7f <= ord(character) <= 0x9f,
+                                 'U+%04X in %r' % (ord(character), output))
+
+    def test_printable(self):
+        self.assertEqual('a\\x1b[2Jb\\x07\\x9b\\x00\\x7f\\x0d\nc\td\u00a0', ova._printable(
+            'a\x1b[2Jb\x07\x9b\x00\x7f\r\nc\td\u00a0'))
+
+    def test_licence_escape_sequences_are_made_visible(self):
+        result, _, _ = self._licence_import('Terms\x1b[2J and \x1b]0;evil\x07 more\nterms')
+        self.assertEqual(1, result.exit_code, result.output)
+        self.assertNotIn('\x1b', result.output)
+        self.assertNotIn('\x07', result.output)
+        self.assertIn('Terms\\x1b[2J and \\x1b]0;evil\\x07 more\nterms', result.output)
+        self.assertNoControlCharacters(result.output)
+
+    def test_c1_controls_and_carriage_returns_from_the_descriptor_are_made_visible(self):
+        # XML 1.0 refuses ESC and BEL in a document, but allows the C1
+        # controls, and a carriage return given as a character reference.
+        descriptor = _text(PRODUCT_AND_EULA, LICENCE, 'Terms&#x9b;2J&#x9d;0;evil&#x9c;&#13;over')
+        result, _, _ = self._import(descriptor)
+        self.assertEqual(1, result.exit_code, result.output)
+        self.assertIn('Terms\\x9b2J\\x9d0;evil\\x9c\\x0dover', result.output)
+        self.assertNoControlCharacters(result.output)
+
+    def test_error_messages_are_made_visible(self):
+        error = ovf.InvalidValueError('Envelope/References/File@ovf:size is "\x1b]0;evil\x07", which is bad')
+        with mock.patch('shakenfist_client_ova.ovf.parse_descriptor', side_effect=error):
+            result, client, util = self._import(_fixture(PRODUCT_AND_EULA))
+        self.assertEqual(1, result.exit_code, result.output)
+        self.assertNotIn('\x1b', result.output)
+        self.assertNotIn('\x07', result.output)
+        self.assertIn('ovf:size is "\\x1b]0;evil\\x07", which is bad', result.output)
+        self.assertNothingUploaded(client, util)
+
+    def test_member_names_are_made_visible(self):
+        result, _, _ = self._import(_fixture(TWO_CONTROLLERS), members={'evil\x1b[2J.vmdk': b'x'})
+        self.assertIn('    Disk:     evil\\x1b[2J.vmdk', result.output)
+        self.assertIn('evil\\x1b[2J.vmdk with size', result.output)
+        self.assertNoControlCharacters(result.output)
+
+
 # What each OVFError subclass is raised by. A value is the descriptor's bytes, or
 # a function of the test case returning the descriptor and any extra archive members.
 def _synthetic(old, new, name=TWO_CONTROLLERS):

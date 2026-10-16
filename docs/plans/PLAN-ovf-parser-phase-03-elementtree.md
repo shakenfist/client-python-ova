@@ -556,7 +556,9 @@ Phase 3 ran on 2026-10-17. Where it departed from the text above:
   that are not marked optional inside a `VirtualHardwareSection`
   marked `required="false"`. The cost is that such a setting is
   ignored silently. Hardware resource-type refusals still look at each
-  item's own attribute.
+  item's own attribute. After review, a CIM property inside such a
+  section is still checked against its class and the refused sets,
+  unless its item, or the property itself, is marked not required.
 * **Decisions step 3b took that the plan left open.**
   * An `ovf:configuration` naming a configuration that does not exist
     is a `BrokenReferenceError`.
@@ -593,19 +595,75 @@ Phase 3 ran on 2026-10-17. Where it departed from the text above:
   fixture and its descriptor. The curated expected file holds no vendor
   prose, only short labels and three lines of generic network
   boilerplate.
+* **Review: unique ids, and the negative tests that parsed.** Every id
+  the parser keys a lookup or reference on is now unique in its scope:
+  `File` and `Disk` ids, `Disk@ovf:fileRef`, network names,
+  configuration ids, `Value` configurations, property keys within a
+  `ProductSection` and full keys across them, and each `ProductSection`'s
+  class and instance. Items follow DSP0243's own rules rather than plain
+  uniqueness: every item needs an `InstanceID` and a resource type;
+  items sharing an `InstanceID` must agree on the resource type; a range
+  has at most one `min` and one `max` marker per configuration; and
+  normal items sharing an `InstanceID` in the default configuration are
+  combined into one, the later's properties winning, because COT's
+  Cisco-style descriptors override a base item that way and a plain
+  uniqueness rule refused them. A `Disk@ovf:parentRef` or a NIC's
+  `Connection` naming nothing is a `BrokenReferenceError`. VMware's
+  `int` and `real` property types are a fifth quirk. Thirty govmomi
+  `Neg/` descriptors (under `OVFToolTemplates/OVF/xmltestfiles/`) had
+  parsed to a model:
+
+  | Descriptor | Class | Reason |
+  |------------|-------|--------|
+  | `AnnotationSection_1_0/ann_sec_elsewhr` | declined | `AnnotationSection` on the envelope; it is ignored wherever it is |
+  | `DigitalCertificates/valid_certificate` | archive | identical to its `Pos/` sibling; the certificate is the archive's |
+  | `DiskSection_1_0/dup_diskid` | refused | repeated `ovf:diskId` |
+  | `DiskSection_1_0/dup_filerefs` | refused | two disks name one file, which DSP0243 forbids |
+  | `DiskSection_1_0/invalid_createType_disk` | archive | only the href differs from `Pos/`; the VMDK's content is at fault |
+  | `DiskSection_1_0/invalid_delta_reference_disk` | archive | only the href differs from `Pos/`; the VMDK's content is at fault |
+  | `DiskSection_1_0/no_format` | archive | no `ovf:format`; four govmomi `Pos` fixtures omit it too, and the disk's format is the archive's |
+  | `DiskSection_1_0/not_in_order_disks` | archive | disks out of `References` order, an order that serves streaming |
+  | `DiskSection_1_0/popsize_gt_capacity` | refused | `populatedSize` larger than the capacity |
+  | `Envelope_1_0/bare_minimal` | declined | identical to its `Pos/` sibling; only `VirtualSystem/Info` is missing |
+  | `Envelope_1_0/content_withnoinfo` | declined | no `VirtualSystem/Info`, which is ignored |
+  | `Envelope_1_0/fileelements_samefile` | archive | two `File`s with one href |
+  | `Envelope_1_0/invalid_no_version` | declined | no `ovf:version`, which is optional |
+  | `Envelope_1_0/invalid_ref_dup_id` | refused | repeated `File@ovf:id` |
+  | `Envelope_1_0/invalid_ref_size_neg` | archive | `ovf:size="0"`, not negative, for a real disk |
+  | `Envelope_1_0/invalid_ref_size_null` | archive | no `ovf:size`, which is optional |
+  | `Envelope_1_0/invalid_vmdk` | archive | the VMDK's content is at fault |
+  | `Envelope_1_0/invalid_zero_capacity` | declined | holds no `Disk`, so no capacity; an empty hardware section is allowed |
+  | `Envelope_1_0/no_version_num` | declined | no `ovf:version`, which is optional |
+  | `Envelope_1_0/section_withnoinfo` | declined | no `OperatingSystemSection/Info`, which is ignored |
+  | `HttpLocators_1_0/bare_minimal_http` | archive | identical to its `Pos/` sibling; fetching over HTTP is at fault |
+  | `HttpLocators_1_0/valid_no_disk_in_server` | archive | the href names a file the server lacks |
+  | `NetworkSection_1_0/no_net` | refused | a NIC's `Connection` names no network |
+  | `ProductSection_1_0/dup_prodsec` | refused | two `ProductSection`s with one class and instance |
+  | `ProductSection_1_0/prop_dup_keys` | refused | repeated property key |
+  | `ProductSection_1_0/prop_invalid_type` | refused | `ovf:type="nosuchtype"` |
+  | `VirtualHardware_1_0/dup_instanceid` | refused | one `InstanceID` on a disk drive and a CPU |
+  | `VirtualHardware_1_0/no_instanceid` | refused | an item without an `InstanceID` |
+  | `VirtualHardware_1_0/twomax_rangemarker` | refused | two `max` range markers |
+  | `VirtualHardware_1_0/twomin_rangemarker` | refused | two `min` range markers |
+
+  A thirteenth negative test, `NetworkSection_1_0/net_sec_elsewhr`, moved
+  from `UnparsedContentError` to `BrokenReferenceError`: its misplaced
+  `NetworkSection` leaves the NIC's network unknown, which is now found
+  first. No vendor or hand-written fixture changed, and no model's
+  content did.
 * **Final ledger:**
 
   | Outcome | Descriptors |
   |---------|-------------|
-  | model | 537 (118 before) |
+  | model | 525 (118 before) |
   | `VirtualSystemCollectionError` | 165 |
   | `UnsupportedEnvelopeError` | 156 |
-  | `MissingContentError` | 40 |
-  | `UnparsedContentError` | 38 |
+  | `MissingContentError` | 41 |
+  | `UnparsedContentError` | 37 |
+  | `InvalidValueError` | 17 |
   | `MalformedDescriptorError` | 15 |
-  | `InvalidValueError` | 7 |
   | `UnsupportedHardwareError` | 6 |
-  | `BrokenReferenceError` | 4 |
+  | `BrokenReferenceError` | 6 |
 * **Found and left for later:**
   * A drive's disk reference is checked, but the model does not link
     drives to disks by id. Instance creation will want that link.

@@ -13,6 +13,23 @@ def ova():
     ...
 
 
+def _printable(text):
+    """Text from the OVA made safe to print to a terminal.
+
+    Archive member names and everything read from a descriptor are untrusted,
+    and a terminal acts on the control characters in what it is given: an
+    escape sequence can clear the screen, retitle the window or rewrite what
+    was printed before. So every C0 and C1 control character (U+0000 to
+    U+001F and U+007F to U+009F), except a newline and a tab, is written as a
+    visible escape instead, such as \\x1b for ESC.
+    """
+    return ''.join(
+        '\\x%02x' % ord(character)
+        if (ord(character) < 0x20 or 0x7f <= ord(character) <= 0x9f) and character not in '\n\t'
+        else character
+        for character in str(text))
+
+
 def _mib(size):
     mib = size / 1024 / 1024
     if mib == int(mib):
@@ -121,10 +138,10 @@ def ova_import(ctx, source=None, namespace=None, accept_eula=False):
                 other_files.append(name)
 
         print('Detected archive members:')
-        print('    OVF:      %s' % ', '.join(ovf_files))
-        print('    Disk:     %s' % ', '.join(disk_files.keys()))
-        print('    Manifest: %s' % ', '.join(manifest_files))
-        print('    Other:    %s' % ', '.join(other_files))
+        print(_printable('    OVF:      %s' % ', '.join(ovf_files)))
+        print(_printable('    Disk:     %s' % ', '.join(disk_files.keys())))
+        print(_printable('    Manifest: %s' % ', '.join(manifest_files)))
+        print(_printable('    Other:    %s' % ', '.join(other_files)))
         print()
 
         try:
@@ -154,13 +171,13 @@ def ova_import(ctx, source=None, namespace=None, accept_eula=False):
 
                 print('VM description:')
                 for line in _envelope_summary(envelope, version, name):
-                    print(line)
+                    print(_printable(line))
 
                 eulas = envelope.virtual_system.eulas
                 for eula in eulas:
                     print()
                     print('Licence agreement:')
-                    print(eula.license)
+                    print(_printable(eula.license))
                 if eulas and not accept_eula:
                     print()
                     print('This appliance has a licence agreement, printed above. '
@@ -173,9 +190,10 @@ def ova_import(ctx, source=None, namespace=None, accept_eula=False):
                     print('Warning: this appliance expects the following properties to be set at first boot, '
                           'and Shaken Fist cannot deliver them yet:')
                     for prop in unset:
-                        print('    %s' % (prop.key if not prop.label else '%s (%s)' % (prop.key, prop.label)))
+                        print(_printable(
+                            '    %s' % (prop.key if not prop.label else '%s (%s)' % (prop.key, prop.label))))
         except ovf.OVFError as e:
-            print(str(e))
+            print(_printable(e))
             sys.exit(1)
 
         print()
@@ -186,8 +204,8 @@ def ova_import(ctx, source=None, namespace=None, accept_eula=False):
             ti = archive.getmember(disk_file)
             disk_files[disk_file]['size'] = ti.size
 
-            print(f'{disk_file} with size '
-                  f'{humanize.naturalsize(disk_files[disk_file]["size"])}')
+            print(_printable(f'{disk_file} with size '
+                             f'{humanize.naturalsize(disk_files[disk_file]["size"])}'))
             source_url = f'ova://{source}/{disk_file}'
             if not ctx.obj['CLIENT'].check_capability('blob-search-by-hash'):
                 blob = None
@@ -211,7 +229,7 @@ def ova_import(ctx, source=None, namespace=None, accept_eula=False):
 
             print()
             for line in _hardware_summary(hardware):
-                print(line)
+                print(_printable(line))
             print()
 
 

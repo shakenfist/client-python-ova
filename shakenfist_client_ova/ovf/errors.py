@@ -63,7 +63,10 @@ class InvalidValueError(OVFError):
     """A value does not parse as its type: a capacity that is not an integer, or a boolean neither true nor false.
 
     A capacity given as ${key} is one too when no ProductSection property has
-    that key, or the property's value is not an integer.
+    that key, or the property's value is not an integer. So is an id or key
+    repeated where it must be unique, such as two Files with one ovf:id, and
+    a value out of range, such as a Disk's ovf:populatedSize larger than its
+    capacity or a Property's ovf:type that is not a property type.
     """
 
 
@@ -71,8 +74,9 @@ class BrokenReferenceError(OVFError):
     """A reference names something the descriptor does not hold.
 
     That is a drive whose HostResource names no Disk (ovf:/disk/<id>) or no
-    File (ovf:/file/<id>), a drive whose Parent names no controller, a Disk
-    whose ovf:fileRef names no File, or an ovf:configuration naming no
+    File (ovf:/file/<id>), a drive whose Parent names no controller, a NIC
+    whose Connection names no Network, a Disk whose ovf:fileRef names no File
+    or whose ovf:parentRef names no Disk, or an ovf:configuration naming no
     Configuration in the DeploymentOptionSection.
     """
 
