@@ -138,5 +138,9 @@ shakenfist_client_ova/_version.py
 # OVA files used for manual testing are routinely several gigabytes.
 *.ova
 
+# Test fixtures are small and deliberate; the global rule above keeps
+# manual-testing appliances out.
+!shakenfist_client_ova/tests/fixtures/ova/**/*.ova
+
 # macOS Finder metadata.
 .DS_Store
