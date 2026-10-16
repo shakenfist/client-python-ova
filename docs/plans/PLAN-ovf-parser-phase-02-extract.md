@@ -716,6 +716,6 @@ Phase 2 ran on 2026-10-17. Where it departed from the text above:
     such as "Management network" reach `curated.expected.json`. Phase 1
     judged them structural. The read of the curated expected file that
     phase 3 already plans should cover this field too.
-  * Nothing tests that the corpus tier's guard fails rather than skips.
-    It was checked by hand in 2d, with the cache absent and with it
-    empty.
+  * The corpus tier's guard was at first checked only by hand. The
+    second automated review round of #13 added
+    `tests/test_corpus_guard.py`, which tests it offline.
