@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-written fixture: ovf2-envelope.ovf
+
+  Case: an OVF 2.x envelope. The envelope namespace and ovf:version
+  are the 2.x ones, and the disk and network adapter use the 2.x
+  StorageItem and EthernetPortItem elements, in the DMTF sasd and
+  epasd namespaces (not the ".xsd" variants VirtualBox writes, which
+  are master plan open question 5).
+
+  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
+  edge cases":
+    "an OVF 2.x envelope;"
+
+  Decision 3: both envelope namespaces are read through one lookup
+  table.
+-->
+<Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/2"
+          xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/2"
+          xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData"
+          xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData"
+          xmlns:epasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_EthernetPortAllocationSettingData"
+          xmlns:sasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_StorageAllocationSettingData"
+          ovf:version="2.0">
+  <References>
+    <File ovf:id="file1" ovf:href="disk1.vmdk" ovf:size="1048576"/>
+  </References>
+  <DiskSection>
+    <Info>Virtual disk information</Info>
+    <Disk ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:capacity="10" ovf:capacityAllocationUnits="byte * 2^30"
+          ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
+  </DiskSection>
+  <NetworkSection>
+    <Info>The list of logical networks</Info>
+    <Network ovf:name="VM Network">
+      <Description>The VM Network network</Description>
+    </Network>
+  </NetworkSection>
+  <VirtualSystem ovf:id="example-vm">
+    <Info>A virtual machine</Info>
+    <Name>example-vm</Name>
+    <OperatingSystemSection ovf:id="36">
+      <Info>The kind of installed guest operating system</Info>
+      <Description>Linux</Description>
+    </OperatingSystemSection>
+    <VirtualHardwareSection>
+      <Info>Virtual hardware requirements</Info>
+      <System>
+        <vssd:ElementName>Virtual Hardware Family</vssd:ElementName>
+        <vssd:InstanceID>0</vssd:InstanceID>
+        <vssd:VirtualSystemIdentifier>example-vm</vssd:VirtualSystemIdentifier>
+        <vssd:VirtualSystemType>vmx-13</vssd:VirtualSystemType>
+      </System>
+      <Item>
+        <rasd:AllocationUnits>hertz * 10^6</rasd:AllocationUnits>
+        <rasd:Description>Number of virtual CPUs</rasd:Description>
+        <rasd:ElementName>1 virtual CPU</rasd:ElementName>
+        <rasd:InstanceID>1</rasd:InstanceID>
+        <rasd:ResourceType>3</rasd:ResourceType>
+        <rasd:VirtualQuantity>1</rasd:VirtualQuantity>
+      </Item>
+      <Item>
+        <rasd:AllocationUnits>byte * 2^20</rasd:AllocationUnits>
+        <rasd:Description>Memory size</rasd:Description>
+        <rasd:ElementName>1024MB of memory</rasd:ElementName>
+        <rasd:InstanceID>2</rasd:InstanceID>
+        <rasd:ResourceType>4</rasd:ResourceType>
+        <rasd:VirtualQuantity>1024</rasd:VirtualQuantity>
+      </Item>
+      <Item>
+        <rasd:Address>0</rasd:Address>
+        <rasd:Description>SCSI controller</rasd:Description>
+        <rasd:ElementName>SCSI controller 0</rasd:ElementName>
+        <rasd:InstanceID>3</rasd:InstanceID>
+        <rasd:ResourceSubType>lsilogic</rasd:ResourceSubType>
+        <rasd:ResourceType>6</rasd:ResourceType>
+      </Item>
+      <StorageItem>
+        <sasd:AddressOnParent>0</sasd:AddressOnParent>
+        <sasd:ElementName>Hard disk 1</sasd:ElementName>
+        <sasd:HostResource>ovf:/disk/vmdisk1</sasd:HostResource>
+        <sasd:InstanceID>4</sasd:InstanceID>
+        <sasd:Parent>3</sasd:Parent>
+        <sasd:ResourceType>17</sasd:ResourceType>
+      </StorageItem>
+      <EthernetPortItem>
+        <epasd:AutomaticAllocation>true</epasd:AutomaticAllocation>
+        <epasd:Connection>VM Network</epasd:Connection>
+        <epasd:ElementName>Network adapter 1</epasd:ElementName>
+        <epasd:InstanceID>5</epasd:InstanceID>
+        <epasd:ResourceSubType>E1000</epasd:ResourceSubType>
+        <epasd:ResourceType>10</epasd:ResourceType>
+      </EthernetPortItem>
+    </VirtualHardwareSection>
+  </VirtualSystem>
+</Envelope>

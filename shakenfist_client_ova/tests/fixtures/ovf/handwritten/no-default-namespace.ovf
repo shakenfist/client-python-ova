@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-written fixture: no-default-namespace.ovf
+
+  Case: no default namespace. The envelope namespace is bound only to
+  the ovf prefix, so every OVF element carries it, as ElementTree
+  writes a descriptor when it re-serialises one.
+
+  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
+  edge cases":
+    "a descriptor with no default namespace, where every OVF element
+    carries a prefix;"
+
+  Decision 3: lookups are by namespace, never by prefix.
+-->
+<ovf:Envelope xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"
+              xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData"
+              xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData"
+              ovf:version="1.0">
+  <ovf:References>
+    <ovf:File ovf:id="file1" ovf:href="disk1.vmdk" ovf:size="1048576"/>
+  </ovf:References>
+  <ovf:DiskSection>
+    <ovf:Info>Virtual disk information</ovf:Info>
+    <ovf:Disk ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:capacity="10" ovf:capacityAllocationUnits="byte * 2^30"
+              ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
+  </ovf:DiskSection>
+  <ovf:NetworkSection>
+    <ovf:Info>The list of logical networks</ovf:Info>
+    <ovf:Network ovf:name="VM Network">
+      <ovf:Description>The VM Network network</ovf:Description>
+    </ovf:Network>
+  </ovf:NetworkSection>
+  <ovf:VirtualSystem ovf:id="example-vm">
+    <ovf:Info>A virtual machine</ovf:Info>
+    <ovf:Name>example-vm</ovf:Name>
+    <ovf:OperatingSystemSection ovf:id="36">
+      <ovf:Info>The kind of installed guest operating system</ovf:Info>
+      <ovf:Description>Linux</ovf:Description>
+    </ovf:OperatingSystemSection>
+    <ovf:VirtualHardwareSection>
+      <ovf:Info>Virtual hardware requirements</ovf:Info>
+      <ovf:System>
+        <vssd:ElementName>Virtual Hardware Family</vssd:ElementName>
+        <vssd:InstanceID>0</vssd:InstanceID>
+        <vssd:VirtualSystemIdentifier>example-vm</vssd:VirtualSystemIdentifier>
+        <vssd:VirtualSystemType>vmx-13</vssd:VirtualSystemType>
+      </ovf:System>
+      <ovf:Item>
+        <rasd:AllocationUnits>hertz * 10^6</rasd:AllocationUnits>
+        <rasd:Description>Number of virtual CPUs</rasd:Description>
+        <rasd:ElementName>1 virtual CPU</rasd:ElementName>
+        <rasd:InstanceID>1</rasd:InstanceID>
+        <rasd:ResourceType>3</rasd:ResourceType>
+        <rasd:VirtualQuantity>1</rasd:VirtualQuantity>
+      </ovf:Item>
+      <ovf:Item>
+        <rasd:AllocationUnits>byte * 2^20</rasd:AllocationUnits>
+        <rasd:Description>Memory size</rasd:Description>
+        <rasd:ElementName>1024MB of memory</rasd:ElementName>
+        <rasd:InstanceID>2</rasd:InstanceID>
+        <rasd:ResourceType>4</rasd:ResourceType>
+        <rasd:VirtualQuantity>1024</rasd:VirtualQuantity>
+      </ovf:Item>
+      <ovf:Item>
+        <rasd:Address>0</rasd:Address>
+        <rasd:Description>SCSI controller</rasd:Description>
+        <rasd:ElementName>SCSI controller 0</rasd:ElementName>
+        <rasd:InstanceID>3</rasd:InstanceID>
+        <rasd:ResourceSubType>lsilogic</rasd:ResourceSubType>
+        <rasd:ResourceType>6</rasd:ResourceType>
+      </ovf:Item>
+      <ovf:Item>
+        <rasd:AddressOnParent>0</rasd:AddressOnParent>
+        <rasd:ElementName>Hard disk 1</rasd:ElementName>
+        <rasd:HostResource>ovf:/disk/vmdisk1</rasd:HostResource>
+        <rasd:InstanceID>4</rasd:InstanceID>
+        <rasd:Parent>3</rasd:Parent>
+        <rasd:ResourceType>17</rasd:ResourceType>
+      </ovf:Item>
+      <ovf:Item>
+        <rasd:AutomaticAllocation>true</rasd:AutomaticAllocation>
+        <rasd:Connection>VM Network</rasd:Connection>
+        <rasd:ElementName>Network adapter 1</rasd:ElementName>
+        <rasd:InstanceID>5</rasd:InstanceID>
+        <rasd:ResourceSubType>E1000</rasd:ResourceSubType>
+        <rasd:ResourceType>10</rasd:ResourceType>
+      </ovf:Item>
+    </ovf:VirtualHardwareSection>
+  </ovf:VirtualSystem>
+</ovf:Envelope>
