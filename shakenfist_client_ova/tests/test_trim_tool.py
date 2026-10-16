@@ -49,7 +49,7 @@ OVF1 = '\n'.join([
     '    <!-- a comment inside the root -->',
     '    <Description>Secret system description</Description>',
     '    <ProductSection ovf:required="false">',
-    '      <Info>Information about the installed software</Info>',
+    '      <Info>Secret product blurb</Info>',
     '      <Product>Secret Product</Product>',
     '      <Vendor>Secret Vendor &amp; Sons</Vendor>',
     '      <FullVersion/>',
@@ -119,6 +119,7 @@ class TrimTestCase(testtools.TestCase):
         expected = OVF1.replace(DECLARATION, DECLARATION + '\n' + _comment(self.original), 1)
         for old, new in (
                 ('<Description>Secret system description</Description>', '<Description>TRIMMED</Description>'),
+                ('<Info>Secret product blurb</Info>', '<Info>TRIMMED</Info>'),
                 ('<Product>Secret Product</Product>', '<Product>TRIMMED</Product>'),
                 ('<Vendor>Secret Vendor &amp; Sons</Vendor>', '<Vendor>TRIMMED</Vendor>'),
                 ('<Label>Secret label</Label>', '<Label>TRIMMED</Label>'),
@@ -149,6 +150,7 @@ class TrimTestCase(testtools.TestCase):
         self.assertIn(b'<Description>Ubuntu 64-bit</Description>', self.trimmed)
         self.assertIn(b'<rasd:Description>Number of Virtual CPUs</rasd:Description>', self.trimmed)
         self.assertIn(b'<Info>A virtual machine</Info>', self.trimmed)
+        self.assertIn(b'<Info>The kind of installed guest operating system</Info>', self.trimmed)
 
     def test_machine_emptied(self):
         self.assertIn(b'    <vbox:Machine ovf:required="false" version="1.16-linux"/>\n  </VirtualSystem>',
@@ -179,7 +181,7 @@ class TrimTestCase(testtools.TestCase):
     def test_check_passes(self):
         descriptor = tool.check(self.original, self.trimmed)
         kinds = [span.kind for span in descriptor.spans]
-        self.assertEqual(8, kinds.count('prose'))
+        self.assertEqual(9, kinds.count('prose'))
         self.assertEqual(1, kinds.count('emptied'))
 
     def test_trim_is_deterministic(self):
@@ -298,7 +300,7 @@ class EnvelopeVersionTestCase(testtools.TestCase):
             '      <License>Secret licence text</License>',
             '    </Section>',
             '    <Section xsi:type="ProductSection_Type">',
-            '      <Info>Product</Info>',
+            '      <Info>Secret product info</Info>',
             '      <Product>Secret Product</Product>',
             '    </Section>',
             '  </Content>',
@@ -330,7 +332,7 @@ class EnvelopeVersionTestCase(testtools.TestCase):
             '']).encode('utf-8')
         trimmed = tool.trim(original, SOURCE)
         self.assertNotIn(b'ecret', trimmed)
-        self.assertEqual(3, trimmed.count(b'>TRIMMED<'))
+        self.assertEqual(4, trimmed.count(b'>TRIMMED<'))
         tool.check(original, trimmed)
 
     def test_unknown_namespace_not_prose(self):

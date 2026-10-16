@@ -313,6 +313,7 @@ expected, not a defect.
    |---------|-------------|
    | `EulaSection/License` | `eula.license` |
    | `AnnotationSection/Annotation` | `annotation` |
+   | `ProductSection/Info` (added in step 1e) | `product.info` |
    | `ProductSection/Product`, `Vendor`, `FullVersion`, `ProductUrl`, `VendorUrl`, `AppUrl`, `Category` | `product.<field>` |
    | `ProductSection/Property/Label`, `Property/Description` | `product.properties[].label`, `.description` |
    | `VirtualSystem/Description`, `VirtualSystemCollection/Description` | `description` |
@@ -341,7 +342,9 @@ expected, not a defect.
    is left alone. So do
    `Info`, `Version`, `rasd:ElementName`, `rasd:Caption` and
    `rasd:Description`. They are short, generic and structural, and a
-   parser that reads them should see the real thing.
+   parser that reads them should see the real thing. The one exception
+   is a `ProductSection`'s `Info`, which VyOS fills with a product
+   description; step 1e found it and added it to the prose list.
 
    `--check ORIGINAL TRIMMED` locates the same spans in both files with
    the same parser. It then requires the bytes outside them to be

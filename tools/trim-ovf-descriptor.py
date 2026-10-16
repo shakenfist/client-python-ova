@@ -53,6 +53,7 @@ VBOX_NAMESPACE = 'http://www.virtualbox.org/ovf/machine'
 PROSE_ELEMENTS = (
     ('EulaSection/License', 'eula.license'),
     ('AnnotationSection/Annotation', 'annotation'),
+    ('ProductSection/Info', 'product.info'),
     ('ProductSection/Product', 'product.product'),
     ('ProductSection/Vendor', 'product.vendor'),
     ('ProductSection/FullVersion', 'product.full_version'),
