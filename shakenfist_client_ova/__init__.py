@@ -37,12 +37,48 @@ def _hardware_summary(hardware):
     return lines
 
 
+def _operating_system_summary(operating_system):
+    """The line describing the guest operating system: its id, its type and its description."""
+    parts = ['id %d' % operating_system.id]
+    if operating_system.os_type:
+        parts.append('type %s' % operating_system.os_type)
+    if operating_system.description:
+        parts.append(operating_system.description)
+    return '    Operating system: %s' % ', '.join(parts)
+
+
+def _product_summary(product):
+    """The line describing a product by name and version only, or None if it has neither."""
+    parts = []
+    if product.product:
+        parts.append(product.product)
+    if product.version:
+        parts.append('version %s' % product.version)
+    if not parts:
+        return None
+    return '    Product: %s' % ', '.join(parts)
+
+
+def _unset_properties(envelope):
+    """The properties a user is expected to set that the descriptor gives no value for."""
+    return [prop
+            for product in envelope.virtual_system.products
+            for prop in product.properties
+            if prop.user_configurable and not prop.value]
+
+
 def _envelope_summary(envelope, version, name):
     """The lines describing a parsed descriptor, printed after the parse."""
     lines = [
         '    Version: %s' % version,
         '    System id: %s' % name,
     ]
+    if envelope.virtual_system.operating_system is not None:
+        lines.append(_operating_system_summary(envelope.virtual_system.operating_system))
+    for product in envelope.virtual_system.products:
+        line = _product_summary(product)
+        if line is not None:
+            lines.append(line)
     for file in envelope.files:
         lines.append('    File %s: %s' % (file.id, file.href))
     for disk in envelope.disks:
@@ -59,8 +95,11 @@ def _envelope_summary(envelope, version, name):
 @click.option('--namespace', type=click.STRING,
               help=('If you are an admin, you can import the OVA into a '
                     'different namespace.'))
+@click.option('--accept-eula', is_flag=True,
+              help=('Accept the licence agreement of an appliance that has one. Without this the '
+                    'licence is printed and the import stops.'))
 @click.pass_context
-def ova_import(ctx, source=None, namespace=None):
+def ova_import(ctx, source=None, namespace=None, accept_eula=False):
     ctx.obj['namespace'] = namespace
     ctx.obj['CLIENT'] = apiclient.Client(
         async_strategy=apiclient.ASYNC_CONTINUE, namespace=namespace)
@@ -116,6 +155,25 @@ def ova_import(ctx, source=None, namespace=None):
                 print('VM description:')
                 for line in _envelope_summary(envelope, version, name):
                     print(line)
+
+                eulas = envelope.virtual_system.eulas
+                for eula in eulas:
+                    print()
+                    print('Licence agreement:')
+                    print(eula.license)
+                if eulas and not accept_eula:
+                    print()
+                    print('This appliance has a licence agreement, printed above. '
+                          'Re-run with --accept-eula to accept it.')
+                    sys.exit(1)
+
+                unset = _unset_properties(envelope)
+                if unset:
+                    print()
+                    print('Warning: this appliance expects the following properties to be set at first boot, '
+                          'and Shaken Fist cannot deliver them yet:')
+                    for prop in unset:
+                        print('    %s' % (prop.key if not prop.label else '%s (%s)' % (prop.key, prop.label)))
         except ovf.OVFError as e:
             print(str(e))
             sys.exit(1)
