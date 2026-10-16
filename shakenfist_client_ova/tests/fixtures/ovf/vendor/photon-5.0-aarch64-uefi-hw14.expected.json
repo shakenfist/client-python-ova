@@ -1,4 +1,90 @@
 {
-  "error": "UnsupportedDescriptorError(KeyError)",
-  "message_contains": "Could not parse the descriptor: KeyError"
+  "deployment_options": [],
+  "disks": [
+    {
+      "capacity_bytes": 17179869184,
+      "disk_id": "vmdisk1",
+      "file_ref": "file1",
+      "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+      "interface": null,
+      "parent_ref": null,
+      "populated_size": 845414400
+    }
+  ],
+  "files": [
+    {
+      "chunk_size": null,
+      "compression": null,
+      "href": "photon-disk1.vmdk",
+      "id": "file1",
+      "size": 293515264
+    }
+  ],
+  "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+  "networks": [
+    {
+      "description": "The bridged network",
+      "name": "bridged"
+    }
+  ],
+  "version": null,
+  "virtual_system": {
+    "description": null,
+    "eulas": [
+      {
+        "license": "TRIMMED"
+      }
+    ],
+    "hardware": [
+      {
+        "controllers": [
+          {
+            "bus": "sata",
+            "instance_id": "3"
+          }
+        ],
+        "disk_drives": [
+          {
+            "address_on_parent": 0,
+            "element_name": "disk0",
+            "host_resource": "ovf:/disk/vmdisk1",
+            "parent": "3"
+          }
+        ],
+        "memory_bytes": 2147483648,
+        "nics": [
+          {
+            "connection": "bridged",
+            "resource_subtype": "VmxNet3"
+          }
+        ],
+        "system_identifier": "Photon OS",
+        "system_type": "vmx-14",
+        "transport": [],
+        "vcpus": 1
+      }
+    ],
+    "id": "vm",
+    "name": "Photon OS",
+    "operating_system": {
+      "description": null,
+      "id": 36,
+      "os_type": "vmwarePhoton64Guest",
+      "version": null
+    },
+    "products": [
+      {
+        "app_url": null,
+        "full_version": "TRIMMED",
+        "instance": null,
+        "product": "TRIMMED",
+        "product_class": null,
+        "product_url": null,
+        "properties": [],
+        "vendor": "TRIMMED",
+        "vendor_url": null,
+        "version": "5.0"
+      }
+    ]
+  }
 }

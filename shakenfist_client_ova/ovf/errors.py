@@ -71,16 +71,9 @@ class BrokenReferenceError(OVFError):
     """A reference names something the descriptor does not hold.
 
     That is a drive whose HostResource names no Disk (ovf:/disk/<id>) or no
-    File (ovf:/file/<id>), a drive whose Parent names no controller, or a Disk
-    whose ovf:fileRef names no File.
-    """
-
-
-class UnsupportedDescriptorError(OVFError):
-    """Any other failure inside the descriptor parser, raised from the original exception.
-
-    It exists only until the parser names each of these failures itself, when
-    this class goes (see docs/plans/PLAN-ovf-parser.md).
+    File (ovf:/file/<id>), a drive whose Parent names no controller, a Disk
+    whose ovf:fileRef names no File, or an ovf:configuration naming no
+    Configuration in the DeploymentOptionSection.
     """
 
 
@@ -89,7 +82,9 @@ def outcome_name(exc):
 
     This is the exception's class name, followed by its cause's class name in
     brackets when it was raised from an exception that is not an OVFError, for
-    example UnsupportedDescriptorError(KeyError).
+    example ManifestError(UnicodeDecodeError). The descriptor parser raises
+    each of its errors itself, never from another exception, so its outcomes
+    are bare class names.
     """
     name = type(exc).__name__
     cause = exc.__cause__

@@ -80,10 +80,10 @@ class ImportCommandTestCase(testtools.TestCase):
                 result = CliRunner().invoke(ova.ova, ['import', path], obj={})
         return result, client_class.return_value, util
 
-    def test_unparseable_descriptor_is_one_line(self):
-        result, _, _ = self._import(_fixture('handwritten/ovf2-envelope.ovf'))
+    def test_refused_descriptor_is_one_line(self):
+        result, _, _ = self._import(_fixture('vendor/tails-202607.ovf'))
         self.assertEqual(1, result.exit_code)
-        lines = [line for line in result.output.split('\n') if line.startswith('Could not parse the descriptor')]
+        lines = [line for line in result.output.split('\n') if line.startswith('The descriptor is an OVF 0.9 envelope')]
         self.assertEqual(1, len(lines), result.output)
         self.assertNotIn('Traceback', result.output)
 

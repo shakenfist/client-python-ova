@@ -1,446 +1,866 @@
 """The descriptor parser.
 
-This is the import command's descriptor walk, moved here from the command
-without changing what it accepts: every dpath call, every deletion and its
-order are as they were. It exists only until the parser moves to ElementTree
-(see docs/plans/PLAN-ovf-parser.md), which replaces all of it, so it is moved
-faithfully rather than tidied.
+A descriptor is read with defusedxml's ElementTree, which refuses entity
+declarations and external references, into the dataclasses in model.py. OVF
+1.x and 2.x are read the same way: every element and attribute name is mapped
+through one table of namespaces, so the section readers below never see a
+namespace URI, a prefix, or a producer's spelling of either.
 
-The walk parses by consumption. Each section it understands is deleted from
-the parsed descriptor as it is read, and anything left at the end is refused.
-The model is built at the end, from what the walk read.
+The parser is strict, as DSP0243 asks of a consumer. It records every element
+and attribute it reads, and when it has built the model it walks the whole
+tree. Anything left unread is either ignored by one of the rules in
+_ignored_element and _ignored_attribute, or refused with UnparsedContentError,
+which names each unread thing by its path.
 """
 
-import json
-import math
+import io
 import re
-from xml.parsers.expat import ExpatError
 
-import dpath
-import xmltodict
+import defusedxml
+from defusedxml import ElementTree
 
+from . import cim
+from . import namespaces
+from . import quirks
+from . import units
 from .errors import (
-    EntityDeclarationError, MalformedDescriptorError, OVFError, UnknownAllocationUnitError, UnparsedContentError,
-    UnsupportedDescriptorError, UnsupportedHardwareError)
-from .model import Controller, Disk, DiskDrive, Envelope, File, Network, Nic, VirtualHardware, VirtualSystem
+    BrokenReferenceError, EntityDeclarationError, InvalidValueError, MalformedDescriptorError, MissingContentError,
+    UnknownAllocationUnitError, UnparsedContentError, UnsupportedEnvelopeError, UnsupportedHardwareError,
+    UnsupportedProducerError, VirtualSystemCollectionError)
+from .model import (
+    Controller, DeploymentOption, Disk, DiskDrive, Envelope, Eula, File, Network, Nic, OperatingSystem, Product,
+    Property, VirtualHardware, VirtualSystem)
 
 
-NAMESPACES = {
-    # https://www.w3.org/XML/1998/namespace
-    'http://www.w3.org/XML/1998/namespace': 'xml',
+# The name the parser reads each namespace under, keyed by URI. Both OVF
+# envelope namespaces are read as one, and each producer alias in quirks.py as
+# the namespace it means. A namespace that is not here is a custom one, read
+# under its URI in braces.
+OVF = 'ovf'
+NAMESPACE_NAMES = {
+    namespaces.OVF_1: OVF,
+    namespaces.OVF_2: OVF,
+    namespaces.RASD: 'rasd',
+    namespaces.VSSD: 'vssd',
+    namespaces.SASD: 'sasd',
+    namespaces.EPASD: 'epasd',
+    namespaces.VMWARE: 'vmw',
+    namespaces.XML: 'xml',
+    namespaces.XSI: 'xsi',
+}
+NAMESPACE_NAMES.update({alias: NAMESPACE_NAMES[uri] for alias, uri in quirks.NAMESPACE_ALIASES.items()})
 
-    # https://www.dmtf.org/sites/default/files/standards/documents/DSP0243_1.1.0.pdf
-    'http://schemas.dmtf.org/ovf/envelope/1': 'v1',
+# The CIM class namespaces, by the name the parser reads each under.
+_CIM_NAMESPACES = frozenset(NAMESPACE_NAMES[uri] for uri in cim.PROPERTIES)
 
-    # https://www.dmtf.org/sites/default/files/standards/documents/DSP0243_2.1.1.pdf
-    'http://schemas.dmtf.org/ovf/envelope/2': 'v2',
+# Element names read as another, keyed by (namespace name, local name).
+_ELEMENT_ALIASES = {
+    (NAMESPACE_NAMES[uri], local): canonical for (uri, local), canonical in quirks.ELEMENT_ALIASES.items()}
 
-    # I cannot find documentation for these
-    'http://www.virtualbox.org/ovf/machine': 'vbox',
-    ('http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/'
-     'CIM_ResourceAllocationSettingData'): 'rasd',
-    ('http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/'
-     'CIM_VirtualSystemSettingData'): 'vssd',
-    'http://www.vmware.com/schema/ovf': 'vmware'
+# The standard CIM properties the parser reads, and those it leaves unread, by
+# namespace name. A read property is recorded as read on every item or System
+# that carries it, whether or not that item's kind uses its value.
+_CIM_READ = {
+    NAMESPACE_NAMES[namespaces.RASD]: cim.RASD_READ,
+    NAMESPACE_NAMES[namespaces.SASD]: cim.SASD_READ,
+    NAMESPACE_NAMES[namespaces.EPASD]: cim.EPASD_READ,
+    NAMESPACE_NAMES[namespaces.VSSD]: cim.VSSD_READ,
+}
+_CIM_UNUSED = {NAMESPACE_NAMES[uri]: names for uri, names in cim.UNUSED.items()}
+
+# The hardware item elements, each with the CIM class its children are
+# properties of. System's children are CIM_VirtualSystemSettingData's.
+ITEMS = {'Item': 'rasd', 'StorageItem': 'sasd', 'EthernetPortItem': 'epasd'}
+_CIM_PARENTS = {(OVF, local): cim_class for local, cim_class in ITEMS.items()}
+_CIM_PARENTS[(OVF, 'System')] = 'vssd'
+
+# OVF elements ignored unread wherever they are. Each holds text for a person,
+# which nothing in Shaken Fist reads: Info describes its parent, an
+# AnnotationSection is a free-form note, and Strings holds translations of the
+# other text, which ovf:msgid attributes point into.
+IGNORED_ELEMENTS = frozenset([(OVF, 'Info'), (OVF, 'AnnotationSection'), (OVF, 'Strings')])
+
+# At most this many unread paths are listed when content is refused.
+MAX_UNREAD_LISTED = 20
+
+UNPARSED_HEADING = 'The descriptor has content the parser does not understand:'
+
+# CIM resource types, from CIM_ResourceAllocationSettingData.
+CPU = 3
+MEMORY = 4
+IDE_CONTROLLER = 5
+SCSI_CONTROLLER = 6
+ETHERNET_ADAPTER = 10
+DISK_DRIVE = 17
+OTHER_STORAGE_CONTROLLER = 20
+
+# The controllers the parser reads, by resource type, and for "other storage
+# controller" by subtype.
+CONTROLLER_BUSES = {IDE_CONTROLLER: 'ide', SCSI_CONTROLLER: 'scsi'}
+OTHER_STORAGE_BUSES = {
+    'AHCI': 'sata',
+    'ahci': 'sata',
+    'vmware.sata.ahci': 'sata',
+    'vmware.nvme.controller': 'nvme',
 }
 
-# The walk reads only v1: elements, so a descriptor it accepts is always in
-# this namespace.
-ENVELOPE_V1_NAMESPACE = 'http://schemas.dmtf.org/ovf/envelope/1'
+# Resource types recognised and left to the instance's defaults: floppy, CD and
+# DVD drives, USB controllers, graphics controllers and sound cards.
+DEFAULTED_TYPES = frozenset([14, 15, 16, 23, 24, 35])
 
-STREAM_OPTIMIZED = ('http://www.vmware.com/interfaces/specifications/'
-                    'vmdk.html#streamOptimized')
+# Every resource type the parser reads or recognises, other than the controllers.
+KNOWN_TYPES = frozenset([CPU, MEMORY, ETHERNET_ADAPTER, DISK_DRIVE]) | DEFAULTED_TYPES
 
-BYTE_MATHS_ALLOCATION_UNITS_RE = re.compile(r'^byte \* 2\^([0-9]+)$')
+# A HostResource naming a disk or a file in the descriptor. Any other
+# HostResource names something on the deployment platform, and is not checked.
+_HOST_RESOURCE_RE = re.compile(r'^ovf:/(disk|file)/(.*)$')
 
+# A disk capacity given as a reference to a ProductSection property.
+_PROPERTY_REFERENCE_RE = re.compile(r'^\$\{(.*)\}$')
 
-def _parse_alloc_units_to_bytes(element):
-    if 'rasd:AllocationUnits' in element:
-        key = 'rasd:AllocationUnits'
-    elif '@v1:capacityAllocationUnits' in element:
-        key = '@v1:capacityAllocationUnits'
-    else:
-        return 1
+# An unsigned integer. The digits are limited, which bounds the arithmetic done
+# on a descriptor's text; no real value comes near the limit.
+_INTEGER_RE = re.compile(r'^[0-9]{1,30}$')
 
-    m = BYTE_MATHS_ALLOCATION_UNITS_RE.match(element[key])
-    if m:
-        return 2 ** int(m.group(1))
-    elif element[key] == 'MegaBytes':
-        return 1024 * 1024
-    elif element[key] == 'GigaBytes':
-        return 1024 * 1024 * 1024
-    else:
-        raise UnknownAllocationUnitError(f'Unknown allocation unit: "{element[key]}"\n{element}')
+# xs:boolean's values.
+_BOOLEANS = {'true': True, '1': True, 'false': False, '0': False}
 
 
-dpath.options.ALLOW_EMPTY_STRING_KEYS = True
+def _split_tag(tag):
+    """A tag or attribute key as ElementTree spells it, split into (URI, local name)."""
+    if tag.startswith('{'):
+        uri, _, local = tag[1:].partition('}')
+        return uri, local
+    return '', tag
 
 
-def _coerce_to_list(input):
-    if isinstance(input, list):
-        return input
-    elif isinstance(input, dict):
-        return [input]
+def _namespace(uri):
+    """The name the parser reads a namespace URI under: its NAMESPACE_NAMES entry, or the URI in braces."""
+    if not uri:
+        return ''
+    return NAMESPACE_NAMES.get(uri, '{%s}' % uri)
 
 
-def _delete_if_empty(input, path):
-    if not dpath.get(input, path):
-        dpath.delete(input, path)
+def _element_key(element):
+    uri, local = _split_tag(element.tag)
+    namespace = _namespace(uri)
+    return namespace, _ELEMENT_ALIASES.get((namespace, local), local)
 
 
-def _get(element, key):
-    """An optional value from an xmltodict element, for building the model only.
+def _attribute_key(key):
+    uri, local = _split_tag(key)
+    return _namespace(uri), local
 
-    The walk reads nothing through this, so it refuses nothing the walk accepts.
-    An element that carries attributes is a dict, whose text is under '#text'.
+
+def _name(text, default_namespace):
+    """A name as the section readers write it, such as 'DiskSection' or 'rasd:ResourceType', as a key."""
+    namespace, colon, local = text.partition(':')
+    if not colon:
+        return default_namespace, text
+    return namespace, local
+
+
+def _required_false(element, key):
+    """Whether an element carries ovf:required="false", or an unqualified required="false" on an OVF element."""
+    for attribute, value in element.attrib.items():
+        namespace, local = _attribute_key(attribute)
+        if local == 'required' and (namespace == OVF or (not namespace and key[0] == OVF)):
+            if _BOOLEANS.get(value.strip()) is False:
+                return True
+    return False
+
+
+class _Reader(object):
+    """One descriptor's tree, and a record of every element and attribute read from it."""
+
+    def __init__(self, prefixes):
+        # The document's own prefix for each namespace URI, for naming custom
+        # elements and attributes in messages.
+        self.prefixes = prefixes
+        self.read = set()
+        self.read_whole = set()
+        self.read_attributes = set()
+        self._steps = {}
+
+    def display(self, namespace, local, attribute=False):
+        """How a name is written in a path: OVF elements bare, everything else with a prefix."""
+        if not namespace or (namespace == OVF and not attribute):
+            return local
+        if namespace.startswith('{'):
+            prefix = self.prefixes.get(namespace[1:-1])
+            return '%s:%s' % (prefix, local) if prefix else namespace + local
+        return '%s:%s' % (namespace, local)
+
+    def steps(self, element):
+        """Each child element as (child, key, step), the step naming it in a path, numbered if its name repeats."""
+        steps = self._steps.get(id(element))
+        if steps is None:
+            children = [child for child in element if isinstance(child.tag, str)]
+            keys = [_element_key(child) for child in children]
+            counts = {}
+            for key in keys:
+                counts[key] = counts.get(key, 0) + 1
+            seen = {}
+            steps = []
+            for child, key in zip(children, keys):
+                step = self.display(*key)
+                if counts[key] > 1:
+                    seen[key] = seen.get(key, 0) + 1
+                    step = '%s[%d]' % (step, seen[key])
+                steps.append((child, key, step))
+            self._steps[id(element)] = steps
+        return steps
+
+
+class _Node(object):
+    """An element being read. Reading a child or an attribute through it records that it was read.
+
+    Names are written as the section readers write them: an element's name is
+    in the OVF namespace unless it has a prefix, as in 'rasd:ResourceType', and
+    an attribute's always has one, as in 'ovf:capacity'. The prefixes are the
+    names in NAMESPACE_NAMES, not the document's.
     """
-    if not isinstance(element, dict):
+
+    def __init__(self, reader, element, path):
+        self.reader = reader
+        self.element = element
+        self.path = path
+        self.key = _element_key(element)
+        reader.read.add(id(element))
+
+    def children(self, *names):
+        """Every child with one of the names, in document order, each recorded as read."""
+        wanted = [_name(name, OVF) for name in names]
+        return [_Node(self.reader, child, '%s/%s' % (self.path, step))
+                for child, key, step in self.reader.steps(self.element) if key in wanted]
+
+    def child(self, name):
+        """The first child with the name, recorded as read, or None. Any second one is left unread."""
+        wanted = _name(name, OVF)
+        for child, key, step in self.reader.steps(self.element):
+            if key == wanted:
+                return _Node(self.reader, child, '%s/%s' % (self.path, step))
         return None
-    return _text(element.get(key))
+
+    def required_child(self, name):
+        node = self.child(name)
+        if node is None:
+            raise MissingContentError('%s has no %s' % (self.path, self.reader.display(*_name(name, OVF))))
+        return node
+
+    def text(self):
+        """The element's text, stripped, or None if it has none."""
+        text = (self.element.text or '').strip()
+        return text or None
+
+    def child_text(self, name):
+        node = self.child(name)
+        return None if node is None else node.text()
+
+    def required_child_text(self, name):
+        node = self.required_child(name)
+        text = node.text()
+        if text is None:
+            raise MissingContentError('%s is empty' % node.path)
+        return text
+
+    def attribute(self, name):
+        """An attribute's value, recorded as read, or None if it is absent.
+
+        On an element in the OVF namespace, an unqualified attribute is read as
+        the OVF attribute of the same local name. An element carrying both forms
+        is refused, because the two could disagree.
+        """
+        wanted = _name(name, '')
+        found = []
+        for key in self.element.attrib:
+            namespace, local = _attribute_key(key)
+            if local == wanted[1] and (
+                    namespace == wanted[0] or (not namespace and wanted[0] == OVF and self.key[0] == OVF)):
+                found.append(key)
+        if not found:
+            return None
+        for key in found:
+            self.reader.read_attributes.add((id(self.element), key))
+        if len(found) > 1:
+            raise UnparsedContentError(
+                '%s carries %s more than once, qualified and unqualified, and the two could disagree'
+                % (self.path, self.reader.display(*wanted, attribute=True)))
+        return self.element.attrib[found[0]]
+
+    def required_attribute(self, name):
+        value = self.attribute(name)
+        if value is None:
+            raise MissingContentError('%s has no %s' % (
+                self.path, self.reader.display(*_name(name, ''), attribute=True)))
+        return value
+
+    def skip(self):
+        """Record the element and its whole subtree as read, for content deliberately passed over."""
+        self.reader.read_whole.add(id(self.element))
+
+    def mark_children(self, namespace, names):
+        """Record as read every child in the namespace whose local name is in names."""
+        for child, key, _ in self.reader.steps(self.element):
+            if key[0] == namespace and key[1] in names:
+                self.reader.read.add(id(child))
+
+    def describe(self, name):
+        """The path of one of the element's attributes ('@ovf:size') or children ('rasd:Parent'), for a message."""
+        if name.startswith('@'):
+            return '%s@%s' % (self.path, self.reader.display(*_name(name[1:], ''), attribute=True))
+        return '%s/%s' % (self.path, self.reader.display(*_name(name, OVF)))
 
 
-def _text(value):
-    if isinstance(value, dict):
-        return value.get('#text')
-    return value
+def _integer(value, where):
+    stripped = value.strip()
+    if not _INTEGER_RE.match(stripped):
+        raise InvalidValueError('%s is "%s", which is not a non-negative integer' % (where, value))
+    return int(stripped)
 
 
-def _parse(data):
+def _integer_attribute(node, name, required=False):
+    value = node.required_attribute(name) if required else node.attribute(name)
+    if value is None:
+        return None
+    return _integer(value, node.describe('@' + name))
+
+
+def _integer_text(node, name, required=False):
+    text = node.required_child_text(name) if required else node.child_text(name)
+    if text is None:
+        return None
+    return _integer(text, node.describe(name))
+
+
+def _boolean_attribute(node, name, default):
+    value = node.attribute(name)
+    if value is None:
+        return default
+    result = _BOOLEANS.get(value.strip())
+    if result is None:
+        raise InvalidValueError('%s is "%s", which is neither true nor false' % (node.describe('@' + name), value))
+    return result
+
+
+def _bytes_per_unit(text, where):
     try:
-        ovf = xmltodict.parse(
-            data, process_namespaces=True, namespaces=NAMESPACES)
-    except ExpatError as e:
-        raise MalformedDescriptorError(f'The descriptor is not well-formed XML: {e}') from None
-    except ValueError as e:
-        # xmltodict refuses an entity declaration with ValueError('entities are
-        # disabled'), and this matches exactly that message. Any other ValueError
-        # is not that refusal, and is left to parse_descriptor to report as an
-        # unsupported descriptor. The xmltodict version is pinned in
-        # tools/pinned-requirements.txt, so a reworded message shows up as a
-        # reviewed golden-file change rather than as a silent mismatch.
-        if str(e) != 'entities are disabled':
-            raise
-        raise EntityDeclarationError(f'The descriptor declares an entity, which is refused: {e}') from None
+        return units.bytes_per_unit(text)
+    except UnknownAllocationUnitError as e:
+        raise UnknownAllocationUnitError('%s: %s' % (where, e)) from None
 
-    # Strip meaningless info tags
-    dpath.delete(ovf, '**/v1:Info')
 
+class _Configurations(object):
+    """The DeploymentOptionSection's configurations, and the default one, which the parser builds."""
+
+    def __init__(self, options):
+        self.ids = set(option.id for option in options)
+        self.default = next((option.id for option in options if option.default), None)
+
+    def applies(self, node, required=False):
+        """Whether an element applies to the default configuration, by its ovf:configuration list.
+
+        An element without one applies to every configuration, unless required
+        says it must have one. A name in the list that is not a configuration's
+        id is refused, because DSP0243 allows only those.
+        """
+        name = 'ovf:configuration'
+        configuration = node.required_attribute(name) if required else node.attribute(name)
+        if configuration is None:
+            return True
+        names = configuration.split()
+        for configuration_id in names:
+            if configuration_id not in self.ids:
+                raise BrokenReferenceError(
+                    '%s names the configuration "%s", which DeploymentOptionSection does not hold'
+                    % (node.describe('@' + name), configuration_id))
+        return self.default in names
+
+
+def _read_tree(data):
+    """Parse the descriptor's bytes, returning its root element and each namespace URI it declares, with a prefix."""
+    prefixes = {}
+    root = None
     try:
-        version = dpath.get(ovf, ['v1:Envelope', '@v1:version'])
-        dpath.delete(ovf, ['v1:Envelope', '@v1:version'])
-    except KeyError:
-        version = None
+        for event, item in ElementTree.iterparse(
+                io.BytesIO(data), events=('start', 'start-ns'), forbid_dtd=False, forbid_entities=True,
+                forbid_external=True):
+            if event == 'start-ns':
+                prefix, uri = item
+                prefixes.setdefault(uri, prefix)
+            elif root is None:
+                root = item
+    except ElementTree.ParseError as e:
+        position = getattr(e, 'position', None)
+        where = ': the first error is at line %d, column %d' % position if position else ''
+        raise MalformedDescriptorError('The descriptor is not well-formed XML%s' % where) from None
+    except defusedxml.EntitiesForbidden as e:
+        raise EntityDeclarationError(
+            'The descriptor declares an entity, "%s", which the parser refuses: no OVF descriptor needs one'
+            % e.name) from None
+    except defusedxml.ExternalReferenceForbidden:
+        raise EntityDeclarationError(
+            'The descriptor refers to an external entity, which the parser refuses: no OVF descriptor needs one'
+        ) from None
+    except defusedxml.DTDForbidden:
+        raise EntityDeclarationError(
+            'The descriptor declares a document type, which the parser refuses: no OVF descriptor needs one') from None
+    except (LookupError, ValueError):
+        # The XML parser decodes an encoding it does not know itself through
+        # Python's codecs, which refuse an unknown or a multi-byte one with one
+        # of these. defusedxml's refusals are ValueErrors too, so come first.
+        raise MalformedDescriptorError('The descriptor declares a character encoding the parser cannot read') from None
+    return root, prefixes
 
-    try:
-        name = dpath.get(
-            ovf, ['v1:Envelope', 'v1:VirtualSystem', '@v1:id'])
-        dpath.delete(
-            ovf, ['v1:Envelope', 'v1:VirtualSystem', '@v1:id'])
-    except KeyError:
-        name = None
 
-    # Some keys we don't care about
-    for ignore in ['DeploymentOptionSection']:
-        try:
-            dpath.delete(
-                ovf, ['v1:Envelope', f'v1:{ignore}'])
-        except dpath.exceptions.PathNotFound:
-            ...
-    for ignore in ['AnnotationSection', 'OperatingSystemSection',
-                   'ProductSection']:
-        try:
-            dpath.delete(
-                ovf, ['v1:Envelope', 'v1:VirtualSystem', f'v1:{ignore}'])
-        except dpath.exceptions.PathNotFound:
-            ...
+def _check_envelope(root):
+    """The envelope's namespace URI, or raise UnsupportedEnvelopeError."""
+    uri, local = _split_tag(root.tag)
+    if uri in namespaces.OVF_ENVELOPES and local == 'Envelope':
+        return uri
+    if uri == namespaces.OVF_0_9:
+        raise UnsupportedEnvelopeError(
+            'The descriptor is an OVF 0.9 envelope, in the namespace %s, and only OVF 1.x and 2.x envelopes are '
+            'read' % uri)
+    if not uri:
+        where = 'in no namespace'
+    elif uri in namespaces.OVF_ENVELOPES:
+        where = 'in the OVF namespace %s, but is not Envelope' % uri
+    else:
+        where = 'in the namespace %s' % uri
+    raise UnsupportedEnvelopeError(
+        'The descriptor is not an OVF 1.x or 2.x envelope: its root element %s is %s' % (local, where))
 
-    # "v1:References": {
-    #     "v1:File": {
-    #         "@v1:href": "CSE-LABVM-disk001.vmdk",
-    #         "@v1:id": "file1"
-    #     }
-    # },
-    #
-    # "v1:References": {
-    #     "v1:File": [
-    #         {
-    #             "@v1:href": "CyberOps Workstation-disk001.vmdk",
-    #             "@v1:id": "file1"
-    #         },
-    #         {
-    #             "@v1:href": "CyberOps Workstation-disk002.vmdk",
-    #             "@v1:id": "file2"
-    #         }
-    #     ]
-    # },
-    model_files = []
-    files = _coerce_to_list(dpath.get(
-        ovf, ['v1:Envelope', 'v1:References', 'v1:File']))
-    for file in files:
-        # Today's references[file['@v1:id']] = file['@v1:href'] read the href
-        # first, so a File missing both still fails naming the href.
-        model_files.append(File(href=file['@v1:href'], id=file['@v1:id']))
-    dpath.delete(ovf, ['v1:Envelope', 'v1:References', 'v1:File'])
-    _delete_if_empty(ovf, ['v1:Envelope', 'v1:References'])
 
-    # "v1:DiskSection": {
-    #     "v1:Disk": [
-    #         {
-    #             "@v1:capacity": "10737418240",
-    #             "@v1:diskId": "vmdisk1",
-    #             "@v1:fileRef": "file1",
-    #             "@v1:format": STREAM_OPTIMIZED,
-    #             "@vbox:uuid": "4ef5671e-51fc-450d-9804-8361fb2ec5d9"
-    #         },
-    #         {
-    #             "@v1:capacity": "1073741824",
-    #             "@v1:diskId": "vmdisk2",
-    #             "@v1:fileRef": "file2",
-    #             "@v1:format": STREAM_OPTIMIZED,
-    #             "@vbox:uuid": "92052b2b-47c2-43c3-b1a9-520400129e5a"
-    #         }
-    #     ],
-    #     "v1:Info": "List of the virtual disks used in the package"
-    # },
-    model_disks = []
-    disks = _coerce_to_list(dpath.get(
-        ovf, ['v1:Envelope', 'v1:DiskSection', 'v1:Disk']))
-    for disk in disks:
-        alloc = _parse_alloc_units_to_bytes(disk)
-        disk['capacity_gb'] = math.ceil(
-            int(disk['@v1:capacity']) * alloc / 1024 / 1024 / 1024)
-        model_disks.append(Disk(
-            disk_id=_get(disk, '@v1:diskId'), capacity_bytes=int(disk['@v1:capacity']) * alloc,
-            file_ref=_get(disk, '@v1:fileRef'), format=_get(disk, '@v1:format')))
-    dpath.delete(
-        ovf, ['v1:Envelope', 'v1:DiskSection', 'v1:Disk'])
-    _delete_if_empty(
-        ovf, ['v1:Envelope', 'v1:DiskSection'])
+def _read_files(envelope):
+    files = []
+    for node in envelope.required_child('References').children('File'):
+        files.append(File(
+            id=node.required_attribute('ovf:id'),
+            href=node.required_attribute('ovf:href'),
+            size=_integer_attribute(node, 'ovf:size'),
+            compression=node.attribute('ovf:compression'),
+            chunk_size=_integer_attribute(node, 'ovf:chunkSize')))
+    return files
 
-    # "v1:NetworkSection": {
-    #     "v1:Info": "Logical networks used in the package",
-    #     "v1:Network": {
-    #         "@v1:name": "NAT",
-    #         "v1:Description": "Logical network used by this appliance."
-    #     }
-    # },
-    model_networks = []
-    networks = _coerce_to_list(dpath.get(
-        ovf, ['v1:Envelope', 'v1:NetworkSection', 'v1:Network']))
-    for network in networks:
-        model_networks.append(Network(
-            name=_get(network, '@v1:name'), description=_get(network, 'v1:Description')))
-    dpath.delete(
-        ovf, ['v1:Envelope', 'v1:NetworkSection', 'v1:Network'])
-    _delete_if_empty(ovf, ['v1:Envelope', 'v1:NetworkSection'])
 
-    # Machine hardware description. Valid resource types appear to
-    # be (https://schemas.dmtf.org/wbem/cim-html/2/CIM_ResourceAllocationSettingData.html):
-    #    1: Other
-    #    2: Computer System
-    #    3: Processor
-    #    4: Memory
-    #    5: IDE Controller
-    #    6: Parallel SCSI HBA
-    #    7: FC HBA
-    #    8: iSCSI HBA
-    #    9: IB HCA
-    #    10: Ethernet Adapter
-    #    11: Other Network Adapter
-    #    12: I/O Slot
-    #    13: I/O Device
-    #    14: Floppy Drive
-    #    15: CD Drive
-    #    16: DVD drive
-    #    17: Disk Drive
-    #    18: Tape Drive
-    #    19: Storage Extent
-    #    20: Other storage device
-    #    21: Serial port
-    #    22: Parallel port
-    #    23: USB Controller
-    #    24: Graphics controller
-    #    25: IEEE 1394 Controller
-    #    26: Partitionable Unit
-    #    27: Base Partitionable Unit
-    #    28: Power
-    #    29: Cooling Capacity
-    #    30: Ethernet Switch Port
-    #    31: Logical Disk
-    #    32: Storage Volume
-    #    33: Ethernet Connection
-    #    ...
-    #    35: Sound card
-    #
-    # The hardware dictionary and storage_controllers_by_id are today's, kept
-    # because how they fail is part of what the walk refuses. The model lists
-    # beside them keep every item in document order, where the dictionaries
-    # keep the last item for a repeated key.
-    hardware = {
-        'disks': {},
-        'interfaces': [],
-        'has_ide': False,
-        'has_sata': False,
-        'has_scsi': False
-    }
-    storage_controllers_by_id = {}
-    memory_bytes = None
-    model_controllers = []
-    model_disk_drives = []
-    model_nics = []
+def _read_deployment_options(envelope):
+    """Every configuration, with only the default one marked default."""
+    section = envelope.child('DeploymentOptionSection')
+    if section is None:
+        return []
 
-    elements = _coerce_to_list(dpath.get(
-        ovf, ['v1:Envelope', 'v1:VirtualSystem',
-              'v1:VirtualHardwareSection', 'v1:Item']))
-    for element in elements:
-        if element['rasd:ResourceType'] == '1':
-            # "Other", thanks guys...
-            if element.get('@v1:required', 'true') != 'false':
-                raise UnsupportedHardwareError(f'    Unhandled "other" element: {element}')
-        elif element['rasd:ResourceType'] == '3':
-            # vCPUs
-            hardware['vcpus'] = element['rasd:VirtualQuantity']
-        elif element['rasd:ResourceType'] == '4':
-            # RAM, with allocation units
-            alloc = _parse_alloc_units_to_bytes(element)
-            hardware['memory_mb'] = (
-                int(element['rasd:VirtualQuantity'])
-                * alloc / 1024 / 1024)
+    options = []
+    for node in section.children('Configuration'):
+        options.append(DeploymentOption(
+            id=node.required_attribute('ovf:id'),
+            default=_boolean_attribute(node, 'ovf:default', False),
+            label=node.child_text('Label'),
+            description=node.child_text('Description')))
+    if options:
+        # The default is the first marked default, or else the first.
+        chosen = next((option for option in options if option.default), options[0])
+        for option in options:
+            option.default = option is chosen
+    return options
 
-            element['capacity_mb'] = hardware['memory_mb']
-            element['capacity_alloc'] = alloc
-            memory_bytes = int(element['rasd:VirtualQuantity']) * alloc
-        elif element['rasd:ResourceType'] == '5':
-            # IDE controllers
-            hardware['has_ide'] = True
-            storage_controllers_by_id[element['rasd:InstanceID']] = \
-                'ide'
-            model_controllers.append(Controller(instance_id=_text(element['rasd:InstanceID']), bus='ide'))
-        elif element['rasd:ResourceType'] == '6':
-            # SCSI controllers
-            hardware['has_scsi'] = True
-            storage_controllers_by_id[element['rasd:InstanceID']] = \
-                'scsi'
-            model_controllers.append(Controller(instance_id=_text(element['rasd:InstanceID']), bus='scsi'))
-        elif element['rasd:ResourceType'] == '10':
-            # Network interfaces
-            hardware['interfaces'].append((
-                element['rasd:ResourceSubType'],
-                element['rasd:Connection']))
-            model_nics.append(Nic(
-                resource_subtype=_text(element['rasd:ResourceSubType']),
-                connection=_text(element['rasd:Connection'])))
-        elif element['rasd:ResourceType'] == '17':
-            # Disks
-            bus = storage_controllers_by_id[element['rasd:Parent']]
-            hardware['disks'][int(element['rasd:AddressOnParent'])] = \
-                (bus, element['rasd:ElementName'])
-            model_disk_drives.append(DiskDrive(
-                parent=_text(element['rasd:Parent']), address_on_parent=int(element['rasd:AddressOnParent']),
-                element_name=_text(element['rasd:ElementName'])))
-        elif element['rasd:ResourceType'] == '20':
-            # Other storage controller
-            if element['rasd:ResourceSubType'] == 'AHCI':
-                hardware['has_sata'] = True
-                storage_controllers_by_id[element['rasd:InstanceID']] = \
-                    'sata'
-                model_controllers.append(Controller(instance_id=_text(element['rasd:InstanceID']), bus='sata'))
-        elif element['rasd:ResourceType'] in [
-                '14', '15', '23', '24', '35']:
-            # 14: Floppy drives
-            # 15: CD ROM drives
-            # 23: USB controllers
-            # 24: Video cards
-            # 35: Sound cards
-            # ... all of which we ignore
-            ...
+
+def _read_property(node, category, configurations):
+    value = node.attribute('ovf:value')
+    # A Value child gives the property's value in the configurations it names.
+    for value_node in node.children('Value'):
+        configured = value_node.required_attribute('ovf:value')
+        if configurations.applies(value_node, required=True):
+            value = configured
+
+    # Read for validity only: whether a property may change while the
+    # appliance runs is the deployment tool's business.
+    _boolean_attribute(node, 'ovf:runtimeConfigurable', False)
+    # ovf:isPassword is OVF 2's name for ovf:password.
+    password = _boolean_attribute(node, 'ovf:password', False)
+    password = _boolean_attribute(node, 'ovf:isPassword', False) or password
+
+    return Property(
+        key=node.required_attribute('ovf:key'),
+        type=node.required_attribute('ovf:type'),
+        user_configurable=_boolean_attribute(node, 'ovf:userConfigurable', False),
+        password=password,
+        value=value,
+        qualifiers=node.attribute('ovf:qualifiers'),
+        category=category,
+        label=node.child_text('Label'),
+        description=node.child_text('Description'))
+
+
+def _full_key(product_class, key, instance):
+    """A property's full key: class.key.instance, with the class and the instance only where they are given."""
+    return '.'.join(part for part in (product_class, key, instance) if part)
+
+
+def _read_product(node, configurations, excluded):
+    """Read a ProductSection, adding to excluded the keys of properties the default configuration leaves out."""
+    product = Product(
+        product_class=node.attribute('ovf:class'),
+        instance=node.attribute('ovf:instance'),
+        product=node.child_text('Product'),
+        vendor=node.child_text('Vendor'),
+        version=node.child_text('Version'),
+        full_version=node.child_text('FullVersion'),
+        product_url=node.child_text('ProductUrl'),
+        vendor_url=node.child_text('VendorUrl'),
+        app_url=node.child_text('AppUrl'))
+
+    # An Icon is read for validity, and not modelled.
+    for icon in node.children('Icon'):
+        icon.required_attribute('ovf:fileId')
+        _integer_attribute(icon, 'ovf:height')
+        _integer_attribute(icon, 'ovf:width')
+        icon.attribute('ovf:mimeType')
+
+    # A Category heads the properties after it.
+    category = None
+    for child in node.children('Category', 'Property'):
+        if child.key[1] == 'Category':
+            category = child.text()
+        elif configurations.applies(child):
+            product.properties.append(_read_property(child, category, configurations))
         else:
-            raise UnsupportedHardwareError(f'    Unknown hardware element: {element}')
+            key = child.attribute('ovf:key')
+            if key:
+                excluded.update([key, _full_key(product.product_class, key, product.instance)])
+            child.skip()
+    return product
 
-    dpath.delete(
-        ovf, ['v1:Envelope', 'v1:VirtualSystem',
-              'v1:VirtualHardwareSection', 'v1:Item'])
 
-    # These two paths don't have anything useful to us
-    dpath.delete(
-        ovf, ['v1:Envelope', 'v1:VirtualSystem',
-              'v1:VirtualHardwareSection', 'v1:System'])
+def _property_values(products):
+    """Each property's value in the default configuration, by its full key and by its key alone.
 
-    try:
-        dpath.delete(
-            ovf, ['v1:Envelope', 'v1:VirtualSystem',
-                  'vbox:Machine'])
-    except dpath.exceptions.PathNotFound:
-        ...
+    DSP0243 2.x names the property a ${key} capacity refers to by its key alone,
+    and 1.x's example reads as a full key. A full key is matched first, and
+    otherwise the first property in document order with that key.
+    """
+    values = {}
+    for product in products:
+        for prop in product.properties:
+            values.setdefault(prop.key, prop.value)
+    for product in products:
+        for prop in product.properties:
+            values[_full_key(product.product_class, prop.key, product.instance)] = prop.value
+    return values
 
-    # VMWare specific keys we don't translate
-    for vhs_key in ['vmware:Config', '@v1:required',
-                    '@v1:transport']:
-        try:
-            dpath.delete(
-                ovf, ['v1:Envelope', 'v1:VirtualSystem',
-                      'v1:VirtualHardwareSection', vhs_key])
-        except dpath.exceptions.PathNotFound:
-            ...
-    for env_key in ['@vmware:buildId', 'vmware:IpAssignmentSection']:
-        try:
-            dpath.delete(ovf, ['v1:Envelope', env_key])
-        except dpath.exceptions.PathNotFound:
-            ...
 
-    try:
-        dpath.delete(ovf, ['v1:Envelope', 'v1:VirtualSystem',
-                           'v1:Name'])
-    except dpath.exceptions.PathNotFound:
-        ...
+def _license(section):
+    node = section.required_child('License')
+    text = node.text()
+    if text is None:
+        msgid = node.attribute('ovf:msgid')
+        if msgid:
+            raise MissingContentError(
+                '%s is empty: its text is only in Strings, under the ovf:msgid "%s", and the parser does not read '
+                'Strings' % (node.path, msgid))
+        raise MissingContentError('%s is empty' % node.path)
+    return text
 
-    _delete_if_empty(
-        ovf, ['v1:Envelope', 'v1:VirtualSystem',
-              'v1:VirtualHardwareSection'])
-    _delete_if_empty(
-        ovf, ['v1:Envelope', 'v1:VirtualSystem'])
 
-    # Remove boiler plate
-    for bp in ['@xml:lang', '@xmlns']:
-        if bp in ovf['v1:Envelope']:
-            del ovf['v1:Envelope'][bp]
+def _read_operating_system(node):
+    os_type = node.attribute('ovf:osType')
+    # VMware writes the guest type as vmw:osType, which OVF 2 standardised as
+    # ovf:osType. It is read by name, although custom attributes are not read.
+    vmware_os_type = node.attribute('vmw:osType')
+    return OperatingSystem(
+        id=_integer_attribute(node, 'ovf:id', required=True),
+        version=node.attribute('ovf:version'),
+        os_type=os_type if os_type is not None else vmware_os_type,
+        description=node.child_text('Description'))
 
-    # Remove envelope if empty
-    _delete_if_empty(ovf, ['v1:Envelope'])
 
-    # If there is anything left, it means we haven't parsed everything
-    if ovf:
-        raise UnparsedContentError(
-            'Not all of the OVF file was parsed!\n\n' + json.dumps(ovf, sort_keys=True, indent=4))
+def _capacity(node, property_values, excluded_properties):
+    """A disk's ovf:capacity, resolving a ${key} reference to a ProductSection property."""
+    capacity = node.required_attribute('ovf:capacity')
+    where = node.describe('@ovf:capacity')
+    reference = _PROPERTY_REFERENCE_RE.match(capacity.strip())
+    if not reference:
+        return _integer(capacity, where)
 
-    vcpus = hardware.get('vcpus')
-    return Envelope(
-        namespace=ENVELOPE_V1_NAMESPACE,
-        version=version,
-        files=model_files,
-        disks=model_disks,
-        networks=model_networks,
-        virtual_system=VirtualSystem(
-            id=name,
-            hardware=[VirtualHardware(
-                vcpus=int(_text(vcpus)) if vcpus is not None else None,
-                memory_bytes=memory_bytes,
-                controllers=model_controllers,
-                disk_drives=model_disk_drives,
-                nics=model_nics)]))
+    key = reference.group(1)
+    if key not in property_values:
+        if key in excluded_properties:
+            raise InvalidValueError(
+                '%s refers to the property "%s", which applies only to configurations other than the default'
+                % (where, key))
+        raise InvalidValueError(
+            '%s refers to the property "%s", which no ProductSection of the VirtualSystem holds' % (where, key))
+    value = property_values[key]
+    if value is None:
+        raise InvalidValueError(
+            '%s refers to the property "%s", which has no value in the default configuration' % (where, key))
+    return _integer(value, '%s, through the property "%s",' % (where, key))
+
+
+def _read_disks(envelope, files, property_values, excluded_properties):
+    section = envelope.child('DiskSection')
+    if section is None:
+        return []
+
+    file_ids = set(file.id for file in files)
+    disks = []
+    for node in section.children('Disk'):
+        disk_id = node.required_attribute('ovf:diskId')
+        capacity = _capacity(node, property_values, excluded_properties)
+        unit = node.attribute('ovf:capacityAllocationUnits')
+        factor = 1 if unit is None else _bytes_per_unit(unit, node.describe('@ovf:capacityAllocationUnits'))
+
+        file_ref = node.attribute('ovf:fileRef')
+        if file_ref is not None and file_ref not in file_ids:
+            raise BrokenReferenceError('%s names the file "%s", which References does not hold' % (
+                node.describe('@ovf:fileRef'), file_ref))
+
+        disks.append(Disk(
+            disk_id=disk_id,
+            capacity_bytes=capacity * factor,
+            file_ref=file_ref,
+            format=node.attribute('ovf:format'),
+            populated_size=_integer_attribute(node, 'ovf:populatedSize'),
+            parent_ref=node.attribute('ovf:parentRef')))
+    return disks
+
+
+def _read_networks(envelope, configurations):
+    section = envelope.child('NetworkSection')
+    if section is None:
+        return []
+
+    networks = []
+    for node in section.children('Network'):
+        if configurations.applies(node):
+            networks.append(Network(
+                name=node.required_attribute('ovf:name'), description=node.child_text('Description')))
+        else:
+            node.skip()
+    return networks
+
+
+def _host_resource(item, cim_class, disk_ids, file_ids):
+    """Check each of an item's HostResources that names a disk or a file, and return the first one's text."""
+    first = None
+    for index, node in enumerate(item.children('%s:HostResource' % cim_class)):
+        text = node.text()
+        if index == 0:
+            first = text
+        match = _HOST_RESOURCE_RE.match(text or '')
+        if match:
+            kind, target = match.groups()
+            if target not in (disk_ids if kind == 'disk' else file_ids):
+                raise BrokenReferenceError('%s names the %s "%s", which the descriptor does not hold' % (
+                    node.path, kind, target))
+    return first
+
+
+def _read_item(item, hardware, drives, disk_ids, file_ids):
+    """Read a hardware item that applies into hardware, collecting a disk drive in drives with its item."""
+    cim_class = ITEMS[item.key[1]]
+
+    def name(local):
+        return '%s:%s' % (cim_class, local)
+
+    item.mark_children(cim_class, _CIM_READ[cim_class])
+    resource_type = _integer_text(item, name('ResourceType'), required=True)
+    subtype = item.child_text(name('ResourceSubType'))
+    required = _boolean_attribute(item, 'ovf:required', True)
+
+    bus = CONTROLLER_BUSES.get(resource_type)
+    if resource_type == OTHER_STORAGE_CONTROLLER:
+        bus = OTHER_STORAGE_BUSES.get(subtype)
+    if bus is None and resource_type not in KNOWN_TYPES:
+        if not required:
+            item.skip()
+            return
+        kind = 'resource type %d' % resource_type
+        if resource_type == OTHER_STORAGE_CONTROLLER:
+            kind += ' with the subtype "%s"' % subtype
+        raise UnsupportedHardwareError(
+            '%s is a hardware item of %s, which the parser does not support' % (item.path, kind))
+
+    host_resource = _host_resource(item, cim_class, disk_ids, file_ids)
+
+    if resource_type == CPU:
+        hardware.vcpus = _integer_text(item, name('VirtualQuantity'), required=True)
+    elif resource_type == MEMORY:
+        quantity = _integer_text(item, name('VirtualQuantity'), required=True)
+        # VirtualQuantityUnits is the unit of VirtualQuantity. Producers wrote
+        # AllocationUnits for it before CIM added VirtualQuantityUnits, and with
+        # neither the quantity is in bytes.
+        unit_name = name('VirtualQuantityUnits')
+        unit = item.child_text(unit_name)
+        if unit is None:
+            unit_name = name('AllocationUnits')
+            unit = item.child_text(unit_name)
+        factor = 1 if unit is None else _bytes_per_unit(unit, item.describe(unit_name))
+        hardware.memory_bytes = quantity * factor
+    elif bus is not None:
+        hardware.controllers.append(Controller(instance_id=item.required_child_text(name('InstanceID')), bus=bus))
+    elif resource_type == ETHERNET_ADAPTER:
+        hardware.nics.append(Nic(resource_subtype=subtype, connection=item.child_text(name('Connection'))))
+    elif resource_type == DISK_DRIVE:
+        drive = DiskDrive(
+            parent=item.required_child_text(name('Parent')),
+            address_on_parent=_integer_text(item, name('AddressOnParent'), required=True),
+            element_name=item.child_text(name('ElementName')),
+            host_resource=host_resource)
+        hardware.disk_drives.append(drive)
+        drives.append((item, drive))
+
+
+def _read_hardware(section, configurations, disk_ids, file_ids):
+    transport = section.attribute('ovf:transport')
+    hardware = VirtualHardware(transport=transport.split() if transport else [])
+
+    system = section.child('System')
+    if system is not None:
+        system.mark_children('vssd', _CIM_READ['vssd'])
+        hardware.system_type = system.child_text('vssd:VirtualSystemType')
+        hardware.system_identifier = system.child_text('vssd:VirtualSystemIdentifier')
+
+    drives = []
+    for item in section.children(*ITEMS):
+        if not configurations.applies(item):
+            item.skip()
+            continue
+        bound = item.attribute('ovf:bound')
+        if bound in ('min', 'max'):
+            # A range for a deployment tool to tune within. The parser reads
+            # the normal value, which is the item without a bound.
+            item.skip()
+            continue
+        if bound not in (None, 'normal'):
+            raise InvalidValueError(
+                '%s is "%s", which is not min, normal or max' % (item.describe('@ovf:bound'), bound))
+        _read_item(item, hardware, drives, disk_ids, file_ids)
+
+    controller_ids = set(controller.instance_id for controller in hardware.controllers)
+    for item, drive in drives:
+        if drive.parent not in controller_ids:
+            raise BrokenReferenceError(
+                '%s names the controller "%s", which the VirtualHardwareSection does not hold'
+                % (item.describe(ITEMS[item.key[1]] + ':Parent'), drive.parent))
+    return hardware
+
+
+def _ignored_element(key, parent_key):
+    """Whether an unread element is ignored, with its whole subtree, rather than refused."""
+    if key in IGNORED_ELEMENTS:
+        return True
+    # A standard property of the CIM class its parent item or System holds,
+    # which the parser deliberately leaves unread (see cim.py).
+    cim_class = _CIM_PARENTS.get(parent_key)
+    return cim_class is not None and key[0] == cim_class and key[1] in _CIM_UNUSED[cim_class]
+
+
+def _ignored_attribute(namespace, local, element_key):
+    """Whether an unread attribute is ignored rather than refused."""
+    if not namespace:
+        # An unqualified attribute belongs to its element's namespace: on an
+        # OVF element it is the OVF attribute of the same name.
+        namespace = element_key[0]
+    if namespace == OVF:
+        # ovf:required is applied by the end-of-parse check itself, and
+        # ovf:msgid only points into Strings.
+        return local in ('required', 'msgid')
+    # A custom attribute "shall not be required for correct behavior"
+    # (DSP0243 section 7.3), so any attribute outside the OVF and CIM
+    # namespaces is ignored. That covers xml:lang and xsi:schemaLocation.
+    return namespace not in _CIM_NAMESPACES
+
+
+def _unread(reader, root):
+    """The sorted path of every unread element and attribute no rule ignores, each unread subtree once, at its root."""
+    found = []
+
+    def walk(element, key, path, optional):
+        # Anything inside an element marked ovf:required="false" is ignored
+        # when it is not understood, as OVF permits.
+        optional = optional or _required_false(element, key)
+        for attribute in element.attrib:
+            if optional or (id(element), attribute) in reader.read_attributes:
+                continue
+            namespace, local = _attribute_key(attribute)
+            if not _ignored_attribute(namespace, local, key):
+                found.append('%s@%s' % (path, reader.display(namespace, local, attribute=True)))
+        for child, child_key, step in reader.steps(element):
+            child_path = '%s/%s' % (path, step)
+            if id(child) in reader.read_whole:
+                continue
+            if id(child) in reader.read:
+                walk(child, child_key, child_path, optional)
+            elif not (optional or _required_false(child, child_key) or _ignored_element(child_key, key)):
+                found.append(child_path)
+
+    walk(root, _element_key(root), 'Envelope', False)
+    return sorted(found)
+
+
+def _refuse_unread(reader, root):
+    found = _unread(reader, root)
+    if not found:
+        return
+    lines = [UNPARSED_HEADING] + ['    %s' % path for path in found[:MAX_UNREAD_LISTED]]
+    if len(found) > MAX_UNREAD_LISTED:
+        lines.append('    ... and %d more' % (len(found) - MAX_UNREAD_LISTED))
+    raise UnparsedContentError('\n'.join(lines))
 
 
 def parse_descriptor(data):
-    """Parse a descriptor's bytes into an Envelope.
+    """Parse a descriptor's bytes into an Envelope. Raises an OVFError subclass for every failure."""
+    root, prefixes = _read_tree(data)
+    envelope_namespace = _check_envelope(root)
+    if quirks.OVIRT_NAMESPACE in prefixes:
+        raise UnsupportedProducerError(
+            'The descriptor is an oVirt export: it declares the oVirt namespace %s. oVirt writes its own dialect '
+            'of OVF, which the parser does not read' % quirks.OVIRT_NAMESPACE)
 
-    Raises an OVFError subclass for every failure. A failure the parser does
-    not yet name is an UnsupportedDescriptorError, raised from the original
-    exception.
-    """
-    try:
-        return _parse(data)
-    except OVFError:
-        raise
-    except Exception as e:
-        raise UnsupportedDescriptorError(
-            'Could not parse the descriptor: %s: %s' % (type(e).__name__, e)) from e
+    reader = _Reader(prefixes)
+    envelope = _Node(reader, root, 'Envelope')
+    if envelope.child('VirtualSystemCollection') is not None:
+        raise VirtualSystemCollectionError(
+            'The descriptor holds a VirtualSystemCollection, which describes several virtual machines, and only a '
+            'single VirtualSystem can be imported')
+
+    version = envelope.attribute('ovf:version')
+    files = _read_files(envelope)
+    deployment_options = _read_deployment_options(envelope)
+    configurations = _Configurations(deployment_options)
+
+    system_node = envelope.required_child('VirtualSystem')
+    system = VirtualSystem(
+        id=system_node.required_attribute('ovf:id'),
+        name=system_node.child_text('Name'),
+        description=system_node.child_text('Description'))
+    excluded_properties = set()
+    for node in system_node.children('ProductSection'):
+        system.products.append(_read_product(node, configurations, excluded_properties))
+    for node in system_node.children('EulaSection'):
+        system.eulas.append(Eula(license=_license(node)))
+    operating_system = system_node.child('OperatingSystemSection')
+    if operating_system is not None:
+        system.operating_system = _read_operating_system(operating_system)
+
+    disks = _read_disks(envelope, files, _property_values(system.products), excluded_properties)
+    networks = _read_networks(envelope, configurations)
+
+    disk_ids = set(disk.disk_id for disk in disks)
+    file_ids = set(file.id for file in files)
+    for node in system_node.children('VirtualHardwareSection'):
+        system.hardware.append(_read_hardware(node, configurations, disk_ids, file_ids))
+    if not system.hardware:
+        raise MissingContentError('%s has no VirtualHardwareSection' % system_node.path)
+
+    _refuse_unread(reader, root)
+
+    return Envelope(
+        namespace=envelope_namespace,
+        version=version,
+        files=files,
+        disks=disks,
+        networks=networks,
+        deployment_options=deployment_options,
+        virtual_system=system)

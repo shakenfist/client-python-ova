@@ -1,4 +1,100 @@
 {
-  "error": "UnparsedContentError",
-  "message_contains": "Not all of the OVF file was parsed"
+  "deployment_options": [],
+  "disks": [
+    {
+      "capacity_bytes": 11736711168,
+      "disk_id": "vmdisk1",
+      "file_ref": "file1",
+      "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+      "interface": null,
+      "parent_ref": null,
+      "populated_size": null
+    }
+  ],
+  "files": [
+    {
+      "chunk_size": null,
+      "compression": null,
+      "href": "disk.vmdk",
+      "id": "file1",
+      "size": 233791488
+    }
+  ],
+  "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+  "networks": [
+    {
+      "description": "The VM Network network",
+      "name": "VM Network"
+    }
+  ],
+  "version": null,
+  "virtual_system": {
+    "description": null,
+    "eulas": [],
+    "hardware": [
+      {
+        "controllers": [
+          {
+            "bus": "scsi",
+            "instance_id": "3"
+          }
+        ],
+        "disk_drives": [
+          {
+            "address_on_parent": 0,
+            "element_name": "disk0",
+            "host_resource": "ovf:/disk/vmdisk1",
+            "parent": "3"
+          }
+        ],
+        "memory_bytes": 2147483648,
+        "nics": [
+          {
+            "connection": "VM Network",
+            "resource_subtype": "VmxNet3"
+          }
+        ],
+        "system_identifier": "talos",
+        "system_type": "vmx-15",
+        "transport": [
+          "com.vmware.guestInfo"
+        ],
+        "vcpus": 2
+      }
+    ],
+    "id": "vm",
+    "name": "talos",
+    "operating_system": {
+      "description": null,
+      "id": 101,
+      "os_type": "other3xLinux64Guest",
+      "version": null
+    },
+    "products": [
+      {
+        "app_url": null,
+        "full_version": null,
+        "instance": null,
+        "product": null,
+        "product_class": null,
+        "product_url": null,
+        "properties": [
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "talos.config",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          }
+        ],
+        "vendor": null,
+        "vendor_url": null,
+        "version": null
+      }
+    ]
+  }
 }

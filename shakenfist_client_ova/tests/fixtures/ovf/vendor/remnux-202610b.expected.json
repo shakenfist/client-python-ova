@@ -1,4 +1,77 @@
 {
-  "error": "UnparsedContentError",
-  "message_contains": "Not all of the OVF file was parsed"
+  "deployment_options": [],
+  "disks": [
+    {
+      "capacity_bytes": 107374182400,
+      "disk_id": "vmdisk1",
+      "file_ref": "file1",
+      "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+      "interface": null,
+      "parent_ref": null,
+      "populated_size": 21506097152
+    }
+  ],
+  "files": [
+    {
+      "chunk_size": null,
+      "compression": "gzip",
+      "href": "remnux-noble-amd64-disk1.vmdk.gz",
+      "id": "file1",
+      "size": 8304866124
+    }
+  ],
+  "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+  "networks": [
+    {
+      "description": "The nat network",
+      "name": "nat"
+    }
+  ],
+  "version": null,
+  "virtual_system": {
+    "description": null,
+    "eulas": [],
+    "hardware": [
+      {
+        "controllers": [
+          {
+            "bus": "sata",
+            "instance_id": "3"
+          },
+          {
+            "bus": "scsi",
+            "instance_id": "5"
+          }
+        ],
+        "disk_drives": [
+          {
+            "address_on_parent": 0,
+            "element_name": "disk0",
+            "host_resource": "ovf:/disk/vmdisk1",
+            "parent": "5"
+          }
+        ],
+        "memory_bytes": 4294967296,
+        "nics": [
+          {
+            "connection": "nat",
+            "resource_subtype": "E1000"
+          }
+        ],
+        "system_identifier": "REMnux",
+        "system_type": "vmx-14",
+        "transport": [],
+        "vcpus": 2
+      }
+    ],
+    "id": "vm",
+    "name": "REMnux",
+    "operating_system": {
+      "description": null,
+      "id": 94,
+      "os_type": "ubuntu64Guest",
+      "version": null
+    },
+    "products": []
+  }
 }

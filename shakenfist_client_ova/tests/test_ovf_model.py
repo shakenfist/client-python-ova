@@ -58,7 +58,7 @@ class ToJsonTestCase(testtools.TestCase):
         self.assertNotIn('\\u', self.text)
 
     def test_empty_fields_serialised(self):
-        # Fields the parser does not read yet are present now, as null or an empty list.
+        # Fields left unset are serialised, as null or an empty list.
         parsed = json.loads(self.text)
         self.assertIsNone(parsed['files'][0]['size'])
         self.assertEqual([], parsed['deployment_options'])
@@ -77,22 +77,21 @@ class ToJsonTestCase(testtools.TestCase):
 class OutcomeNameTestCase(testtools.TestCase):
     def test_every_error_is_an_ovf_error(self):
         for cls in (ovf.ManifestError, ovf.UnknownAllocationUnitError, ovf.UnsupportedHardwareError,
-                    ovf.UnparsedContentError, ovf.MalformedDescriptorError, ovf.EntityDeclarationError,
-                    ovf.UnsupportedDescriptorError):
+                    ovf.UnparsedContentError, ovf.MalformedDescriptorError, ovf.EntityDeclarationError):
             self.assertTrue(issubclass(cls, ovf.OVFError), cls)
 
     def test_no_cause(self):
         self.assertEqual('UnparsedContentError', ovf.outcome_name(ovf.UnparsedContentError('left over')))
 
-    def test_raised_from_key_error(self):
+    def test_raised_from_another_exception(self):
         def raiser():
             try:
-                {}['v1:References']
-            except KeyError as e:
-                raise ovf.UnsupportedDescriptorError('Could not parse the descriptor') from e
+                b'\xff'.decode('utf-8')
+            except UnicodeDecodeError as e:
+                raise ovf.ManifestError('Could not parse the manifest') from e
 
         e = self.assertRaises(ovf.OVFError, raiser)
-        self.assertEqual('UnsupportedDescriptorError(KeyError)', ovf.outcome_name(e))
+        self.assertEqual('ManifestError(UnicodeDecodeError)', ovf.outcome_name(e))
 
     def test_raised_from_ovf_error(self):
         def raiser():

@@ -1,23 +1,124 @@
 {
   "cot:ersatz_ovf_3.0.ovf": {
-    "error": "UnsupportedDescriptorError(PathNotFound)",
-    "message_contains": "Could not find **/v1:Info to delete it"
+    "error": "UnsupportedEnvelopeError",
+    "message_contains": "in the namespace http://schemas.dmtf.org/ovf/envelope/3"
   },
   "cot:invalid.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "error": "BrokenReferenceError",
+    "message_contains": "Envelope/DiskSection/Disk[2]@ovf:fileRef names the file \"flash2\""
   },
   "cot:minimal.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "deployment_options": [],
+    "disks": [],
+    "files": [],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [],
+          "disk_drives": [],
+          "memory_bytes": null,
+          "nics": [],
+          "system_identifier": null,
+          "system_type": null,
+          "transport": [],
+          "vcpus": null
+        }
+      ],
+      "id": "x",
+      "name": null,
+      "operating_system": null,
+      "products": []
+    }
   },
   "cot:ubuntu.2.0.ovf": {
-    "error": "UnsupportedDescriptorError(PathNotFound)",
-    "message_contains": "Could not find **/v1:Info to delete it"
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 8589934592,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "ubuntu.2.0-disk1.vmdk",
+        "id": "file1",
+        "size": null
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/2",
+    "networks": [
+      {
+        "description": "Logical network used by this appliance.",
+        "name": "NAT"
+      }
+    ],
+    "version": "2.0",
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "ide",
+              "instance_id": "3"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "4"
+            },
+            {
+              "bus": "sata",
+              "instance_id": "5"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": null,
+              "host_resource": "/disk/vmdisk1",
+              "parent": "5"
+            }
+          ],
+          "memory_bytes": 536870912,
+          "nics": [
+            {
+              "connection": "NAT",
+              "resource_subtype": "E1000"
+            }
+          ],
+          "system_identifier": "ubuntu",
+          "system_type": "virtualbox-2.2",
+          "transport": [],
+          "vcpus": 1
+        }
+      ],
+      "id": "ubuntu",
+      "name": null,
+      "operating_system": {
+        "description": "Ubuntu_64",
+        "id": 94,
+        "os_type": null,
+        "version": null
+      },
+      "products": []
+    }
   },
   "cot:v0.9.ovf": {
-    "error": "UnsupportedDescriptorError(PathNotFound)",
-    "message_contains": "Could not find **/v1:Info to delete it"
+    "error": "UnsupportedEnvelopeError",
+    "message_contains": "OVF 0.9 envelope"
   },
   "cot:vmware.ovf": {
     "deployment_options": [],
@@ -28,7 +129,8 @@
         "file_ref": "file1",
         "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
         "interface": null,
-        "populated_size": null
+        "parent_ref": null,
+        "populated_size": 293011456
       }
     ],
     "files": [
@@ -37,7 +139,7 @@
         "compression": null,
         "href": "input.vmdk",
         "id": "file1",
-        "size": null
+        "size": 152576
       }
     ],
     "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
@@ -71,7 +173,7 @@
             {
               "address_on_parent": 0,
               "element_name": "Hard disk 1",
-              "host_resource": null,
+              "host_resource": "ovf:/disk/vmdisk1",
               "parent": "3"
             }
           ],
@@ -94,25 +196,234 @@
               "resource_subtype": "E1000"
             }
           ],
-          "system_identifier": null,
-          "system_type": null,
+          "system_identifier": "vmw",
+          "system_type": "vmx-08",
           "transport": [],
           "vcpus": 2
         }
       ],
       "id": "vmw",
-      "name": null,
-      "operating_system": null,
-      "products": []
+      "name": "vmw",
+      "operating_system": {
+        "description": "Red Hat Enterprise Linux 6 (64-bit)",
+        "id": 80,
+        "os_type": "rhel6_64Guest",
+        "version": "6"
+      },
+      "products": [
+        {
+          "app_url": null,
+          "full_version": null,
+          "instance": null,
+          "product": null,
+          "product_class": null,
+          "product_url": null,
+          "properties": [
+            {
+              "category": null,
+              "description": null,
+              "key": "custom-property",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "string",
+              "user_configurable": false,
+              "value": "custom-value"
+            }
+          ],
+          "vendor": null,
+          "vendor_url": null,
+          "version": null
+        }
+      ]
     }
   },
   "govmomi:category-grouping.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "deployment_options": [
+      {
+        "default": true,
+        "description": "Base set of properties only",
+        "id": "default",
+        "label": "Default"
+      },
+      {
+        "default": false,
+        "description": "Includes config-specific properties in each category",
+        "id": "extended",
+        "label": "Extended"
+      }
+    ],
+    "disks": [],
+    "files": [],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "VM Network",
+        "name": "VM Network"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard disk 1",
+              "host_resource": null,
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 1073741824,
+          "nics": [],
+          "system_identifier": "category-vm",
+          "system_type": "vmx-19",
+          "transport": [],
+          "vcpus": 1
+        }
+      ],
+      "id": "category-vm",
+      "name": "category-vm",
+      "operating_system": {
+        "description": "Ubuntu Linux (64-bit)",
+        "id": 94,
+        "os_type": "ubuntu64Guest",
+        "version": null
+      },
+      "products": [
+        {
+          "app_url": null,
+          "full_version": null,
+          "instance": null,
+          "product": "TRIMMED",
+          "product_class": "test",
+          "product_url": null,
+          "properties": [
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "net_common",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": null,
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "storage_common",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": null,
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "auth_mode",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": null,
+              "type": "string",
+              "user_configurable": true,
+              "value": "password"
+            }
+          ],
+          "vendor": "TRIMMED",
+          "vendor_url": null,
+          "version": "1.0"
+        }
+      ]
+    }
   },
   "govmomi:disk-capacity-property.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 5368709120,
+        "disk_id": "vmdisk_data",
+        "file_ref": null,
+        "format": null,
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      }
+    ],
+    "files": [],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Data disk",
+              "host_resource": "ovf:/disk/vmdisk_data",
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 536870912,
+          "nics": [],
+          "system_identifier": null,
+          "system_type": "vmx-13",
+          "transport": [
+            "com.vmware.guestInfo"
+          ],
+          "vcpus": 1
+        }
+      ],
+      "id": "disk-capacity-property-vm",
+      "name": "disk-capacity-property-vm",
+      "operating_system": null,
+      "products": [
+        {
+          "app_url": null,
+          "full_version": null,
+          "instance": null,
+          "product": null,
+          "product_class": null,
+          "product_url": null,
+          "properties": [
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "disksize",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": null,
+              "type": "int",
+              "user_configurable": false,
+              "value": "5"
+            }
+          ],
+          "vendor": null,
+          "vendor_url": null,
+          "version": null
+        }
+      ]
+    }
   },
   "govmomi:external/BitnamiTomcat/bitnami-tomcatstack-8.0.36-x86_64.ovf": {
     "deployment_options": [],
@@ -123,7 +434,8 @@
         "file_ref": "file1",
         "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
         "interface": null,
-        "populated_size": null
+        "parent_ref": null,
+        "populated_size": 1656422400
       }
     ],
     "files": [
@@ -132,7 +444,7 @@
         "compression": null,
         "href": "bitnami-tomcatstack-8.0.36-2-linux-ubuntu-14.04-x86_64-disk1.vmdk",
         "id": "file1",
-        "size": null
+        "size": 551212032
       }
     ],
     "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
@@ -158,7 +470,7 @@
             {
               "address_on_parent": 0,
               "element_name": "disk1",
-              "host_resource": null,
+              "host_resource": "ovf:/disk/vmdisk1",
               "parent": "3"
             }
           ],
@@ -169,93 +481,453 @@
               "resource_subtype": "PCNet32"
             }
           ],
-          "system_identifier": null,
-          "system_type": null,
+          "system_identifier": "bitnami-tomcatstack-8.0.36-2-linux-ubuntu-14.04-x86_64",
+          "system_type": "vmx-07",
           "transport": [],
           "vcpus": 1
         }
       ],
       "id": "bitnami-tomcatstack",
-      "name": null,
-      "operating_system": null,
+      "name": "bitnami-tomcatstack-8.0.36-2-linux-ubuntu-14.04-x86_64",
+      "operating_system": {
+        "description": null,
+        "id": 94,
+        "os_type": "ubuntu64Guest",
+        "version": null
+      },
       "products": []
     }
   },
   "govmomi:external/DeleteHDTestdata/PvScsis_old/descriptor.ovf": {
-    "error": "UnsupportedDescriptorError(PathNotFound)",
-    "message_contains": "Could not find **/v1:Info to delete it"
+    "error": "UnsupportedEnvelopeError",
+    "message_contains": "root element HTML is in no namespace"
   },
   "govmomi:external/ImportOvf2014/complete_vsc.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "error": "VirtualSystemCollectionError",
+    "message_contains": "holds a VirtualSystemCollection"
   },
   "govmomi:external/ImportOvf2014/eula.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "error": "VirtualSystemCollectionError",
+    "message_contains": "holds a VirtualSystemCollection"
   },
   "govmomi:external/ImportOvf2014/scaleoutUnbound.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "error": "VirtualSystemCollectionError",
+    "message_contains": "holds a VirtualSystemCollection"
   },
   "govmomi:external/ImportOvf2014/trivial.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "deployment_options": [],
+    "disks": [],
+    "files": [],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [],
+          "disk_drives": [],
+          "memory_bytes": null,
+          "nics": [],
+          "system_identifier": null,
+          "system_type": null,
+          "transport": [],
+          "vcpus": null
+        }
+      ],
+      "id": "vs1",
+      "name": "Test System",
+      "operating_system": null,
+      "products": []
+    }
   },
   "govmomi:external/ImportOvf2014/unknownsections.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "deployment_options": [],
+    "disks": [],
+    "files": [],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [],
+          "disk_drives": [],
+          "memory_bytes": null,
+          "nics": [],
+          "system_identifier": null,
+          "system_type": null,
+          "transport": [],
+          "vcpus": null
+        }
+      ],
+      "id": "vs1",
+      "name": "Test System",
+      "operating_system": null,
+      "products": []
+    }
   },
   "govmomi:external/MultiVmVapps/MultiVmVapps.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "error": "VirtualSystemCollectionError",
+    "message_contains": "holds a VirtualSystemCollection"
   },
   "govmomi:external/NonAsciiChars/chinese/虚拟机.ovf": {
-    "error": "UnknownAllocationUnitError",
-    "message_contains": "Unknown allocation unit: \"byte\""
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 41943040,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "虚拟机-1.vmdk",
+        "id": "file1",
+        "size": null
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "The VM Network network",
+        "name": "VM Network"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            },
+            {
+              "bus": "sata",
+              "instance_id": "4"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard Disk 1",
+              "host_resource": "ovf:/disk/vmdisk1",
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 41943040,
+          "nics": [
+            {
+              "connection": "VM Network",
+              "resource_subtype": "E1000"
+            }
+          ],
+          "system_identifier": null,
+          "system_type": "vmx-13",
+          "transport": [],
+          "vcpus": 1
+        }
+      ],
+      "id": "虚拟机",
+      "name": "虚拟机",
+      "operating_system": {
+        "description": "Microsoft Windows Server 2008 R2 (64-bit)",
+        "id": 103,
+        "os_type": "windows7Server64Guest",
+        "version": null
+      },
+      "products": []
+    }
   },
   "govmomi:external/OVFCerts/CorruptedCert/Nostalgia.ovf": {
-    "error": "UnsupportedDescriptorError(PathNotFound)",
-    "message_contains": "Could not find **/v1:Info to delete it"
+    "error": "MissingContentError",
+    "message_contains": "Envelope has no References"
   },
   "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/DeltaDiskCompression/Pos/nvapp-disks-0.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "deployment_options": [],
+    "disks": [],
+    "files": [],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "5"
+            }
+          ],
+          "disk_drives": [],
+          "memory_bytes": 268435456,
+          "nics": [],
+          "system_identifier": "web",
+          "system_type": "vmx-04",
+          "transport": [
+            "iso"
+          ],
+          "vcpus": 1
+        }
+      ],
+      "id": "web",
+      "name": "SugarmCRM Server",
+      "operating_system": {
+        "description": "Ubuntu",
+        "id": 93,
+        "os_type": null,
+        "version": null
+      },
+      "products": [
+        {
+          "app_url": null,
+          "full_version": null,
+          "instance": null,
+          "product": null,
+          "product_class": null,
+          "product_url": null,
+          "properties": [],
+          "vendor": null,
+          "vendor_url": null,
+          "version": null
+        }
+      ]
+    }
   },
   "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/DeltaDiskCompression/Pos/nvapp-disks-3.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 1073741824,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#monolithicSparse",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      },
+      {
+        "capacity_bytes": 1073741824,
+        "disk_id": "vmdisk2",
+        "file_ref": "file2",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#monolithicSparse",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      },
+      {
+        "capacity_bytes": 1073741824,
+        "disk_id": "vmdisk3",
+        "file_ref": "file3",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#monolithicSparse",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "disks/disk1.vmdk",
+        "id": "file1",
+        "size": 1073741824
+      },
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "disks/disk2.vmdk",
+        "id": "file2",
+        "size": 1073741824
+      },
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "disks/disk3.vmdk",
+        "id": "file3",
+        "size": 1073741824
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "5"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard Disk 1",
+              "host_resource": "ovf:/disk/vmdisk1",
+              "parent": "3"
+            },
+            {
+              "address_on_parent": 1,
+              "element_name": "Hard Disk 2",
+              "host_resource": "ovf:/disk/vmdisk2",
+              "parent": "3"
+            },
+            {
+              "address_on_parent": 2,
+              "element_name": "Hard Disk 3",
+              "host_resource": "ovf:/disk/vmdisk3",
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 268435456,
+          "nics": [],
+          "system_identifier": "web",
+          "system_type": "vmx-04",
+          "transport": [
+            "iso"
+          ],
+          "vcpus": 1
+        }
+      ],
+      "id": "web",
+      "name": "SugarmCRM Server",
+      "operating_system": {
+        "description": "Ubuntu",
+        "id": 93,
+        "os_type": null,
+        "version": null
+      },
+      "products": [
+        {
+          "app_url": null,
+          "full_version": null,
+          "instance": null,
+          "product": null,
+          "product_class": null,
+          "product_url": null,
+          "properties": [],
+          "vendor": null,
+          "vendor_url": null,
+          "version": null
+        }
+      ]
+    }
   },
   "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/Envelope/Neg/invalid_empty_env.ovf": {
-    "error": "UnsupportedDescriptorError(PathNotFound)",
-    "message_contains": "Could not find **/v1:Info to delete it"
+    "error": "UnsupportedEnvelopeError",
+    "message_contains": "OVF 0.9 envelope"
   },
   "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/Envelope/Pos/section_extensibility.ovf": {
-    "error": "UnsupportedDescriptorError(PathNotFound)",
-    "message_contains": "Could not find **/v1:Info to delete it"
+    "error": "UnsupportedEnvelopeError",
+    "message_contains": "OVF 0.9 envelope"
   },
   "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/Envelope/Pos/valid_bare_minimal.ovf": {
-    "error": "UnsupportedDescriptorError(PathNotFound)",
-    "message_contains": "Could not find **/v1:Info to delete it"
+    "error": "UnsupportedEnvelopeError",
+    "message_contains": "OVF 0.9 envelope"
   },
   "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/Envelope_1_0/Neg/invalid_namespace.ovf": {
-    "error": "UnsupportedDescriptorError(PathNotFound)",
-    "message_contains": "Could not find **/v1:Info to delete it"
+    "error": "UnsupportedEnvelopeError",
+    "message_contains": "in the namespace http://nosuchspec.com/ovf/envelope/1"
   },
   "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/Envelope_1_0/Neg/section_compatibility_neg.ovf": {
     "error": "MalformedDescriptorError",
     "message_contains": "not well-formed XML"
   },
   "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/VirtualAppliances/Pos/nvapp002.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "error": "VirtualSystemCollectionError",
+    "message_contains": "holds a VirtualSystemCollection"
   },
   "govmomi:external/OVFToolTemplates/ovftoolresources/identity_compression.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 329197568,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": "identity",
+        "href": "valid_disk.vmdk",
+        "id": "file1",
+        "size": 329197568
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "8"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard Disk 1",
+              "host_resource": "/disk/vmdisk1",
+              "parent": "8"
+            }
+          ],
+          "memory_bytes": null,
+          "nics": [],
+          "system_identifier": "system id",
+          "system_type": "vmx-04",
+          "transport": [],
+          "vcpus": null
+        }
+      ],
+      "id": "PTC01_VM",
+      "name": null,
+      "operating_system": {
+        "description": "Other Linux (32-bit)",
+        "id": 36,
+        "os_type": null,
+        "version": null
+      },
+      "products": []
+    }
   },
   "govmomi:external/OvfWithSpaceInFileName/SpaceInOvfName/haoUn OS2VMs.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "error": "VirtualSystemCollectionError",
+    "message_contains": "holds a VirtualSystemCollection"
   },
   "govmomi:external/PhotonOS/photon.ovf": {
     "deployment_options": [],
@@ -266,7 +938,8 @@
         "file_ref": "file1",
         "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
         "interface": null,
-        "populated_size": null
+        "parent_ref": null,
+        "populated_size": 1375535104
       }
     ],
     "files": [
@@ -275,7 +948,7 @@
         "compression": null,
         "href": "photon-disk1.vmdk",
         "id": "file1",
-        "size": null
+        "size": 507132416
       }
     ],
     "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
@@ -309,7 +982,7 @@
             {
               "address_on_parent": 0,
               "element_name": "Hard Disk 1",
-              "host_resource": null,
+              "host_resource": "ovf:/disk/vmdisk1",
               "parent": "3"
             }
           ],
@@ -320,39 +993,260 @@
               "resource_subtype": "E1000e"
             }
           ],
-          "system_identifier": null,
-          "system_type": null,
+          "system_identifier": "111378-Photon-1.0-Rev2-64-Open-VM-Tools-HW13",
+          "system_type": "vmx-13",
           "transport": [],
           "vcpus": 1
         }
       ],
       "id": "111378-Photon-1.0-Rev2-64-Open-VM-Tools-HW13",
-      "name": null,
-      "operating_system": null,
+      "name": "111378-Photon-1.0-Rev2-64-Open-VM-Tools-HW13",
+      "operating_system": {
+        "description": null,
+        "id": 36,
+        "os_type": "vmwarePhoton64Guest",
+        "version": null
+      },
       "products": []
     }
   },
   "govmomi:external/SignedOVF/dsl-with-cert.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 104857600,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": 52953088
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "dsl-with-cert-disk1.vmdk",
+        "id": "file1",
+        "size": 23565312
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "4"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "5"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard disk 1",
+              "host_resource": "ovf:/disk/vmdisk1",
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 33554432,
+          "nics": [],
+          "system_identifier": "dsl-with-tools",
+          "system_type": "vmx-04",
+          "transport": [],
+          "vcpus": 1
+        }
+      ],
+      "id": "dsl-with-tools",
+      "name": "dsl-with-tools",
+      "operating_system": {
+        "description": "Other (32-bit)",
+        "id": 1,
+        "os_type": "otherGuest",
+        "version": null
+      },
+      "products": []
+    }
   },
   "govmomi:external/VM_with_nvram/newVM-with-nvram.ovf": {
-    "error": "UnknownAllocationUnitError",
-    "message_contains": "Unknown allocation unit: \"byte\""
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 1073741824,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "newVM-with-nvram-1.vmdk",
+        "id": "file1",
+        "size": null
+      },
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "newVM-with-nvram-2.nvram",
+        "id": "file2",
+        "size": 270840
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "The VM Network network",
+        "name": "VM Network"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            },
+            {
+              "bus": "sata",
+              "instance_id": "4"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard Disk 1",
+              "host_resource": "ovf:/disk/vmdisk1",
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 1073741824,
+          "nics": [
+            {
+              "connection": "VM Network",
+              "resource_subtype": "VmxNet3"
+            }
+          ],
+          "system_identifier": null,
+          "system_type": "vmx-17",
+          "transport": [],
+          "vcpus": 1
+        }
+      ],
+      "id": "newVM-with-nvram",
+      "name": "newVM-with-nvram",
+      "operating_system": {
+        "description": "CentOS 8 (64-bit)",
+        "id": 107,
+        "os_type": "centos8_64Guest",
+        "version": "8"
+      },
+      "products": []
+    }
   },
   "govmomi:external/VappWithFlexibleNicAdapter/FlexibleNic.ovf": {
-    "error": "UnparsedContentError",
-    "message_contains": "Not all of the OVF file was parsed"
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 4194304,
+        "disk_id": "vmdisk-fe8bebf7-fbc9-4e7b-8878-fcf25dc1be55-2000",
+        "file_ref": "file-fe8bebf7-fbc9-4e7b-8878-fcf25dc1be55-2000",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "vm-75d6a767-a45f-4d74-afb7-73703dddfbd5-disk-0.vmdk",
+        "id": "file-fe8bebf7-fbc9-4e7b-8878-fcf25dc1be55-2000",
+        "size": 68096
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "This is a special place-holder used for disconnected network interfaces.",
+        "name": "none"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "2"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "3"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard disk 1",
+              "host_resource": "ovf:/disk/vmdisk-fe8bebf7-fbc9-4e7b-8878-fcf25dc1be55-2000",
+              "parent": "2"
+            }
+          ],
+          "memory_bytes": 268435456,
+          "nics": [
+            {
+              "connection": "none",
+              "resource_subtype": "PCNet32"
+            }
+          ],
+          "system_identifier": "FlexibleNic",
+          "system_type": "vmx-07",
+          "transport": [],
+          "vcpus": 1
+        }
+      ],
+      "id": "FlexibleNic",
+      "name": "FlexibleNic",
+      "operating_system": {
+        "description": "Red Hat Enterprise Linux 6 (64-bit)",
+        "id": 80,
+        "os_type": "rhel6_64Guest",
+        "version": null
+      },
+      "products": []
+    }
   },
   "govmomi:external/invalid_ovf/path1/testLonCharacterPathLimit/testDBpathLimitwwwwwwwwwwwwwww/descriptor.ovf": {
     "error": "MalformedDescriptorError",
     "message_contains": "not well-formed XML"
   },
   "govmomi:external/nostalgia-chunkdisk.ovf": {
-    "error": "UnknownAllocationUnitError",
-    "message_contains": "Unknown allocation unit: \"byte\""
-  },
-  "govmomi:external/nostalgia-read-only-disk.ovf": {
     "deployment_options": [],
     "disks": [
       {
@@ -361,46 +1255,17 @@
         "file_ref": "file1",
         "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
         "interface": null,
-        "populated_size": null
-      },
-      {
-        "capacity_bytes": 107373568,
-        "disk_id": "vmdisk2",
-        "file_ref": "file2",
-        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
-        "interface": null,
-        "populated_size": null
-      },
-      {
-        "capacity_bytes": 107373568,
-        "disk_id": "vmdisk3",
-        "file_ref": "file3",
-        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
-        "interface": null,
-        "populated_size": null
+        "parent_ref": null,
+        "populated_size": 11141120
       }
     ],
     "files": [
       {
-        "chunk_size": null,
+        "chunk_size": 7516192768,
         "compression": null,
-        "href": "nostalgia-disk1.vmdk",
+        "href": "Nostalgia-disk1.vmdk",
         "id": "file1",
-        "size": null
-      },
-      {
-        "chunk_size": null,
-        "compression": null,
-        "href": "nostalgia-disk2.vmdk",
-        "id": "file2",
-        "size": null
-      },
-      {
-        "chunk_size": null,
-        "compression": null,
-        "href": "nostalgia-disk3.vmdk",
-        "id": "file3",
-        "size": null
+        "size": 6872576
       }
     ],
     "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
@@ -434,19 +1299,7 @@
             {
               "address_on_parent": 0,
               "element_name": "Hard disk 1",
-              "host_resource": null,
-              "parent": "3"
-            },
-            {
-              "address_on_parent": 1,
-              "element_name": "Hard disk 2",
-              "host_resource": null,
-              "parent": "3"
-            },
-            {
-              "address_on_parent": 2,
-              "element_name": "Hard disk 3",
-              "host_resource": null,
+              "host_resource": "ovf:/disk/vmdisk1",
               "parent": "3"
             }
           ],
@@ -457,53 +1310,768 @@
               "resource_subtype": "PCNet32"
             }
           ],
-          "system_identifier": null,
-          "system_type": null,
+          "system_identifier": "Nostalgia",
+          "system_type": "vmx-04",
           "transport": [],
           "vcpus": 1
         }
       ],
       "id": "Nostalgia",
-      "name": null,
-      "operating_system": null,
+      "name": "Nostalgia",
+      "operating_system": {
+        "description": "Other (32-bit)",
+        "id": 1,
+        "os_type": "otherGuest",
+        "version": null
+      },
+      "products": []
+    }
+  },
+  "govmomi:external/nostalgia-read-only-disk.ovf": {
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 107373568,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      },
+      {
+        "capacity_bytes": 107373568,
+        "disk_id": "vmdisk2",
+        "file_ref": "file2",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      },
+      {
+        "capacity_bytes": 107373568,
+        "disk_id": "vmdisk3",
+        "file_ref": "file3",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "nostalgia-disk1.vmdk",
+        "id": "file1",
+        "size": 6872576
+      },
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "nostalgia-disk2.vmdk",
+        "id": "file2",
+        "size": 6872576
+      },
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "nostalgia-disk3.vmdk",
+        "id": "file3",
+        "size": 6872576
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "The VM Network network",
+        "name": "VM Network"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "4"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "5"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard disk 1",
+              "host_resource": "ovf:/disk/vmdisk1",
+              "parent": "3"
+            },
+            {
+              "address_on_parent": 1,
+              "element_name": "Hard disk 2",
+              "host_resource": "ovf:/disk/vmdisk2",
+              "parent": "3"
+            },
+            {
+              "address_on_parent": 2,
+              "element_name": "Hard disk 3",
+              "host_resource": "ovf:/disk/vmdisk3",
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 67108864,
+          "nics": [
+            {
+              "connection": "VM Network",
+              "resource_subtype": "PCNet32"
+            }
+          ],
+          "system_identifier": "Nostalgia",
+          "system_type": "vmx-22",
+          "transport": [],
+          "vcpus": 1
+        }
+      ],
+      "id": "Nostalgia",
+      "name": "Nostalgia",
+      "operating_system": {
+        "description": "Other (32-bit)",
+        "id": 1,
+        "os_type": "otherGuest",
+        "version": null
+      },
       "products": []
     }
   },
   "govmomi:external/nostalgia_small/nostalgia.ovf": {
-    "error": "UnparsedContentError",
-    "message_contains": "Not all of the OVF file was parsed"
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 2097152,
+        "disk_id": "vmdisk-81303793-ff25-4064-af00-ba49d67ca65b-2000",
+        "file_ref": "file-81303793-ff25-4064-af00-ba49d67ca65b-2000",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "nostalgia.vmdk",
+        "id": "file-81303793-ff25-4064-af00-ba49d67ca65b-2000",
+        "size": 833536
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "This network provides connectivity to this virtual machine.",
+        "name": "VM Network"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [
+        {
+          "license": "TRIMMED"
+        },
+        {
+          "license": "TRIMMED"
+        }
+      ],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "2"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "3"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard disk 1",
+              "host_resource": "ovf:/disk/vmdisk-81303793-ff25-4064-af00-ba49d67ca65b-2000",
+              "parent": "2"
+            }
+          ],
+          "memory_bytes": 33554432,
+          "nics": [
+            {
+              "connection": "VM Network",
+              "resource_subtype": "PCNet32"
+            }
+          ],
+          "system_identifier": "89136fbf-b17f-478a-a5ac-033c3adf6318",
+          "system_type": "vmx-04",
+          "transport": [],
+          "vcpus": 1
+        }
+      ],
+      "id": "89136fbf-b17f-478a-a5ac-033c3adf6318",
+      "name": "89136fbf-b17f-478a-a5ac-033c3adf6318",
+      "operating_system": {
+        "description": "Ubuntu Linux (32-bit)",
+        "id": 93,
+        "os_type": "ubuntuGuest",
+        "version": null
+      },
+      "products": [
+        {
+          "app_url": null,
+          "full_version": null,
+          "instance": null,
+          "product": "TRIMMED",
+          "product_class": null,
+          "product_url": null,
+          "properties": [],
+          "vendor": null,
+          "vendor_url": null,
+          "version": null
+        }
+      ]
+    }
   },
   "govmomi:external/oldOvfs/sun-ovfEnv/sun-ovfEnv.ovf": {
     "error": "UnparsedContentError",
-    "message_contains": "Not all of the OVF file was parsed"
+    "message_contains": "Envelope/VirtualSystem/InstallSection"
   },
   "govmomi:external/ovftoolresources/identity_compression.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 329197568,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": "identity",
+        "href": "valid_disk.vmdk",
+        "id": "file1",
+        "size": 329197568
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "8"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard Disk 1",
+              "host_resource": "ovf:/disk/vmdisk1",
+              "parent": "8"
+            }
+          ],
+          "memory_bytes": null,
+          "nics": [],
+          "system_identifier": "system id",
+          "system_type": "vmx-04",
+          "transport": [],
+          "vcpus": null
+        }
+      ],
+      "id": "PTC01_VM",
+      "name": null,
+      "operating_system": {
+        "description": "Other Linux (32-bit)",
+        "id": 36,
+        "os_type": null,
+        "version": null
+      },
+      "products": []
+    }
   },
   "govmomi:external/ovftoolresources/nvm001.ovf": {
-    "error": "UnsupportedDescriptorError(PathNotFound)",
-    "message_contains": "Could not find **/v1:Info to delete it"
+    "error": "UnsupportedEnvelopeError",
+    "message_contains": "OVF 0.9 envelope"
   },
   "govmomi:external/standard_ovas/eula-vm/eula-vm.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "deployment_options": [],
+    "disks": [],
+    "files": [],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [
+        {
+          "license": "TRIMMED"
+        }
+      ],
+      "hardware": [
+        {
+          "controllers": [],
+          "disk_drives": [],
+          "memory_bytes": null,
+          "nics": [],
+          "system_identifier": null,
+          "system_type": null,
+          "transport": [],
+          "vcpus": null
+        }
+      ],
+      "id": "vs1",
+      "name": "Test VM",
+      "operating_system": null,
+      "products": []
+    }
   },
   "govmomi:external/standard_ovas/internal-sha1/internal.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "error": "VirtualSystemCollectionError",
+    "message_contains": "holds a VirtualSystemCollection"
   },
   "govmomi:external/standard_ovas/nostalgia-chunkdisk/Nostalgia.ovf": {
-    "error": "UnknownAllocationUnitError",
-    "message_contains": "Unknown allocation unit: \"byte\""
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 107373568,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": 11141120
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": 7516192768,
+        "compression": null,
+        "href": "Nostalgia-disk1.vmdk",
+        "id": "file1",
+        "size": 6872576
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "The VM Network network",
+        "name": "VM Network"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "4"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "5"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard disk 1",
+              "host_resource": "ovf:/disk/vmdisk1",
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 67108864,
+          "nics": [
+            {
+              "connection": "VM Network",
+              "resource_subtype": "PCNet32"
+            }
+          ],
+          "system_identifier": "Nostalgia",
+          "system_type": "vmx-04",
+          "transport": [],
+          "vcpus": 1
+        }
+      ],
+      "id": "Nostalgia",
+      "name": "Nostalgia",
+      "operating_system": {
+        "description": "Other (32-bit)",
+        "id": 1,
+        "os_type": "otherGuest",
+        "version": null
+      },
+      "products": []
+    }
   },
   "govmomi:external/vbs/vapp/extra-config-complete-vapp.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "error": "VirtualSystemCollectionError",
+    "message_contains": "holds a VirtualSystemCollection"
   },
   "govmomi:property-types.ovf": {
-    "error": "UnsupportedDescriptorError(KeyError)",
-    "message_contains": "Could not parse the descriptor: KeyError"
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 1073741824,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": null,
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "os.vmdk",
+        "id": "file1",
+        "size": 655360000
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard Disk 1",
+              "host_resource": "ovf:/disk/vmdisk1",
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 536870912,
+          "nics": [],
+          "system_identifier": null,
+          "system_type": "vmx-13",
+          "transport": [
+            "com.vmware.guestInfo"
+          ],
+          "vcpus": 1
+        }
+      ],
+      "id": "property-types-vm",
+      "name": "property-types-vm",
+      "operating_system": {
+        "description": "Other 3.x or later Linux (64-bit)",
+        "id": 101,
+        "os_type": "other3xLinux64Guest",
+        "version": null
+      },
+      "products": [
+        {
+          "app_url": null,
+          "full_version": null,
+          "instance": null,
+          "product": "TRIMMED",
+          "product_class": null,
+          "product_url": null,
+          "properties": [
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_string_plain",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "string",
+              "user_configurable": false,
+              "value": ""
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_string_min_only",
+              "label": null,
+              "password": false,
+              "qualifiers": "MinLen(5)",
+              "type": "string",
+              "user_configurable": false,
+              "value": "hello"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_string_max_only",
+              "label": null,
+              "password": false,
+              "qualifiers": "MaxLen(100)",
+              "type": "string",
+              "user_configurable": false,
+              "value": ""
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_string_min_max",
+              "label": null,
+              "password": false,
+              "qualifiers": "MinLen(1),MaxLen(253)",
+              "type": "string",
+              "user_configurable": false,
+              "value": "x"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_string_valuemap",
+              "label": null,
+              "password": false,
+              "qualifiers": "ValueMap{\"a\", \"b\", \"c\"}",
+              "type": "string",
+              "user_configurable": false,
+              "value": "a"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_string_valuemap_single",
+              "label": null,
+              "password": false,
+              "qualifiers": "ValueMap{\"only\"}",
+              "type": "string",
+              "user_configurable": false,
+              "value": "only"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_password_plain",
+              "label": null,
+              "password": true,
+              "qualifiers": null,
+              "type": "string",
+              "user_configurable": false,
+              "value": ""
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_password_min_only",
+              "label": null,
+              "password": true,
+              "qualifiers": "MinLen(8)",
+              "type": "string",
+              "user_configurable": false,
+              "value": "secret12"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_boolean",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "boolean",
+              "user_configurable": false,
+              "value": "true"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_int_plain",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "int",
+              "user_configurable": false,
+              "value": "42"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_int_valuemap",
+              "label": null,
+              "password": false,
+              "qualifiers": "ValueMap{1, 2, 3, 5}",
+              "type": "int",
+              "user_configurable": false,
+              "value": "2"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_uint8",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "uint8",
+              "user_configurable": false,
+              "value": "0"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_sint8",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "sint8",
+              "user_configurable": false,
+              "value": "0"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_uint16",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "uint16",
+              "user_configurable": false,
+              "value": "0"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_sint16",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "sint16",
+              "user_configurable": false,
+              "value": "0"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_uint32",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "uint32",
+              "user_configurable": false,
+              "value": "0"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_sint32",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "sint32",
+              "user_configurable": false,
+              "value": "0"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_uint64",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "uint64",
+              "user_configurable": false,
+              "value": "0"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_sint64",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "sint64",
+              "user_configurable": false,
+              "value": "0"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_real32",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "real32",
+              "user_configurable": false,
+              "value": "1.5"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_real64",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "real64",
+              "user_configurable": false,
+              "value": "2.5"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_String_capital",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "String",
+              "user_configurable": false,
+              "value": ""
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "p_Boolean_capital",
+              "label": null,
+              "password": false,
+              "qualifiers": null,
+              "type": "Boolean",
+              "user_configurable": false,
+              "value": "false"
+            }
+          ],
+          "vendor": "TRIMMED",
+          "vendor_url": null,
+          "version": "1.0"
+        }
+      ]
+    }
   },
   "govmomi:qualifiers.ovf": {
     "deployment_options": [],
@@ -514,6 +2082,7 @@
         "file_ref": "file1",
         "format": null,
         "interface": null,
+        "parent_ref": null,
         "populated_size": null
       }
     ],
@@ -523,7 +2092,7 @@
         "compression": null,
         "href": "disk.vmdk",
         "id": "file1",
-        "size": null
+        "size": 65536
       }
     ],
     "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
@@ -553,34 +2122,551 @@
             {
               "address_on_parent": 0,
               "element_name": "Hard Disk 1",
-              "host_resource": null,
+              "host_resource": "ovf:/disk/vmdisk1",
               "parent": "3"
             }
           ],
           "memory_bytes": 536870912,
           "nics": [],
           "system_identifier": null,
-          "system_type": null,
-          "transport": [],
+          "system_type": "vmx-13",
+          "transport": [
+            "com.vmware.guestInfo"
+          ],
           "vcpus": 1
         }
       ],
       "id": "qualifiers-vm",
-      "name": null,
-      "operating_system": null,
-      "products": []
+      "name": "qualifiers-vm",
+      "operating_system": {
+        "description": "Other 3.x or later Linux (64-bit)",
+        "id": 101,
+        "os_type": "other3xLinux64Guest",
+        "version": null
+      },
+      "products": [
+        {
+          "app_url": null,
+          "full_version": null,
+          "instance": null,
+          "product": "TRIMMED",
+          "product_class": "qualifiers",
+          "product_url": null,
+          "properties": [
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "port",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "MinValue(1),MaxValue(65535)",
+              "type": "int",
+              "user_configurable": true,
+              "value": "8080"
+            },
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "ratio",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "MinValue(0),MaxValue(1)",
+              "type": "real",
+              "user_configurable": true,
+              "value": "0.5"
+            },
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "hostname",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "MinLen(1),MaxLen(253)",
+              "type": "string",
+              "user_configurable": true,
+              "value": "test.local"
+            },
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "short_id",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "MaxLen(8)",
+              "type": "string",
+              "user_configurable": true,
+              "value": "abc"
+            },
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "long_desc",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "MinLen(10)",
+              "type": "string",
+              "user_configurable": true,
+              "value": "optional..."
+            },
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "mode",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "ValueMap{\"low\",\"medium\",\"high\"}",
+              "type": "string",
+              "user_configurable": true,
+              "value": "medium"
+            },
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "priority",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "ValueMap{1,2,3}",
+              "type": "int",
+              "user_configurable": true,
+              "value": "2"
+            },
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "mgmt_ip",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "Ip",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "any_ip",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "Ip()",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "net_ip",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "Ip(Management)",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "workload_ip",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "Ip(Workload)",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "guest_ip",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "VimIp",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "net_expr",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "Net(Management)",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": "TRIMMED",
+              "key": "auto_ip_expr",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "AutoIp",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": null,
+              "key": "netmask_expr",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "Netmask",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": null,
+              "key": "gateway_expr",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "Gateway",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": null,
+              "key": "domain_expr",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "DomainName",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": null,
+              "key": "host_prefix_expr",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "HostPrefix",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": null,
+              "key": "dns_expr",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "Dns",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": null,
+              "key": "subnet_expr",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "Subnet",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": null,
+              "key": "search_path_expr",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "SearchPath",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": null,
+              "description": null,
+              "key": "http_proxy_expr",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "HttpProxy",
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            }
+          ],
+          "vendor": "TRIMMED",
+          "vendor_url": null,
+          "version": "1.0"
+        }
+      ]
     }
   },
   "govmomi:uber.ovf": {
-    "error": "UnsupportedDescriptorError(ValueError)",
-    "message_contains": "invalid literal for int()"
+    "deployment_options": [
+      {
+        "default": true,
+        "description": "Base configuration",
+        "id": "default",
+        "label": "Default"
+      },
+      {
+        "default": false,
+        "description": "Includes config-specific properties",
+        "id": "extended",
+        "label": "Extended"
+      }
+    ],
+    "disks": [
+      {
+        "capacity_bytes": 21474836480,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": null,
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      },
+      {
+        "capacity_bytes": 5368709120,
+        "disk_id": "vmdisk2",
+        "file_ref": null,
+        "format": null,
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "uber-os.vmdk",
+        "id": "file1",
+        "size": 1073741824
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "Management network",
+        "name": "Management"
+      },
+      {
+        "description": "Workload network",
+        "name": "Workload"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard Disk 1 (file-backed)",
+              "host_resource": "ovf:/disk/vmdisk1",
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 536870912,
+          "nics": [
+            {
+              "connection": "Management",
+              "resource_subtype": "VmxNet3"
+            }
+          ],
+          "system_identifier": "uber-vm",
+          "system_type": "vmx-13",
+          "transport": [
+            "com.vmware.guestInfo"
+          ],
+          "vcpus": 1
+        }
+      ],
+      "id": "uber-vm",
+      "name": "uber-vm",
+      "operating_system": {
+        "description": "Other 3.x or later Linux (64-bit)",
+        "id": 101,
+        "os_type": "other3xLinux64Guest",
+        "version": null
+      },
+      "products": [
+        {
+          "app_url": null,
+          "full_version": null,
+          "instance": null,
+          "product": "TRIMMED",
+          "product_class": "uber",
+          "product_url": null,
+          "properties": [
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "net_common",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": null,
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": "TRIMMED",
+              "description": "TRIMMED",
+              "key": "hostname",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": "MinLen(1),MaxLen(253)",
+              "type": "string",
+              "user_configurable": true,
+              "value": "uber.local"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "storage_common",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": null,
+              "type": "string",
+              "user_configurable": true,
+              "value": ""
+            },
+            {
+              "category": "TRIMMED",
+              "description": "TRIMMED",
+              "key": "disksize",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": null,
+              "type": "int",
+              "user_configurable": false,
+              "value": "5"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "auth_mode",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": null,
+              "type": "string",
+              "user_configurable": true,
+              "value": "password"
+            },
+            {
+              "category": "TRIMMED",
+              "description": null,
+              "key": "enable_ssh",
+              "label": "TRIMMED",
+              "password": false,
+              "qualifiers": null,
+              "type": "boolean",
+              "user_configurable": true,
+              "value": "false"
+            }
+          ],
+          "vendor": "TRIMMED",
+          "vendor_url": null,
+          "version": "1.0"
+        }
+      ]
+    }
   },
   "govmomi:virtualsystemcollection.ovf": {
-    "error": "UnsupportedDescriptorError(PathNotFound)",
-    "message_contains": "Could not find **/v1:Info to delete it"
+    "error": "VirtualSystemCollectionError",
+    "message_contains": "holds a VirtualSystemCollection"
   },
   "govmomi:vmware/esxvmovf-25262174.ovf": {
-    "error": "UnparsedContentError",
-    "message_contains": "Not all of the OVF file was parsed"
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 34359738368,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "parent_ref": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "disk-0.vmdk",
+        "id": "file1",
+        "size": 706671104
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "The vxw-dvs-34-virtualwire-3-sid-1300002-sc2-01-tr-build01-vc30-dynamic network",
+        "name": "vxw-dvs-34-virtualwire-3-sid-1300002-sc2-01-tr-build01-vc30-dynamic"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "4"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "5"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard disk 1",
+              "host_resource": "ovf:/disk/vmdisk1",
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 8589934592,
+          "nics": [
+            {
+              "connection": "vxw-dvs-34-virtualwire-3-sid-1300002-sc2-01-tr-build01-vc30-dynamic",
+              "resource_subtype": "VmxNet3"
+            }
+          ],
+          "system_identifier": "esxvm-sb-62272164-rZ0",
+          "system_type": "vmx-20",
+          "transport": [],
+          "vcpus": 2
+        }
+      ],
+      "id": "esxvm-sb-62272164-rZ0",
+      "name": "esxvm-sb-62272164-rZ0",
+      "operating_system": {
+        "description": "VMware ESXi 8.x",
+        "id": 104,
+        "os_type": "vmkernel8Guest",
+        "version": "8"
+      },
+      "products": []
+    }
   }
 }

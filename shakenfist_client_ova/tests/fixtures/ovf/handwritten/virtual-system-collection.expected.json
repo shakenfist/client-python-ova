@@ -1,4 +1,4 @@
 {
-  "error": "UnsupportedDescriptorError(KeyError)",
-  "message_contains": "Could not parse the descriptor: KeyError"
+  "error": "VirtualSystemCollectionError",
+  "message_contains": "holds a VirtualSystemCollection"
 }
