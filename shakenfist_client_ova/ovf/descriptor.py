@@ -113,7 +113,8 @@ KNOWN_TYPES = frozenset([CPU, MEMORY, ETHERNET_ADAPTER, DISK_DRIVE]) | DEFAULTED
 
 # A HostResource naming a disk or a file in the descriptor. Any other
 # HostResource names something on the deployment platform, and is not checked.
-_HOST_RESOURCE_RE = re.compile(r'^ovf:/(disk|file)/(.*)$')
+_HOST_RESOURCE_RE = re.compile(
+    r'^(?:%s)/(disk|file)/(.*)$' % '|'.join(re.escape(prefix) for prefix in quirks.HOST_RESOURCE_PREFIXES))
 
 # A disk capacity given as a reference to a ProductSection property.
 _PROPERTY_REFERENCE_RE = re.compile(r'^\$\{(.*)\}$')

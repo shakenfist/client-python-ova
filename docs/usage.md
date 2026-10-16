@@ -87,10 +87,11 @@ Other refusals are named, and each prints one line and exits 1:
 That is the intended behaviour: an OVA whose description is only
 partly understood would otherwise become an instance that is subtly
 different from the appliance its author built. Some producers write
-descriptors that deviate from the schema; the parser accepts the
-known ones (VirtualBox's `.xsd`-suffixed CIM namespaces, `InstanceId`
-for `InstanceID`, and VMware's unqualified attributes). The plan for
-what remains is in [the OVF parser plan](plans/PLAN-ovf-parser.md).
+descriptors that deviate from the schema; the parser accepts the known
+ones (VirtualBox's `.xsd`-suffixed CIM namespaces, `InstanceId` for
+`InstanceID`, VMware's unqualified attributes, and a drive's disk
+reference written without its `ovf:` prefix). The plan for what
+remains is in [the OVF parser plan](plans/PLAN-ovf-parser.md).
 
 ## Standards
 

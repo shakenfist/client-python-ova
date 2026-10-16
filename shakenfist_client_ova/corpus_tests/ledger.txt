@@ -183,7 +183,7 @@ govmomi:external/OVFToolTemplates/OVF/xmltestfiles/DiskSection/Pos/valid_vmfs_di
 govmomi:external/OVFToolTemplates/OVF/xmltestfiles/DiskSection/Pos/valid_vmfs_sparsedisk.ovf	UnsupportedEnvelopeError
 govmomi:external/OVFToolTemplates/OVF/xmltestfiles/DiskSection_1_0/Neg/dup_diskid.ovf	model
 govmomi:external/OVFToolTemplates/OVF/xmltestfiles/DiskSection_1_0/Neg/dup_filerefs.ovf	model
-govmomi:external/OVFToolTemplates/OVF/xmltestfiles/DiskSection_1_0/Neg/inside_content.ovf	UnparsedContentError
+govmomi:external/OVFToolTemplates/OVF/xmltestfiles/DiskSection_1_0/Neg/inside_content.ovf	BrokenReferenceError
 govmomi:external/OVFToolTemplates/OVF/xmltestfiles/DiskSection_1_0/Neg/invalid_createType_disk.ovf	model
 govmomi:external/OVFToolTemplates/OVF/xmltestfiles/DiskSection_1_0/Neg/invalid_delta_reference_disk.ovf	model
 govmomi:external/OVFToolTemplates/OVF/xmltestfiles/DiskSection_1_0/Neg/no_capacity.ovf	MissingContentError

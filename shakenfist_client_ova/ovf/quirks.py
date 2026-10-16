@@ -47,6 +47,17 @@ INSTANCE_ID_NAMESPACES = frozenset([namespaces.RASD, namespaces.VSSD, namespaces
 # Element names read as another, keyed by (namespace, local name).
 ELEMENT_ALIASES = {(namespace, 'InstanceId'): 'InstanceID' for namespace in INSTANCE_ID_NAMESPACES}
 
+# The prefixes with which a HostResource may name a disk or a file in the
+# descriptor: the specification's "ovf:" form (ovf:/disk/<diskId>), and the bare
+# form (/disk/<diskId>). VirtualBox writes the bare form, in ArchiveTeam Warrior
+# 4.1 (tests/fixtures/ovf/vendor/archiveteam-warrior-4.1.ovf), both CyberOps
+# fixtures (tests/fixtures/ovf/vendor/cyberops-*.ovf) and vulnhub-blogger.ovf.
+# 189 descriptors in the upstream corpus write it too, 186 for a disk and 3 for
+# a file: one in COT's corpus and the rest in govmomi's, mostly VMware ovftool
+# templates and test files. Both forms are checked alike, and the text is kept
+# as written.
+HOST_RESOURCE_PREFIXES = ('ovf:', '')
+
 # oVirt writes its own dialect of OVF, not a few extra attributes: Oracle Linux
 # 9.8's OLVM template (tests/fixtures/ovf/vendor/oracle-linux-9.8-olvm.ovf)
 # carries 33 oVirt elements under VirtualSystem, the template's cloud-init

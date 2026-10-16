@@ -643,10 +643,19 @@ class BrokenReferenceTestCase(DescriptorTestCase):
         parse(items=SCSI + item(15, ('HostResource', 'ovf:/file/file1'), ('Parent', '3')))
 
     def test_other_host_resources_are_not_checked(self):
-        for host_resource in ('', '/disk/vmdisk2', 'ovf:disk/vmdisk2', '/dev/cdrom', 'http://example.com/x'):
+        for host_resource in ('', 'ovf:disk/vmdisk2', '/dev/cdrom', 'http://example.com/x'):
             items = SCSI + item(17, ('AddressOnParent', '0'), ('HostResource', host_resource), ('Parent', '3'))
             drive = parse(items=items).virtual_system.hardware[0].disk_drives[0]
             self.assertEqual(host_resource or None, drive.host_resource)
+
+    def test_unprefixed_host_resources_are_checked(self):
+        items = SCSI + item(17, ('AddressOnParent', '0'), ('HostResource', '/disk/x'), ('Parent', '3'))
+        self.assertRefused(ovf.BrokenReferenceError, 'names the disk "x"', descriptor(items=items))
+        items = SCSI + item(15, ('HostResource', '/file/x'), ('Parent', '3'))
+        self.assertRefused(ovf.BrokenReferenceError, 'names the file "x"', descriptor(items=items))
+        items = SCSI + item(17, ('AddressOnParent', '0'), ('HostResource', '/disk/vmdisk1'), ('Parent', '3'))
+        drive = parse(items=items).virtual_system.hardware[0].disk_drives[0]
+        self.assertEqual('/disk/vmdisk1', drive.host_resource)
 
     def test_parent(self):
         items = SCSI + item(17, ('AddressOnParent', '0'), ('Parent', '9'))
