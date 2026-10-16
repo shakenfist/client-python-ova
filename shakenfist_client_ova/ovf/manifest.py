@@ -7,7 +7,7 @@ by the rules in docs/plans/PLAN-ovf-parser.md; until then it is as the command h
 
 import re
 
-from .errors import ManifestError, OVFError, UnsupportedDescriptorError
+from .errors import ManifestError, OVFError
 from .model import Manifest, ManifestEntry
 
 
@@ -37,14 +37,14 @@ def _parse_manifest(data):
 def parse_manifest(data):
     """Parse a manifest's bytes into a Manifest, keeping every line in order.
 
-    Raises ManifestError for a line that does not parse, and
-    UnsupportedDescriptorError, raised from the original exception, for any
-    other failure, such as a manifest that is not UTF-8.
+    Raises ManifestError for a line that does not parse, and for any other
+    failure, such as a manifest that is not UTF-8, in which case it is raised
+    from the original exception.
     """
     try:
         return _parse_manifest(data)
     except OVFError:
         raise
     except Exception as e:
-        raise UnsupportedDescriptorError(
+        raise ManifestError(
             'Could not parse the manifest: %s: %s' % (type(e).__name__, e)) from e

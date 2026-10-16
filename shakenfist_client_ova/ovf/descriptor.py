@@ -112,8 +112,11 @@ def _parse(data):
     except ExpatError as e:
         raise MalformedDescriptorError(f'The descriptor is not well-formed XML: {e}') from None
     except ValueError as e:
-        # xmltodict refuses an entity declaration with a ValueError, and
-        # raises no other ValueError while parsing.
+        # xmltodict refuses an entity declaration with ValueError('entities are
+        # disabled'). Any other ValueError is not that refusal, and is left to
+        # parse_descriptor to report as an unsupported descriptor.
+        if 'entit' not in str(e):
+            raise
         raise EntityDeclarationError(f'The descriptor declares an entity, which is refused: {e}') from None
 
     # Strip meaningless info tags
@@ -309,13 +312,13 @@ def _parse(data):
             hardware['has_ide'] = True
             storage_controllers_by_id[element['rasd:InstanceID']] = \
                 'ide'
-            model_controllers.append(Controller(instance_id=element['rasd:InstanceID'], bus='ide'))
+            model_controllers.append(Controller(instance_id=_text(element['rasd:InstanceID']), bus='ide'))
         elif element['rasd:ResourceType'] == '6':
             # SCSI controllers
             hardware['has_scsi'] = True
             storage_controllers_by_id[element['rasd:InstanceID']] = \
                 'scsi'
-            model_controllers.append(Controller(instance_id=element['rasd:InstanceID'], bus='scsi'))
+            model_controllers.append(Controller(instance_id=_text(element['rasd:InstanceID']), bus='scsi'))
         elif element['rasd:ResourceType'] == '10':
             # Network interfaces
             hardware['interfaces'].append((
@@ -330,7 +333,7 @@ def _parse(data):
             hardware['disks'][int(element['rasd:AddressOnParent'])] = \
                 (bus, element['rasd:ElementName'])
             model_disk_drives.append(DiskDrive(
-                parent=element['rasd:Parent'], address_on_parent=int(element['rasd:AddressOnParent']),
+                parent=_text(element['rasd:Parent']), address_on_parent=int(element['rasd:AddressOnParent']),
                 element_name=_text(element['rasd:ElementName'])))
         elif element['rasd:ResourceType'] == '20':
             # Other storage controller
@@ -338,7 +341,7 @@ def _parse(data):
                 hardware['has_sata'] = True
                 storage_controllers_by_id[element['rasd:InstanceID']] = \
                     'sata'
-                model_controllers.append(Controller(instance_id=element['rasd:InstanceID'], bus='sata'))
+                model_controllers.append(Controller(instance_id=_text(element['rasd:InstanceID']), bus='sata'))
         elif element['rasd:ResourceType'] in [
                 '14', '15', '23', '24', '35']:
             # 14: Floppy drives

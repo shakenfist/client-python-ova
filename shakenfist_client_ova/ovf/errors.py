@@ -10,7 +10,7 @@ class OVFError(Exception):
 
 
 class ManifestError(OVFError):
-    """A manifest line does not parse."""
+    """A manifest does not parse: a line that is malformed, or a manifest that cannot be read."""
 
 
 class UnknownAllocationUnitError(OVFError):
@@ -34,7 +34,7 @@ class EntityDeclarationError(OVFError):
 
 
 class UnsupportedDescriptorError(OVFError):
-    """Any other failure inside the parser, raised from the original exception.
+    """Any other failure inside the descriptor parser, raised from the original exception.
 
     It exists only until the parser names each of these failures itself, when
     this class goes (see docs/plans/PLAN-ovf-parser.md).

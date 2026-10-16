@@ -26,6 +26,10 @@ never re-serialises, because a re-serialised descriptor is a different one:
 it would lose prolog comments and the envelope's default namespace, which are
 shapes the parser must be tested against. docs/development.md, "Test
 fixtures", describes the rules.
+
+The tool imports the prose list from shakenfist_client_ova.ovf, so it must run
+with a Python where the package and its dependencies are installed, such as the
+py3 tox environment's: .tox/py3/bin/python -I tools/trim-ovf-descriptor.py ...
 """
 
 import argparse

@@ -43,13 +43,16 @@ this repository, so it imports only the standard library and its
 parsing dependencies, never `click` or `shakenfist_client`. It never
 prints and never exits. `shakenfist_client_ova/tests/test_ovf_boundary.py`
 reads the source of every module in it and fails on a forbidden
-import, a `print` or an exit.
+import, a `print` or an exit. That boundary covers the code inside
+`ovf/` only: importing `shakenfist_client_ova.ovf` still runs the parent
+package's `__init__.py`, which imports `click` and `shakenfist_client`,
+so the subpackage cannot yet be used without the plugin's dependencies.
 
 Every failure is an `OVFError` subclass: `ManifestError`,
 `MalformedDescriptorError`, `EntityDeclarationError`,
 `UnknownAllocationUnitError`, `UnsupportedHardwareError`,
 `UnparsedContentError`, and `UnsupportedDescriptorError` for anything
-else that goes wrong inside the parser, raised from the original
+else that goes wrong inside the descriptor parser, raised from the original
 exception. The parser returns an `Envelope` (a tree of plain
 dataclasses, serialised by `ovf.to_json()`), with sizes in bytes. The
 command does all the talking: it catches `OVFError`, prints its

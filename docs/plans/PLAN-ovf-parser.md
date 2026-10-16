@@ -657,19 +657,20 @@ to the master plan".
   `click.testing.CliRunner` and the client and `shakenfist_client.util`
   mocked. Cover the `--accept-eula` refusal, the property warning, and
   the turning of each `OVFError` into one line and exit code 1.
-- Every change to an expected file in this phase's diff is an
-  intended behaviour change, explained in the pull request. Phase 2
-  records 12 of the 16 vendor fixtures as refusals, so many expected
-  files go from an error to a whole model, with nothing to compare
-  against. Three of those refusals are #11, the `byte` allocation
-  unit, which this phase fixes unless it has been fixed already. Each newly successful one is checked field by field
-  against its descriptor: disk capacities, controllers, NICs and
-  memory units. Each vendor fixture also gains a small hand-written
-  assertion of those values, so the expected file is not the only
-  record of what correct looks like. Before the curated expected file
-  is committed, read it for vendor text in fields the prose list does
-  not cover, such as deployment option labels: they are filled for the
-  first time in this phase.
+- Every change to an expected file in this phase's diff is an intended
+  behaviour change, explained in the pull request. Phase 2 records 12
+  of the 16 vendor fixtures as refusals, so many expected files go
+  from an error to a whole model, with nothing to compare against.
+  Three of those refusals are #11, the `byte` allocation unit, which
+  this phase fixes unless it has been fixed already. Each newly
+  successful one is checked field by field against its descriptor:
+  disk capacities, controllers, NICs and memory units. Each vendor
+  fixture also gains a small hand-written assertion of those values,
+  so the expected file is not the only record of what correct looks
+  like. Before the curated expected file is committed, read it for
+  vendor text in fields the prose list does not cover, such as
+  deployment option labels: they are filled for the first time in this
+  phase.
 - Turn on the descriptor corpus tier's second assertion (decision 5):
   every descriptor yields a model or a named `OVFError` subclass, and
   phase 2's `UnsupportedDescriptorError` wrapper is deleted. The

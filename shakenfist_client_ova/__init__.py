@@ -98,8 +98,9 @@ def ova_import(ctx, source=None, namespace=None):
                     if entry.name in disk_files:
                         disk_files[entry.name]['hash'] = (entry.algorithm, entry.digest)
 
-            # A second descriptor replaces the first, as it always has. Phase
-            # 4 of docs/plans/PLAN-ovf-parser.md refuses it instead.
+            # A second descriptor replaces the first, as it always has.
+            # Checking the archive will refuse it instead; see
+            # docs/plans/PLAN-ovf-parser.md.
             for ovf_file in ovf_files:
                 with archive.extractfile(ovf_file) as f:
                     envelope = ovf.parse_descriptor(f.read())

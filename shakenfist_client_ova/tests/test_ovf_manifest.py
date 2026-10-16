@@ -31,6 +31,6 @@ class ParseManifestTestCase(testtools.TestCase):
         self.assertEqual('Failed to parse manifest line: not a manifest line', str(e))
 
     def test_not_utf8(self):
-        e = self.assertRaises(ovf.UnsupportedDescriptorError, ovf.parse_manifest, b'SHA1 (\xff.vmdk) = 01\n')
-        self.assertEqual('UnsupportedDescriptorError(UnicodeDecodeError)', ovf.outcome_name(e))
+        e = self.assertRaises(ovf.ManifestError, ovf.parse_manifest, b'SHA1 (\xff.vmdk) = 01\n')
+        self.assertEqual('ManifestError(UnicodeDecodeError)', ovf.outcome_name(e))
         self.assertIn('Could not parse the manifest: UnicodeDecodeError', str(e))
