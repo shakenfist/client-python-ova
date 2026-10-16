@@ -358,6 +358,24 @@ expected, not a defect.
    `CurrentByteIndex` and defusedxml both work on Python 3.7, so the
    tool and its test meet the package's floor.
 
+   Step 1d settled four details this decision left open:
+   * OVF 0.9 types `Content` as well as `Section`: Tails writes
+     `<Content xsi:type="ovf:VirtualSystem_Type">`. The `xsi:type` rule
+     applies to both, or a 0.9 `VirtualSystem/Description` would pass
+     through untrimmed.
+   * Each kept attribute's span starts at the whitespace before its
+     name, so the emptied element is `<`, the name, those spans, and
+     `/>`, with no separator of the tool's own.
+   * An emptied element keeps only the namespace declarations its name
+     or a kept attribute needs; without them it would not be
+     namespace-well-formed.
+   * The provenance comment is preceded by a newline when it follows
+     the XML declaration, and followed by one otherwise.
+
+   The tool reaches `CurrentByteIndex` through the SAX reader's private
+   `_parser`, because neither defusedxml API exposes it and only the SAX
+   reader reports prefix mappings on 3.7.
+
 5. **`defusedxml` joins the `test` extra now and the runtime
    dependencies in phase 3.** The trim tool reads vendor files, and
    decision 6 of the master plan says it reads them as the importer

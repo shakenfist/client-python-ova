@@ -74,4 +74,7 @@ test = [
     "flake8",              # mit
     "testtools",           # mit
     "stestr",              # apache2
+    # The trim tool in tools/ reads vendor descriptors through it; it joins
+    # the runtime dependencies when the parser does.
+    "defusedxml",          # psf
 ]
