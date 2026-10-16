@@ -680,3 +680,42 @@ have generated 81 expected outcomes and a 968-line ledger against it.
 So step 2a does not start until the operator has reviewed decision 2,
 and 2c does not start until the management session has confirmed that
 2a's `model.py` matches decision 2 field for field.
+
+## Execution notes
+
+Phase 2 ran on 2026-10-17. Where it departed from the text above:
+
+* Every `Optional` field in the model defaults to `None`, and required
+  fields come first in each class. Decision 2's block shows fields, not
+  order, and `to_json` sorts keys, so no expected file shows the
+  difference. The field names and types are as written.
+* A manifest that cannot be read says `Could not parse the manifest`,
+  not decision 3's `Could not parse the descriptor`, which would blame
+  the wrong file. `MalformedDescriptorError` and
+  `EntityDeclarationError` are raised `from None`, so that their
+  outcome names carry no bracketed cause, as decision 3's table and the
+  ledger counts expect.
+* Reviewing step 2b against the consistency audits found that phase 1
+  and this phase had written 66 citations of plan phases, decisions and
+  steps into source, configuration and the hand-written fixtures. The
+  `plan-history-in-source` audit forbids them. A commit between 2b and
+  2c replaced each with the reason it stood for, and the later steps'
+  briefs forbade new ones. The audit now passes.
+* Step 2e also marked the corpus tier's ledger and curated files
+  `-text` in `.gitattributes`, as the fixtures already were.
+* Decision 10's equivalence script ran after 2b, 2c and 2d: 1007 runs
+  (33 fixtures, 968 upstream descriptors, six synthetic OVAs), 0
+  mismatches each time. The ledger's counts equal survey finding 2.
+* The Definition of done's `python3 -c 'import shakenfist_client_ova'`
+  needs a Python with the package's dependencies. The host's system
+  Python lacks `dpath`, so the check ran under `.tox/py3/bin/python`.
+* Found and left for later:
+  * #12: the trim tool prints a traceback, not a refusal, for a
+    descriptor that declares an entity. This dates from phase 1.
+  * `Network.description` is not on the prose list, so short strings
+    such as "Management network" reach `curated.expected.json`. Phase 1
+    judged them structural. The read of the curated expected file that
+    phase 3 already plans should cover this field too.
+  * Nothing tests that the corpus tier's guard fails rather than skips.
+    It was checked by hand in 2d, with the cache absent and with it
+    empty.
