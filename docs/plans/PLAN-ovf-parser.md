@@ -463,11 +463,41 @@ Out of scope, and deliberately so:
    answer rather than guessing. Adding `GITLAB_TESTDATA_TOKEN` as a
    secret on this repository is the operator's step, not an agent's.
 
+Phase 1's survey found three shapes the decisions above would refuse.
+Each is for phase 3 to settle, before it writes the namespace and
+attribute tables; the evidence is in the phase 1 plan's survey finding
+4.
+
+4. **Should oVirt's attributes in the OVF namespace be refused?**
+   oVirt (and so Oracle Linux's OLVM templates) writes
+   `ovf:disk-interface`, `ovf:disk-alias` and `ovf:disk-type` on
+   `Disk`. Decision 4 refuses OVF-namespace attributes it does not
+   read, which refuses every oVirt export. The recommendation is to
+   read `ovf:disk-interface` into the model as the disk bus, which
+   instance creation needs, and to ignore a closed, named list of the
+   others, with oVirt given as the reason.
+5. **Should VirtualBox's `.xsd`-suffixed CIM namespaces be accepted?**
+   VirtualBox's OVF 2.0 export declares `epasd` and `sasd` with a
+   `.xsd` suffix on the DMTF namespace URI. Taken literally, its
+   `EthernetPortItem` and `StorageItem` contents are unknown custom
+   elements, and every VirtualBox OVF 2.0 export is refused. The
+   recommendation is to treat the two suffixed URIs as aliases of the
+   DMTF ones, in the namespace table, with VirtualBox given as the
+   reason.
+6. **Should OVF 0.9 be supported or refused by name?** The
+   pre-standard `http://www.vmware.com/schema/ovf/1/envelope`
+   namespace, with generic `Section` elements typed by `xsi:type`,
+   appears in 149 of govmomi's 958 descriptors, in COT and in Tails'
+   export. The recommendation is to refuse it with a named
+   unsupported-version error. Supporting it means a second section
+   dispatch, and the producers that write it today (VirtualBox's
+   legacy export option) can also write 1.0.
+
 ## Execution
 
 | Phase | Plan | Status | Merged |
 |-------|------|--------|--------|
-| 1. Corpus and fixtures | - | Not started | |
+| 1. Corpus and fixtures | [PLAN-ovf-parser-phase-01-corpus.md](PLAN-ovf-parser-phase-01-corpus.md) | Not started | |
 | 2. Extract the parser | - | Not started | |
 | 3. ElementTree and the specification | - | Not started | |
 | 4. Archive correctness | - | Not started | |
