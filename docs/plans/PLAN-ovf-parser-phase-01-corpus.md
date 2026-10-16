@@ -313,6 +313,7 @@ expected, not a defect.
    |---------|-------------|
    | `EulaSection/License` | `eula.license` |
    | `AnnotationSection/Annotation` | `annotation` |
+   | `ProductSection/Info` (added in step 1e) | `product.info` |
    | `ProductSection/Product`, `Vendor`, `FullVersion`, `ProductUrl`, `VendorUrl`, `AppUrl`, `Category` | `product.<field>` |
    | `ProductSection/Property/Label`, `Property/Description` | `product.properties[].label`, `.description` |
    | `VirtualSystem/Description`, `VirtualSystemCollection/Description` | `description` |
@@ -341,7 +342,9 @@ expected, not a defect.
    is left alone. So do
    `Info`, `Version`, `rasd:ElementName`, `rasd:Caption` and
    `rasd:Description`. They are short, generic and structural, and a
-   parser that reads them should see the real thing.
+   parser that reads them should see the real thing. The one exception
+   is a `ProductSection`'s `Info`, which VyOS fills with a product
+   description; step 1e found it and added it to the prose list.
 
    `--check ORIGINAL TRIMMED` locates the same spans in both files with
    the same parser. It then requires the bytes outside them to be
@@ -357,6 +360,24 @@ expected, not a defect.
 
    `CurrentByteIndex` and defusedxml both work on Python 3.7, so the
    tool and its test meet the package's floor.
+
+   Step 1d settled four details this decision left open:
+   * OVF 0.9 types `Content` as well as `Section`: Tails writes
+     `<Content xsi:type="ovf:VirtualSystem_Type">`. The `xsi:type` rule
+     applies to both, or a 0.9 `VirtualSystem/Description` would pass
+     through untrimmed.
+   * Each kept attribute's span starts at the whitespace before its
+     name, so the emptied element is `<`, the name, those spans, and
+     `/>`, with no separator of the tool's own.
+   * An emptied element keeps only the namespace declarations its name
+     or a kept attribute needs; without them it would not be
+     namespace-well-formed.
+   * The provenance comment is preceded by a newline when it follows
+     the XML declaration, and followed by one otherwise.
+
+   The tool reaches `CurrentByteIndex` through the SAX reader's private
+   `_parser`, because neither defusedxml API exposes it and only the SAX
+   reader reports prefix mappings on 3.7.
 
 5. **`defusedxml` joins the `test` extra now and the runtime
    dependencies in phase 3.** The trim tool reads vendor files, and
@@ -469,9 +490,8 @@ string there is published.
    resparsifies image extensions, not `.ova`. 1c files an issue on
    shakenfist/instar proposing `git lfs pull --exclude
    downloaded/ova`, and this phase does not wait for it.
-4. **The CyberOps exports' origin and terms are not recorded
-   anywhere.** They are the operator's local copies of Cisco Networking
-   Academy course appliances. See open question 1.
+4. **The CyberOps exports' origin and terms were not recorded
+   anywhere.** Open question 1 now records them.
 5. **The upstream corpora move under the pins.** They cannot: a commit
    hash is immutable. The risk is the reverse, a pin going stale, and
    the master plan accepts that (pins are bumped by hand).
@@ -479,11 +499,15 @@ string there is published.
 ## Open questions
 
 1. **Where did the two CyberOps appliances come from, and on what
-   terms?** The provenance records `local`, plus whatever the operator
-   can say about where they were downloaded. Only their descriptor and
-   manifest are kept, and only trimmed descriptors are published, so
-   this does not block the phase. It is recorded so that nobody has to
-   ask again.
+   terms?** Answered on 2026-10-16: they are training VMs from Cisco's
+   CyberOps courseware. The operator is licensed to possess them but
+   not to redistribute them, so their `.ova` files stay in
+   `instar-testdata` and are never republished. Their trimmed
+   descriptors are published like any other: a descriptor with its
+   prose removed is the envelope, not the courseware. `sources.json`
+   records this in a `redistributable` field on every entry (`true`,
+   `false`, or `null` where nobody has checked), and only a `true`
+   entry's `.ova` may be copied anywhere public.
 
 The survey's three new questions for phase 3 (survey finding 4) are
 recorded in the master plan as its open questions 4 to 6.
@@ -525,6 +549,26 @@ aligns with this plan. Step 1b is the shape gate: it is the expensive
 download, and once its output is pushed to `instar-testdata` it is
 awkward to take back, so confirm 1a's test runs before starting it.
 The other judgement call is 1e's read of the trimmed fixtures.
+
+## Execution notes
+
+Phase 1 ran on 2026-10-16. Where it departed from the text above:
+
+* Oracle Linux and REMnux do publish SHA-256 checksums (Oracle's
+  templates page and REMnux's install docs), and both matched. Only
+  VyOS, Talos, Warrior and the two CyberOps exports are unpublished.
+* The fetch script keeps `.cert` members in a descriptor-only re-tar
+  as well as the descriptor and manifest. None of the ten
+  descriptor-only entries has one, so no entry is affected.
+* Decision 4 gained the four details step 1d settled, and the prose
+  list gained `ProductSection/Info` in step 1e; both are recorded
+  there.
+* The `instar-testdata` commits are `18a5ea5421..cf67642bbb`, pushed
+  to `main` after the path and README-table audit passed; the last of
+  them adds the `redistributable` field (open question 1). The instar
+  issue for risk 3 is shakenfist/instar#672.
+* A sub-agent's `pre-commit run --all-files` skips untracked files, so
+  new files were staged before every check.
 
 ## Appendix: the curated descriptor list
 

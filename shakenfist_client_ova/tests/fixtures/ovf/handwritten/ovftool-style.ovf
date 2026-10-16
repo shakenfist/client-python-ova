@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-written fixture: ovftool-style.ovf
+
+  Case: the ovftool shapes that the real descriptors spread across
+  several files, in one place: vmw:buildId and xsi:schemaLocation on
+  the envelope, a DeploymentOptionSection with two configurations
+  whose CPU and memory items carry ovf:configuration, ovf:transport
+  on the VirtualHardwareSection, and a vmw:Config marked
+  ovf:required="false". Values are invented.
+
+  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
+  edge cases":
+    "an ovftool-style descriptor carrying `vmw:buildId`,
+    `xsi:schemaLocation`, a `vmw:Config` marked not required,
+    `ovf:transport` and a `DeploymentOptionSection` with two
+    configurations."
+
+  Decision 4: vmw:buildId is ignored by the attribute rule,
+  xsi:schemaLocation is on the ignore list, vmw:Config is ignored as
+  not required, ovf:transport is read into the model, and the default
+  configuration ("small") is built. Phase 1 decision 7: no upstream
+  descriptor combines these.
+-->
+<Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"
+          xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"
+          xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData"
+          xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData"
+          xmlns:vmw="http://www.vmware.com/schema/ovf"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://schemas.dmtf.org/ovf/envelope/1 http://schemas.dmtf.org/ovf/envelope/1/dsp8023_1.1.0.xsd"
+          vmw:buildId="build-1234567"
+          ovf:version="1.0">
+  <References>
+    <File ovf:id="file1" ovf:href="disk1.vmdk" ovf:size="1048576"/>
+  </References>
+  <DiskSection>
+    <Info>Virtual disk information</Info>
+    <Disk ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:capacity="10" ovf:capacityAllocationUnits="byte * 2^30"
+          ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
+  </DiskSection>
+  <NetworkSection>
+    <Info>The list of logical networks</Info>
+    <Network ovf:name="VM Network">
+      <Description>The VM Network network</Description>
+    </Network>
+  </NetworkSection>
+  <DeploymentOptionSection>
+    <Info>The list of deployment options</Info>
+    <Configuration ovf:id="small" ovf:default="true">
+      <Label>Small</Label>
+      <Description>One CPU and 1024MB of memory</Description>
+    </Configuration>
+    <Configuration ovf:id="large">
+      <Label>Large</Label>
+      <Description>Four CPUs and 4096MB of memory</Description>
+    </Configuration>
+  </DeploymentOptionSection>
+  <VirtualSystem ovf:id="example-vm">
+    <Info>A virtual machine</Info>
+    <Name>example-vm</Name>
+    <OperatingSystemSection ovf:id="36">
+      <Info>The kind of installed guest operating system</Info>
+      <Description>Linux</Description>
+    </OperatingSystemSection>
+    <VirtualHardwareSection ovf:transport="com.vmware.guestInfo">
+      <Info>Virtual hardware requirements</Info>
+      <System>
+        <vssd:ElementName>Virtual Hardware Family</vssd:ElementName>
+        <vssd:InstanceID>0</vssd:InstanceID>
+        <vssd:VirtualSystemIdentifier>example-vm</vssd:VirtualSystemIdentifier>
+        <vssd:VirtualSystemType>vmx-13</vssd:VirtualSystemType>
+      </System>
+      <Item ovf:configuration="small">
+        <rasd:AllocationUnits>hertz * 10^6</rasd:AllocationUnits>
+        <rasd:Description>Number of virtual CPUs</rasd:Description>
+        <rasd:ElementName>1 virtual CPU</rasd:ElementName>
+        <rasd:InstanceID>1</rasd:InstanceID>
+        <rasd:ResourceType>3</rasd:ResourceType>
+        <rasd:VirtualQuantity>1</rasd:VirtualQuantity>
+      </Item>
+      <Item ovf:configuration="large">
+        <rasd:AllocationUnits>hertz * 10^6</rasd:AllocationUnits>
+        <rasd:Description>Number of virtual CPUs</rasd:Description>
+        <rasd:ElementName>4 virtual CPUs</rasd:ElementName>
+        <rasd:InstanceID>6</rasd:InstanceID>
+        <rasd:ResourceType>3</rasd:ResourceType>
+        <rasd:VirtualQuantity>4</rasd:VirtualQuantity>
+      </Item>
+      <Item ovf:configuration="small">
+        <rasd:AllocationUnits>byte * 2^20</rasd:AllocationUnits>
+        <rasd:Description>Memory size</rasd:Description>
+        <rasd:ElementName>1024MB of memory</rasd:ElementName>
+        <rasd:InstanceID>2</rasd:InstanceID>
+        <rasd:ResourceType>4</rasd:ResourceType>
+        <rasd:VirtualQuantity>1024</rasd:VirtualQuantity>
+      </Item>
+      <Item ovf:configuration="large">
+        <rasd:AllocationUnits>byte * 2^20</rasd:AllocationUnits>
+        <rasd:Description>Memory size</rasd:Description>
+        <rasd:ElementName>4096MB of memory</rasd:ElementName>
+        <rasd:InstanceID>7</rasd:InstanceID>
+        <rasd:ResourceType>4</rasd:ResourceType>
+        <rasd:VirtualQuantity>4096</rasd:VirtualQuantity>
+      </Item>
+      <Item>
+        <rasd:Address>0</rasd:Address>
+        <rasd:Description>SCSI controller</rasd:Description>
+        <rasd:ElementName>SCSI controller 0</rasd:ElementName>
+        <rasd:InstanceID>3</rasd:InstanceID>
+        <rasd:ResourceSubType>lsilogic</rasd:ResourceSubType>
+        <rasd:ResourceType>6</rasd:ResourceType>
+      </Item>
+      <Item>
+        <rasd:AddressOnParent>0</rasd:AddressOnParent>
+        <rasd:ElementName>Hard disk 1</rasd:ElementName>
+        <rasd:HostResource>ovf:/disk/vmdisk1</rasd:HostResource>
+        <rasd:InstanceID>4</rasd:InstanceID>
+        <rasd:Parent>3</rasd:Parent>
+        <rasd:ResourceType>17</rasd:ResourceType>
+      </Item>
+      <Item>
+        <rasd:AutomaticAllocation>true</rasd:AutomaticAllocation>
+        <rasd:Connection>VM Network</rasd:Connection>
+        <rasd:ElementName>Network adapter 1</rasd:ElementName>
+        <rasd:InstanceID>5</rasd:InstanceID>
+        <rasd:ResourceSubType>E1000</rasd:ResourceSubType>
+        <rasd:ResourceType>10</rasd:ResourceType>
+      </Item>
+      <vmw:Config ovf:required="false" vmw:key="tools.syncTimeWithHost" vmw:value="false"/>
+    </VirtualHardwareSection>
+  </VirtualSystem>
+</Envelope>

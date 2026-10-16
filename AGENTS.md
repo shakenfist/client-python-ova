@@ -45,12 +45,19 @@ releasing.
   left over stops the import. Supporting a new section means
   consuming and deleting it, never loosening the final check. See
   "When an import stops" in `docs/usage.md`.
+- Vendor OVF descriptors are committed only as trimmed copies made by
+  `tools/trim-ovf-descriptor.py`, never by hand, because this
+  repository is public. See "Test fixtures" in `docs/development.md`.
 
 ## When Making Changes
 
 - Document user-visible behaviour in `docs/usage.md`.
 - Update `ARCHITECTURE.md` only when the shape of the import changes.
 - Large `.ova` files used for manual testing are gitignored; keep it
-  that way.
+  that way. The one exception is the small, deliberate fixtures under
+  `shakenfist_client_ova/tests/fixtures/ova/`, unignored by a negation
+  in `.gitignore`, and only from sources whose terms allow it: an
+  instar-testdata appliance whose `redistributable` is not `true` never
+  goes there.
 - Plans live in `docs/plans/`, start from `PLAN-TEMPLATE.md`, and are
   registered in `docs/plans/index.md`.

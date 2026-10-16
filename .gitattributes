@@ -1,0 +1,6 @@
+# Test fixtures are byte-exact: the vendor descriptors are spliced from
+# their originals, keeping trailing whitespace, tabs and missing final
+# newlines, and tools/trim-ovf-descriptor.py --check compares bytes. So
+# git never converts their line endings. Any whitespace or end-of-file
+# hook added to pre-commit must exclude this directory too.
+shakenfist_client_ova/tests/fixtures/** -text

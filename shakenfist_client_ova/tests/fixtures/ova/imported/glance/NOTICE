@@ -1,0 +1,13 @@
+These files are imported unmodified from OpenStack Glance.
+
+Source repository: https://opendev.org/openstack/glance
+Commit:            76306ffdb15a76456bc6106a659250e1ae69f4e1
+Path:              glance/tests/var/
+Licence:           Apache-2.0
+
+SHA-256:
+3949981764c603328cba9fe46a40470d3728f37537515d4cd36be8a16de1dd5d  testserver-bad-ovf.ova
+4afd686994085b265b0ea8cf842f2608437ef0a16c78112858259357141461fb  testserver-no-disk.ova
+9509127720aff27294392c06900f53a8e6830c35725c040e31a7f7393fd354a4  testserver-no-ovf.ova
+aaee2dcb3a67388daa08d353c448669cca0b969673a370d1d972ef435c50d543  testserver-not-tar.ova
+76f3ddacf003377183d6ba41fcf02a3784a473fd365b17dcf690995a190863d3  testserver.ova

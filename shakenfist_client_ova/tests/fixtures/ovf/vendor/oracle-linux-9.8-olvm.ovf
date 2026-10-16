@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Trimmed from https://yum.oracle.com/templates/OracleLinux/OL9/u8/x86_64/OL9U8_x86_64-olvm-b293.ova (SHA-256 ea5b76058b4fff0a5c331a06dcd434b722bf9ec454f754b670a6ed444e5c176f of the original descriptor) by tools/trim-ovf-descriptor.py; prose replaced with "TRIMMED". -->
+<ovf:Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1" xmlns:ovirt="http://www.ovirt.org/ovf" xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <References>
+    <File ovf:href="41f1c6a6-7f8c-472d-beb3-3f02f77753a9" ovf:id="41f1c6a6-7f8c-472d-beb3-3f02f77753a9" ovf:size="815333376"/>
+  </References>
+  <NetworkSection>
+    <Info>List of networks</Info>
+    <Network ovf:name="ovirtvm"/>
+  </NetworkSection>
+  <DiskSection>
+    <Info>List of Virtual Disks</Info>
+    <Disk ovf:boot="true" ovf:capacity="39728447488" ovf:disk-alias="Disk_OL9U8_x86_64-olvm-b293" ovf:disk-interface="VirtIO" ovf:disk-type="System" ovf:diskId="9a6f13d1-b326-47ed-ace1-c28f7f5e74bf" ovf:fileRef="41f1c6a6-7f8c-472d-beb3-3f02f77753a9" ovf:format="http://www.gnome.org/~markmc/qcow-image-format.html" ovf:parentRef="" ovf:populatedSize="1456537600" ovf:volume-format="COW" ovf:volume-type="Sparse"/>
+  </DiskSection>
+  <VirtualSystem ovf:id="87ed8a8f-89ee-4c60-9344-09aa959d2dfb">
+    <VmInit ovf:authorizedKeys="" ovf:customScript="#cloud-config&#10;disable_root: true" ovf:networks="[ ]" ovf:regenerateKeys="false"/>
+    <Name>OL9U8_x86_64-olvm-b293</Name>
+    <Description>TRIMMED</Description>
+    <Comment/>
+    <CreationDate>2026/07/07 11:08:14</CreationDate>
+    <ExportDate>2026/07/07 11:08:14</ExportDate>
+    <DeleteProtected>false</DeleteProtected>
+    <NumOfIoThreads>1</NumOfIoThreads>
+    <TimeZone>Etc/GMT</TimeZone>
+    <ClusterCompatibilityVersion>4.2</ClusterCompatibilityVersion>
+    <VmType>1</VmType>
+    <ResumeBehavior>AUTO_RESUME</ResumeBehavior>
+    <MinAllocatedMem>8192</MinAllocatedMem>
+    <IsStateless>false</IsStateless>
+    <IsRunAndPause>false</IsRunAndPause>
+    <AutoStartup>false</AutoStartup>
+    <Priority>1</Priority>
+    <MigrationSupport>0</MigrationSupport>
+    <IsBootMenuEnabled>false</IsBootMenuEnabled>
+    <IsSpiceFileTransferEnabled>true</IsSpiceFileTransferEnabled>
+    <IsSpiceCopyPasteEnabled>true</IsSpiceCopyPasteEnabled>
+    <AllowConsoleReconnect>true</AllowConsoleReconnect>
+    <ConsoleDisconnectAction>LOCK_SCREEN</ConsoleDisconnectAction>
+    <MaxMemorySizeMb>8192</MaxMemorySizeMb>
+    <MultiQueuesEnabled>true</MultiQueuesEnabled>
+    <Origin>0</Origin>
+    <DefaultDisplayType>2</DefaultDisplayType>
+    <TrustedService>false</TrustedService>
+    <UseHostCpu>false</UseHostCpu>
+    <TemplateId>87ed8a8f-89ee-4c60-9344-09aa959d2dfb</TemplateId>
+    <TemplateType>TEMPLATE</TemplateType>
+    <BaseTemplateId>87ed8a8f-89ee-4c60-9344-09aa959d2dfb</BaseTemplateId>
+    <TemplateVersionNumber>1</TemplateVersionNumber>
+    <TemplateVersionName>base version</TemplateVersionName>
+    <OperatingSystemSection ovf:id="1" ovf:required="false" ovirt:id="5007">
+      <Info>Guest Operating System</Info>
+      <Description>OL9U8 x64</Description>
+    </OperatingSystemSection>
+    <VirtualHardwareSection>
+      <Info>4 CPU, 8192 Memory</Info>
+      <System>
+        <vssd:VirtualSystemType>ENGINE 4.1.0.0</vssd:VirtualSystemType>
+      </System>
+      <Item>
+        <rasd:Caption>4 virtual cpu</rasd:Caption>
+        <rasd:Description>Number of virtual CPU</rasd:Description>
+        <rasd:InstanceId>1</rasd:InstanceId>
+        <rasd:ResourceType>3</rasd:ResourceType>
+        <rasd:num_of_sockets>4</rasd:num_of_sockets>
+        <rasd:cpu_per_socket>1</rasd:cpu_per_socket>
+        <rasd:threads_per_cpu>1</rasd:threads_per_cpu>
+        <rasd:max_num_of_vcpus>16</rasd:max_num_of_vcpus>
+        <rasd:VirtualQuantity>4</rasd:VirtualQuantity>
+      </Item>
+      <Item>
+        <rasd:Caption>8192 MB of memory</rasd:Caption>
+        <rasd:Description>Memory Size</rasd:Description>
+        <rasd:InstanceId>2</rasd:InstanceId>
+        <rasd:ResourceType>4</rasd:ResourceType>
+        <rasd:AllocationUnits>MegaBytes</rasd:AllocationUnits>
+        <rasd:VirtualQuantity>8192</rasd:VirtualQuantity>
+      </Item>
+      <Item>
+        <rasd:Caption>USB Controller</rasd:Caption>
+        <rasd:InstanceId>3</rasd:InstanceId>
+        <rasd:ResourceType>23</rasd:ResourceType>
+        <rasd:UsbPolicy>DISABLED</rasd:UsbPolicy>
+      </Item>
+      <Item>
+        <rasd:Caption>Graphical Controller</rasd:Caption>
+        <rasd:InstanceId>6cc25139-d7f5-4515-8dd0-cae345dcc3b6</rasd:InstanceId>
+        <rasd:ResourceType>32768</rasd:ResourceType>
+        <Type>video</Type>
+        <rasd:VirtualQuantity>1</rasd:VirtualQuantity>
+        <Device>vga</Device>
+      </Item>
+      <Item>
+        <rasd:Caption>Drive: 1</rasd:Caption>
+        <rasd:InstanceId>41f1c6a6-7f8c-472d-beb3-3f02f77753a9</rasd:InstanceId>
+        <rasd:ResourceType>17</rasd:ResourceType>
+        <Type>disk</Type>
+        <rasd:HostResource>ovf:disk/9a6f13d1-b326-47ed-ace1-c28f7f5e74bf</rasd:HostResource>
+        <rasd:Parent>00000000-0000-0000-0000-000000000000</rasd:Parent>
+        <rasd:Template>00000000-0000-0000-0000-000000000000</rasd:Template>
+        <rasd:ApplicationList/>
+        <rasd:StorageId>00000000-0000-0000-0000-000000000000</rasd:StorageId>
+        <rasd:StoragePoolId>00000000-0000-0000-0000-000000000000</rasd:StoragePoolId>
+        <rasd:CreationDate>2026/07/07 11:08:14</rasd:CreationDate>
+        <rasd:LastModified>2026/07/07 11:08:14</rasd:LastModified>
+        <rasd:last_modified_date>2026/07/07 11:08:14</rasd:last_modified_date>
+        <Device>disk</Device>
+        <BootOrder>0</BootOrder>
+        <IsPlugged>true</IsPlugged>
+        <IsReadOnly>false</IsReadOnly>
+      </Item>
+      <Item>
+        <rasd:Caption>Ethernet adapter on ovirtvm</rasd:Caption>
+        <rasd:InstanceId>8ae8e552-9b93-4343-b24e-39704663dbbc</rasd:InstanceId>
+        <rasd:ResourceType>10</rasd:ResourceType>
+        <rasd:OtherResourceType>ovirtvm</rasd:OtherResourceType>
+        <rasd:ResourceSubType>3</rasd:ResourceSubType>
+        <rasd:Connection>ovirtvm</rasd:Connection>
+        <rasd:Linked>true</rasd:Linked>
+        <rasd:Name>nic1</rasd:Name>
+        <rasd:ElementName>nic1</rasd:ElementName>
+        <rasd:speed>10000</rasd:speed>
+        <Type>interface</Type>
+        <Device>bridge</Device>
+        <BootOrder>0</BootOrder>
+        <IsPlugged>true</IsPlugged>
+        <IsReadOnly>false</IsReadOnly>
+      </Item>
+    </VirtualHardwareSection>
+  </VirtualSystem>
+</ovf:Envelope>
