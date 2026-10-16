@@ -121,7 +121,8 @@ class BoundaryTestCase(testtools.TestCase):
 
     def test_modules_found(self):
         names = [os.path.basename(path) for path in _modules()]
-        for expected in ('__init__.py', 'descriptor.py', 'errors.py', 'manifest.py', 'model.py', 'prose.py'):
+        for expected in ('__init__.py', 'cim.py', 'descriptor.py', 'errors.py', 'manifest.py', 'model.py',
+                         'namespaces.py', 'prose.py', 'quirks.py', 'units.py'):
             self.assertIn(expected, names)
 
     def test_never_imports_the_command_dependencies(self):

@@ -8,8 +8,10 @@ model.py. tests/test_ovf_boundary.py enforces this.
 """
 
 from .errors import (
-    EntityDeclarationError, MalformedDescriptorError, ManifestError, OVFError, outcome_name,
-    UnknownAllocationUnitError, UnparsedContentError, UnsupportedDescriptorError, UnsupportedHardwareError)
+    BrokenReferenceError, EntityDeclarationError, InvalidValueError, MalformedDescriptorError, ManifestError,
+    MissingContentError, OVFError, outcome_name, UnknownAllocationUnitError, UnparsedContentError,
+    UnsupportedDescriptorError, UnsupportedEnvelopeError, UnsupportedHardwareError, UnsupportedProducerError,
+    VirtualSystemCollectionError)
 from .model import (
     Controller, DeploymentOption, Disk, DiskDrive, Envelope, Eula, File, Manifest, ManifestEntry, Network, Nic,
     OperatingSystem, Product, Property, to_json, VirtualHardware, VirtualSystem)
@@ -19,8 +21,10 @@ from .manifest import parse_manifest
 
 __all__ = [
     # errors.py
-    'EntityDeclarationError', 'MalformedDescriptorError', 'ManifestError', 'OVFError', 'outcome_name',
-    'UnknownAllocationUnitError', 'UnparsedContentError', 'UnsupportedDescriptorError', 'UnsupportedHardwareError',
+    'BrokenReferenceError', 'EntityDeclarationError', 'InvalidValueError', 'MalformedDescriptorError',
+    'ManifestError', 'MissingContentError', 'OVFError', 'outcome_name', 'UnknownAllocationUnitError',
+    'UnparsedContentError', 'UnsupportedDescriptorError', 'UnsupportedEnvelopeError', 'UnsupportedHardwareError',
+    'UnsupportedProducerError', 'VirtualSystemCollectionError',
     # model.py
     'Controller', 'DeploymentOption', 'Disk', 'DiskDrive', 'Envelope', 'Eula', 'File', 'Manifest', 'ManifestEntry',
     'Network', 'Nic', 'OperatingSystem', 'Product', 'Property', 'to_json', 'VirtualHardware', 'VirtualSystem',
