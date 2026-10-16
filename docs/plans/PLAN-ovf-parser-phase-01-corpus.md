@@ -547,6 +547,25 @@ download, and once its output is pushed to `instar-testdata` it is
 awkward to take back, so confirm 1a's test runs before starting it.
 The other judgement call is 1e's read of the trimmed fixtures.
 
+## Execution notes
+
+Phase 1 ran on 2026-10-16. Where it departed from the text above:
+
+* Oracle Linux and REMnux do publish SHA-256 checksums (Oracle's
+  templates page and REMnux's install docs), and both matched. Only
+  VyOS, Talos, Warrior and the two CyberOps exports are unpublished.
+* The fetch script keeps `.cert` members in a descriptor-only re-tar
+  as well as the descriptor and manifest. None of the ten
+  descriptor-only entries has one, so no entry is affected.
+* Decision 4 gained the four details step 1d settled, and the prose
+  list gained `ProductSection/Info` in step 1e; both are recorded
+  there.
+* The `instar-testdata` commits are `18a5ea5421..3a6d14f823`, pushed
+  to `main` after the path and README-table audit passed. The instar
+  issue for risk 3 is shakenfist/instar#672.
+* A sub-agent's `pre-commit run --all-files` skips untracked files, so
+  new files were staged before every check.
+
 ## Appendix: the curated descriptor list
 
 Produced by `classify-ovf-corpus.py --curate 2` over govmomi at
