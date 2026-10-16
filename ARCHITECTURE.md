@@ -25,7 +25,7 @@ read through `tarfile.extractfile()` as a stream.
 |-------|-------|--------|
 | Classify | tar member names | lists of `.ovf`, `.vmdk`, `.mf` and other members |
 | Manifest | `.mf` members, through `ovf.parse_manifest()` | a `Manifest` of `(name, algorithm, digest)` entries, from which the command records a hash per file name |
-| Descriptor | `.ovf` members, through `ovf.parse_descriptor()` | an `Envelope`: the VM name, file references, disks, networks and virtual hardware |
+| Descriptor | `.ovf` members, through `ovf.parse_descriptor()` | an `Envelope`: the VM name, file references, disks, networks, deployment options, products and virtual hardware |
 | Upload | `.vmdk` members | one artifact per disk |
 
 The hardware description is not yet turned into an instance, and the
@@ -48,38 +48,42 @@ import, a `print` or an exit. That boundary covers the code inside
 package's `__init__.py`, which imports `click` and `shakenfist_client`,
 so the subpackage cannot yet be used without the plugin's dependencies.
 
-Every failure is an `OVFError` subclass: `ManifestError`,
-`MalformedDescriptorError`, `EntityDeclarationError`,
-`UnknownAllocationUnitError`, `UnsupportedHardwareError`,
-`UnparsedContentError`, and `UnsupportedDescriptorError` for anything
-else that goes wrong inside the descriptor parser, raised from the original
-exception. The parser returns an `Envelope` (a tree of plain
-dataclasses, serialised by `ovf.to_json()`), with sizes in bytes. The
-command does all the talking: it catches `OVFError`, prints its
-message and exits, and prints the summary of the model.
+Every failure is an `OVFError` subclass, and the command prints its
+message and exits 1: one line, or for `UnparsedContentError` a heading
+and one unread path per line. `errors.py` lists them, and
+`docs/usage.md` says what each one means for a person. The parser
+returns an `Envelope` (a tree of plain dataclasses, serialised by
+`ovf.to_json()`), with sizes in bytes. The command does all the
+talking: it catches `OVFError`, prints its message and exits, and
+prints the summary of the model.
 
-## Parsing by consumption
+## Reading with ElementTree
 
-The parser is planned to move to ElementTree; see [the OVF parser
-plan](docs/plans/PLAN-ovf-parser.md). Until then, inside
-`ovf/descriptor.py`, the descriptor is parsed with `xmltodict`, with
-the OVF, CIM and vendor namespaces mapped to short prefixes (`v1`,
-`rasd`, `vssd`, `vbox`, `vmware`) by the `NAMESPACES` table, so the
-code addresses elements as `v1:Envelope`, `rasd:ResourceType` and so
-on.
+`ovf/descriptor.py` parses the descriptor with `defusedxml` and
+ElementTree, addressing every element by its full namespace, so a
+producer's choice of prefix does not matter. `namespaces.py` holds
+the namespaces and `units.py` converts DSP0004 allocation units to
+bytes. Virtual hardware items are dispatched on their CIM
+`ResourceAllocationSettingData` resource type, and storage
+controllers are recorded by instance id so that disk drives, which
+name their controller as a parent, land on the right bus.
 
-Each section is read with `dpath` and then deleted from the parsed
-dictionary. Sections known to carry nothing useful are deleted unread.
-Once every known section is gone, an empty dictionary means the whole
-descriptor was understood; anything left is raised as an
-`UnparsedContentError` and the import stops. This makes support for a
-new appliance an explicit decision about each section it carries,
-rather than a silent omission -- the reasoning is in `docs/usage.md`.
+The parser marks each element and attribute it reads. When it has
+finished, it walks the tree, and anything unmarked is either ignored
+for a stated reason or refused with `UnparsedContentError`. This
+makes support for a new appliance an explicit decision about each
+piece of it, rather than a silent omission. The rule is in
+`docs/usage.md`.
 
-Virtual hardware items are dispatched on their CIM
-`ResourceAllocationSettingData` resource type. Storage controllers are
-recorded by instance id so that disk drives, which name their
-controller as a parent, can be placed on the right bus.
+Two tables keep producer and standard knowledge out of the parser's
+logic. `ovf/cim.py` lists, for each CIM class, the standard
+properties the parser uses, the ones it deliberately leaves unused
+and the few it refuses because they change what the guest sees.
+`ovf/quirks.py` lists the producer deviations from the schema that
+the parser accepts (VirtualBox's `.xsd`-suffixed CIM namespaces, the
+`InstanceId` spelling, VMware's unqualified attributes), each with
+its evidence. What is not yet read is tracked as Future work in
+[the OVF parser plan](docs/plans/PLAN-ovf-parser.md).
 
 ## Disk upload
 

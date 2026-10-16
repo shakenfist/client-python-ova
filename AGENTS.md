@@ -40,11 +40,9 @@ releasing.
   top-level import takes every `sf-client` command down with it, not
   just `ova`. Check `python -c 'import shakenfist_client_ova'` after a
   change.
-- The OVF parser is strict on purpose: each section it understands is
-  deleted from the parsed descriptor as it is consumed, and anything
-  left over stops the import. Supporting a new section means
-  consuming and deleting it, never loosening the final check. See
-  "When an import stops" in `docs/usage.md`.
+- The OVF parser is strict on purpose: unread content is ignored for
+  a stated reason or refused with `UnparsedContentError`. Never widen
+  the ignore rules to pass an appliance; see `docs/usage.md`.
 - `shakenfist_client_ova/ovf/` never imports `click` or
   `shakenfist_client`, never prints and never exits: it raises
   `OVFError` and the command does the talking. A test enforces this.
