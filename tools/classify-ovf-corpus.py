@@ -31,14 +31,19 @@ The output is one 'NAME:PATH' per line, sorted within each corpus, with paths
 relative to DIRECTORY. --output FILE writes it there instead of stdout.
 
 To regenerate shakenfist_client_ova/corpus_tests/curated.txt from the repository
-root:
+root, take the pinned directories from the fetch script, which is the only place
+the pins are written:
 
     tools/fetch-descriptor-corpus.sh
+    pin() { sed -n "s/^$1=//p" tools/fetch-descriptor-corpus.sh; }
     tools/classify-ovf-corpus.py --curate 2 \\
         --overrides shakenfist_client_ova/corpus_tests/curated-overrides.txt \\
         --output shakenfist_client_ova/corpus_tests/curated.txt \\
-        govmomi=.cache/ovf-corpora/govmomi-79bc9d75e5c930649bc1b3e86bb0cfe76d60fdbe/ovf/fixtures \\
-        cot=.cache/ovf-corpora/cot-0811b96311881a8293f28f2e300f6bed1b77ee31/COT/tests:1
+        govmomi=.cache/ovf-corpora/govmomi-$(pin GOVMOMI_SHA)/$(pin GOVMOMI_PATH) \\
+        cot=.cache/ovf-corpora/cot-$(pin COT_SHA)/$(pin COT_PATH):1
+
+The descriptor corpus tests run the same command (shakenfist_client_ova/corpus_tests/
+test_descriptor_corpus.py) and fail if its output is not curated.txt byte for byte.
 """
 
 import argparse

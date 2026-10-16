@@ -13,13 +13,19 @@ Setting OVF_UPDATE_EXPECTED=1 rewrites the expected files from the parser's
 current behaviour. A run in that mode never passes, so that it cannot be left
 switched on in CI: the rewritten files are reviewed with git diff, and the tests
 are run again without the variable.
+
+The corpus tests in shakenfist_client_ova/corpus_tests keep many such values in
+one JSON object keyed by descriptor. They share expected_entry and problem with
+the per-descriptor files, so both kinds of expected value mean the same thing.
 """
 
+import difflib
 import json
 import os
 import re
 
 from shakenfist_client_ova import ovf
+from shakenfist_client_ova.ovf import prose
 
 
 FIXTURE_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures', 'ovf')
@@ -68,17 +74,29 @@ def dump(value):
     return json.dumps(value, sort_keys=True, indent=2, ensure_ascii=False) + '\n'
 
 
-def outcome(descriptor_path):
-    """Parse a descriptor, returning (to_json text, None) or (None, the OVFError)."""
-    with open(descriptor_path, 'rb') as f:
-        data = f.read()
+def outcome_of(data, scrub=False):
+    """Parse descriptor bytes, returning (to_json text, None) or (None, the OVFError).
+
+    With scrub, the model's prose fields are replaced first. The upstream corpora
+    use it, so that no vendor text reaches a committed file.
+    """
     try:
-        return ovf.to_json(ovf.parse_descriptor(data)), None
+        envelope = ovf.parse_descriptor(data)
+        if scrub:
+            prose.scrub(envelope.virtual_system)
+        return ovf.to_json(envelope), None
     except ovf.OVFError as e:
         return None, e
 
 
-def _read(path):
+def outcome(descriptor_path, scrub=False):
+    """Parse a descriptor file, returning (to_json text, None) or (None, the OVFError)."""
+    with open(descriptor_path, 'rb') as f:
+        return outcome_of(f.read(), scrub)
+
+
+def read(path):
+    """The text of a file, or None if it does not exist."""
     try:
         with open(path, 'rb') as f:
             return f.read().decode('utf-8')
@@ -86,19 +104,56 @@ def _read(path):
         return None
 
 
-def _write(path, text):
-    # Binary, with \n endings: the fixtures are marked -text, so git never converts these.
+def write(path, text):
+    """Write text as UTF-8 with LF endings, which git never converts: the fixtures are marked -text."""
     with open(path, 'wb') as f:
         f.write(text.encode('utf-8'))
 
 
-def _old_fragment(text):
-    try:
-        old = json.loads(text)
-    except (TypeError, ValueError):
-        return None
-    if isinstance(old, dict):
-        return old.get('message_contains')
+def is_error_entry(expected):
+    return isinstance(expected, dict) and set(expected) == {'error', 'message_contains'}
+
+
+def expected_entry(model_text, exc, old=None):
+    """What an expected value should hold for an outcome.
+
+    That is the parsed model, or an error entry. old is the previous parsed
+    value, if there was one: its message_contains is kept while the exception's
+    message still holds it, else PLACEHOLDER is written for a person to replace.
+    """
+    if exc is None:
+        return json.loads(model_text)
+    fragment = old.get('message_contains') if isinstance(old, dict) else None
+    if not isinstance(fragment, str) or not fragment or fragment not in str(exc):
+        fragment = PLACEHOLDER
+    return {'error': ovf.outcome_name(exc), 'message_contains': fragment}
+
+
+def problem(name, expected, model_text, exc):
+    """Describe how an outcome differs from a parsed expected value, or return None if it matches."""
+    expects_error = is_error_entry(expected)
+
+    if exc is None:
+        if expects_error:
+            return '%s parsed, but its expected value is %s' % (name, expected['error'])
+        actual = json.loads(model_text)
+        if actual == expected:
+            return None
+        diff = list(difflib.unified_diff(
+            dump(expected).splitlines(), dump(actual).splitlines(), 'expected', 'parsed', lineterm='', n=1))
+        if len(diff) > 30:
+            diff = diff[:30] + ['...']
+        return '%s: the parsed model differs from its expected value:\n%s' % (name, '\n'.join(diff))
+
+    if not expects_error:
+        return '%s raised %s: %s, but its expected value holds a model' % (name, ovf.outcome_name(exc), exc)
+    if expected['error'] != ovf.outcome_name(exc):
+        return '%s: the wrong outcome: expected %s, got %s: %s' % (
+            name, expected['error'], ovf.outcome_name(exc), exc)
+    if expected['message_contains'] == PLACEHOLDER:
+        return '%s: choose a message_contains fragment' % name
+    if expected['message_contains'] not in str(exc):
+        return '%s: the message no longer holds the fragment %r: %s' % (name, expected['message_contains'], exc)
     return None
 
 
@@ -107,13 +162,14 @@ def update(descriptor_path):
     path = expected_path(descriptor_path)
     model_text, exc = outcome(descriptor_path)
     if exc is None:
-        _write(path, model_text)
+        write(path, model_text)
         return
 
-    fragment = _old_fragment(_read(path))
-    if not isinstance(fragment, str) or not fragment or fragment not in str(exc):
-        fragment = PLACEHOLDER
-    _write(path, dump({'error': ovf.outcome_name(exc), 'message_contains': fragment}))
+    try:
+        old = json.loads(read(path))
+    except (TypeError, ValueError):
+        old = None
+    write(path, dump(expected_entry(model_text, exc, old)))
 
 
 def check(testcase, descriptor_path):
@@ -129,23 +185,16 @@ def check(testcase, descriptor_path):
             'again without the variable.' % (UPDATE_VARIABLE, name, PLACEHOLDER))
 
     path = expected_path(descriptor_path)
-    expected_text = _read(path)
+    expected_text = read(path)
     if expected_text is None:
         testcase.fail('%s has no expected file; run with %s=1 to create %s' % (
             name, UPDATE_VARIABLE, os.path.basename(path)))
 
     model_text, exc = outcome(descriptor_path)
     expected = json.loads(expected_text)
-    expects_error = isinstance(expected, dict) and set(expected) == {'error', 'message_contains'}
-
-    if exc is None:
-        if expects_error:
-            testcase.fail('%s parsed, but %s expects %s' % (name, os.path.basename(path), expected['error']))
+    if exc is None and not is_error_entry(expected):
+        # A model must match byte for byte, so that the file stays exactly to_json's output.
         testcase.assertEqual(expected_text, model_text, '%s: the parsed model differs from its expected file' % name)
-        return
-
-    if not expects_error:
-        testcase.fail('%s raised %s: %s, but its expected file holds a model' % (name, ovf.outcome_name(exc), exc))
-    testcase.assertEqual(expected['error'], ovf.outcome_name(exc), '%s: the wrong outcome' % name)
-    testcase.assertNotEqual(PLACEHOLDER, expected['message_contains'], '%s: choose a message_contains fragment' % name)
-    testcase.assertIn(expected['message_contains'], str(exc), '%s: the message no longer holds the fragment' % name)
+    message = problem(name, expected, model_text, exc)
+    if message:
+        testcase.fail(message)
