@@ -6,12 +6,10 @@
   has no ovf:value, and an EulaSection. All prose here is invented
   test text.
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "a `ProductSection` with a user-configurable property that has no
-    default, and an `EulaSection`;"
+  Tests: a ProductSection with a user-configurable property that has
+  no default, and an EulaSection, are read.
 
-  Decision 4: the property is named in a warning, and the licence is
+  Rule: the property is named in a warning, and the licence is
   printed and must be accepted with accept-eula.
 -->
 <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"

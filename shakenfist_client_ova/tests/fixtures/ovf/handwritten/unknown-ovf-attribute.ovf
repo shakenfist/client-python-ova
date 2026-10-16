@@ -5,14 +5,11 @@
   Case: an attribute in the OVF envelope namespace that OVF does not
   define, on a known element (VirtualSystem).
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "an unknown OVF-namespace attribute on a known element, and a
-    custom-namespace one, which are refused and ignored respectively;"
-    (this file is the refused half)
+  Tests: an unknown OVF-namespace attribute on a known element is
+  refused and a custom-namespace one is ignored. This file is the
+  refused half.
 
-  Decision 4: OVF-namespace attributes are read or refused like
-  elements.
+  Rule: OVF-namespace attributes are read or refused like elements.
 -->
 <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"
           xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"

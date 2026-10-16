@@ -58,7 +58,7 @@ class ToJsonTestCase(testtools.TestCase):
         self.assertNotIn('\\u', self.text)
 
     def test_empty_fields_serialised(self):
-        # Fields phase 3 fills are present now, as null or an empty list.
+        # Fields the parser does not read yet are present now, as null or an empty list.
         parsed = json.loads(self.text)
         self.assertIsNone(parsed['files'][0]['size'])
         self.assertEqual([], parsed['deployment_options'])

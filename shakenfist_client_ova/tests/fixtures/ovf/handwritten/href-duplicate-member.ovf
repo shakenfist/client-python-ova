@@ -4,14 +4,12 @@
 
   Case: two References Files whose hrefs name the same archive member,
   each backing its own disk. The archive-level form, one member
-  stored twice, is a synthetic OVA in phase 4 and can be built
-  around this file too.
+  stored twice, is a synthetic OVA, to be built when archives are
+  checked, and can be built around this file too.
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "`References` hrefs that are an absolute URL, contain `../`, name a
-    missing member, or name a duplicated member;"
-    (this file is the duplicated member)
+  Tests: a References href is refused when it is an absolute URL,
+  contains "../", names a missing member, or names a duplicated member.
+  This file is the duplicated member.
 -->
 <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"
           xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"

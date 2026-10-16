@@ -4,11 +4,9 @@
 
   Case: a References href containing "../".
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "`References` hrefs that are an absolute URL, contain `../`, name a
-    missing member, or name a duplicated member;"
-    (this file is the "../")
+  Tests: a References href is refused when it is an absolute URL,
+  contains "../", names a missing member, or names a duplicated member.
+  This file is the "../".
 -->
 <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"
           xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"

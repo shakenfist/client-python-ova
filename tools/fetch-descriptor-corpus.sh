@@ -2,7 +2,6 @@
 
 # Fetch the two upstream OVF descriptor collections the parser's tests draw
 # on, each at an exact pinned commit, into .cache/ovf-corpora/<repo>-<sha>/.
-# See decision 8 of docs/plans/PLAN-ovf-parser-phase-01-corpus.md.
 #
 # Each fetch is `git init`, a sparse checkout of the one directory, and
 # `git fetch --depth 1 --filter=blob:none origin <sha>`. GitHub serves any

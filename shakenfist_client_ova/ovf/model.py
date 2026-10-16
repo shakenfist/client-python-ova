@@ -1,10 +1,12 @@
 """What the OVF parser returns: plain dataclasses, and their one serialisation.
 
 Lists keep document order. Sizes are integers in bytes; any conversion to MiB
-or GiB is the command's. Fields marked "phase 3" are not yet filled, and hold
-None or an empty list. Each class lists its required fields first, because a
-dataclass refuses a field without a default after one with a default; to_json
-sorts keys, so the order never reaches an expected file.
+or GiB is the command's. Fields commented "not read yet" exist so that the
+serialised shape is final; the parser does not fill them yet, and they hold
+None or an empty list. See docs/plans/PLAN-ovf-parser.md. Each class lists its
+required fields first, because a dataclass refuses a field without a default
+after one with a default; to_json sorts keys, so the order never reaches an
+expected file.
 """
 
 import dataclasses
@@ -17,9 +19,9 @@ from typing import List, Optional
 class File:                                     # References/File
     id: str
     href: str
-    size: Optional[int] = None                  # phase 3; phase 4 checks it
-    compression: Optional[str] = None           # phase 3; phase 4 refuses gzip
-    chunk_size: Optional[int] = None            # phase 3; phase 4 refuses it
+    size: Optional[int] = None                  # not read yet; will be checked against the archive member
+    compression: Optional[str] = None           # not read yet; a gzip reference will be refused
+    chunk_size: Optional[int] = None            # not read yet; a chunked reference will be refused
 
 
 @dataclass
@@ -28,8 +30,8 @@ class Disk:                                     # DiskSection/Disk
     capacity_bytes: int                         # ovf:capacity x its allocation units
     file_ref: Optional[str] = None
     format: Optional[str] = None
-    populated_size: Optional[int] = None        # phase 3
-    interface: Optional[str] = None             # phase 3, master open question 4
+    populated_size: Optional[int] = None        # not read yet
+    interface: Optional[str] = None             # not read yet: ovf:disk-interface, the disk bus (oVirt writes it)
 
 
 @dataclass
@@ -49,7 +51,7 @@ class DiskDrive:                                # ResourceType 17
     parent: str                                 # the controller's instance_id
     address_on_parent: int
     element_name: Optional[str] = None
-    host_resource: Optional[str] = None         # phase 3: which Disk it holds
+    host_resource: Optional[str] = None         # not read yet: which Disk it holds
 
 
 @dataclass
@@ -65,13 +67,13 @@ class VirtualHardware:                          # VirtualHardwareSection
     controllers: List[Controller] = field(default_factory=list)
     disk_drives: List[DiskDrive] = field(default_factory=list)
     nics: List[Nic] = field(default_factory=list)
-    transport: List[str] = field(default_factory=list)  # phase 3: ovf:transport, split on spaces
-    system_type: Optional[str] = None           # phase 3: vssd:VirtualSystemType
-    system_identifier: Optional[str] = None     # phase 3: vssd:VirtualSystemIdentifier
+    transport: List[str] = field(default_factory=list)  # not read yet: ovf:transport, split on spaces
+    system_type: Optional[str] = None           # not read yet: vssd:VirtualSystemType
+    system_identifier: Optional[str] = None     # not read yet: vssd:VirtualSystemIdentifier
 
 
 @dataclass
-class Property:                                 # ProductSection/Property, phase 3
+class Property:                                 # ProductSection/Property, not read yet
     key: str
     type: str
     user_configurable: bool
@@ -84,7 +86,7 @@ class Property:                                 # ProductSection/Property, phase
 
 
 @dataclass
-class Product:                                  # ProductSection, phase 3
+class Product:                                  # ProductSection, not read yet
     product_class: Optional[str] = None         # ovf:class
     instance: Optional[str] = None              # ovf:instance
     product: Optional[str] = None
@@ -98,12 +100,12 @@ class Product:                                  # ProductSection, phase 3
 
 
 @dataclass
-class Eula:                                     # EulaSection, phase 3
+class Eula:                                     # EulaSection, not read yet
     license: str
 
 
 @dataclass
-class OperatingSystem:                          # OperatingSystemSection, phase 3
+class OperatingSystem:                          # OperatingSystemSection, not read yet
     id: int
     version: Optional[str] = None
     os_type: Optional[str] = None
@@ -111,7 +113,7 @@ class OperatingSystem:                          # OperatingSystemSection, phase 
 
 
 @dataclass
-class DeploymentOption:                         # DeploymentOptionSection/Configuration, phase 3
+class DeploymentOption:                         # DeploymentOptionSection/Configuration, not read yet
     id: str
     default: bool
     label: Optional[str] = None
@@ -121,12 +123,12 @@ class DeploymentOption:                         # DeploymentOptionSection/Config
 @dataclass
 class VirtualSystem:
     id: Optional[str] = None
-    name: Optional[str] = None                  # phase 3: VirtualSystem/Name
-    description: Optional[str] = None           # phase 3
-    hardware: List[VirtualHardware] = field(default_factory=list)  # phase 2 fills exactly one
-    products: List[Product] = field(default_factory=list)          # phase 3
-    eulas: List[Eula] = field(default_factory=list)                # phase 3
-    operating_system: Optional[OperatingSystem] = None             # phase 3
+    name: Optional[str] = None                  # not read yet: VirtualSystem/Name
+    description: Optional[str] = None           # not read yet
+    hardware: List[VirtualHardware] = field(default_factory=list)  # the parser fills exactly one
+    products: List[Product] = field(default_factory=list)          # not read yet
+    eulas: List[Eula] = field(default_factory=list)                # not read yet
+    operating_system: Optional[OperatingSystem] = None             # not read yet
 
 
 @dataclass
@@ -137,7 +139,7 @@ class Envelope:
     files: List[File] = field(default_factory=list)
     disks: List[Disk] = field(default_factory=list)
     networks: List[Network] = field(default_factory=list)
-    deployment_options: List[DeploymentOption] = field(default_factory=list)  # phase 3
+    deployment_options: List[DeploymentOption] = field(default_factory=list)  # not read yet
 
 
 @dataclass

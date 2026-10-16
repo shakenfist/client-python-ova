@@ -36,7 +36,8 @@ class EntityDeclarationError(OVFError):
 class UnsupportedDescriptorError(OVFError):
     """Any other failure inside the parser, raised from the original exception.
 
-    Phase 3 deletes this class, once the parser names each of these failures.
+    It exists only until the parser names each of these failures itself, when
+    this class goes (see docs/plans/PLAN-ovf-parser.md).
     """
 
 

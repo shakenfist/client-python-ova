@@ -21,8 +21,11 @@ after the XML declaration. Everything else is byte-for-byte the original's.
 
 --check re-derives the spans in both files and fails, naming the first byte
 offset and element where the rule is broken, unless the trimmed file differs
-from the original only by those changes. See decision 4 of
-docs/plans/PLAN-ovf-parser-phase-01-corpus.md for the rules this implements.
+from the original only by those changes. The tool splices bytes and
+never re-serialises, because a re-serialised descriptor is a different one:
+it would lose prolog comments and the envelope's default namespace, which are
+shapes the parser must be tested against. docs/development.md, "Test
+fixtures", describes the rules.
 """
 
 import argparse
@@ -67,7 +70,7 @@ def _envelope_attribute(local):
 # anything not named here is dropped, along with every child.
 EMPTIED_ELEMENTS = (
     # VirtualBox's machine configuration. It holds the exporting host's paths
-    # and shared folders (phase 1 survey finding 5), and the parser ignores it
+    # and shared folders (found when the corpus was surveyed), and the parser ignores it
     # because it is marked not required.
     (VBOX_NAMESPACE, 'Machine', _envelope_attribute('required') + ((None, 'version'),)),
 )
@@ -476,7 +479,7 @@ def _compare(original, o_start, o_end, trimmed, t_start, t_end, descriptor, what
 
 
 def check(original, trimmed):
-    """Raise CheckError unless trimmed is exactly original trimmed by decision 4's rule.
+    """Raise CheckError unless trimmed is exactly original trimmed by the rules in the module docstring.
 
     Returns the Descriptor of the original.
     """

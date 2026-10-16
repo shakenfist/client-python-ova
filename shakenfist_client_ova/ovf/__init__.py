@@ -1,8 +1,8 @@
 """An OVF descriptor and manifest parser.
 
 This subpackage is built to be spun out. It imports only the standard library
-and defusedxml (and, until phase 3 of docs/plans/PLAN-ovf-parser.md, xmltodict
-and dpath). It never imports click or shakenfist_client, never prints and
+and defusedxml (and, until the parser moves to ElementTree, xmltodict and
+dpath; see docs/plans/PLAN-ovf-parser.md). It never imports click or shakenfist_client, never prints and
 never exits: it raises OVFError subclasses and returns the dataclasses in
 model.py. tests/test_ovf_boundary.py enforces this.
 """

@@ -7,11 +7,9 @@
   non-recursive entity, not an expansion bomb: the unit tier parses
   it on every pull request. defusedxml refuses it before expansion.
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "a descriptor declaring an entity;"
+  Tests: a descriptor declaring an entity is refused.
 
-  Decision 3: defusedxml refuses entity declarations, and the parser
+  Rule: defusedxml refuses entity declarations, and the parser
   re-raises that as a named OVFError subclass.
 -->
 <!DOCTYPE Envelope [

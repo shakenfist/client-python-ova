@@ -29,8 +29,8 @@ ALLOWED_IMPORTS = frozenset([
 
     # Third-party parsing dependencies.
     'defusedxml',
-    # Phase 3 of docs/plans/PLAN-ovf-parser.md replaces these two with
-    # ElementTree through defusedxml, and removes them from this list.
+    # Allowed only until the parser moves to ElementTree through defusedxml
+    # (see docs/plans/PLAN-ovf-parser.md), when both leave this list.
     'dpath',
     'xmltodict',
 ])

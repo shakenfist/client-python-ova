@@ -22,7 +22,7 @@ class ParseManifestTestCase(testtools.TestCase):
         self.assertEqual(['01', '02'], [entry.digest for entry in manifest.entries])
 
     def test_crlf_is_kept_in_the_digest(self):
-        # As today: the line is split on newlines only. Phase 4 rewrites this.
+        # As today: the line is split on newlines only. The archive-correctness work will rewrite this.
         manifest = ovf.parse_manifest(b'SHA1 (a.vmdk) = 01\r\n')
         self.assertEqual('01\r', manifest.entries[0].digest)
 

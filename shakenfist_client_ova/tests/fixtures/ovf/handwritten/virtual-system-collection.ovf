@@ -5,9 +5,8 @@
   Case: the envelope's content is a VirtualSystemCollection holding
   the one VirtualSystem, rather than the VirtualSystem itself.
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "a `VirtualSystemCollection`, which phase 3 refuses by name;"
+  Tests: a VirtualSystemCollection is refused by name, since the
+  parser reads only a single VirtualSystem.
 -->
 <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"
           xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"

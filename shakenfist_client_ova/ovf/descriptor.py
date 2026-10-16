@@ -1,9 +1,10 @@
 """The descriptor parser.
 
-This is the import command's descriptor walk, moved here in phase 2 of
-docs/plans/PLAN-ovf-parser.md without changing what it accepts: every dpath
-call, every deletion and its order are as they were. Phase 3 replaces all of it
-with ElementTree, so it is moved faithfully rather than tidied.
+This is the import command's descriptor walk, moved here from the command
+without changing what it accepts: every dpath call, every deletion and its
+order are as they were. It exists only until the parser moves to ElementTree
+(see docs/plans/PLAN-ovf-parser.md), which replaces all of it, so it is moved
+faithfully rather than tidied.
 
 The walk parses by consumption. Each section it understands is deleted from
 the parsed descriptor as it is read, and anything left at the end is refused.

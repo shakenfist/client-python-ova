@@ -1,7 +1,8 @@
 """The manifest parser.
 
-This is the import command's manifest loop, moved here in phase 2 of
-docs/plans/PLAN-ovf-parser.md without changing what it accepts.
+This is the import command's manifest loop, moved here from the
+command without changing what it accepts. The parser will later read the manifest
+by the rules in docs/plans/PLAN-ovf-parser.md; until then it is as the command had it.
 """
 
 import re
