@@ -7,6 +7,10 @@ None or an empty list. See docs/plans/PLAN-ovf-parser.md. Each class lists its
 required fields first, because a dataclass refuses a field without a default
 after one with a default; to_json sorts keys, so the order never reaches an
 expected file.
+
+While the parser still walks xmltodict's output, a field typed str may hold
+None when the walk did not refuse that value's absence. Once the parser moves
+to ElementTree, a missing required value is refused instead.
 """
 
 import dataclasses

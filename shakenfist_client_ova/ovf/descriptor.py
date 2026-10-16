@@ -113,9 +113,12 @@ def _parse(data):
         raise MalformedDescriptorError(f'The descriptor is not well-formed XML: {e}') from None
     except ValueError as e:
         # xmltodict refuses an entity declaration with ValueError('entities are
-        # disabled'). Any other ValueError is not that refusal, and is left to
-        # parse_descriptor to report as an unsupported descriptor.
-        if 'entit' not in str(e):
+        # disabled'), and this matches exactly that message. Any other ValueError
+        # is not that refusal, and is left to parse_descriptor to report as an
+        # unsupported descriptor. The xmltodict version is pinned in
+        # tools/pinned-requirements.txt, so a reworded message shows up as a
+        # reviewed golden-file change rather than as a silent mismatch.
+        if str(e) != 'entities are disabled':
             raise
         raise EntityDeclarationError(f'The descriptor declares an entity, which is refused: {e}') from None
 

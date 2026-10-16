@@ -25,7 +25,6 @@ ALLOWED_IMPORTS = frozenset([
     'math',
     're',
     'typing',
-    'xml',
 
     # Third-party parsing dependencies.
     'defusedxml',
@@ -34,6 +33,11 @@ ALLOWED_IMPORTS = frozenset([
     'dpath',
     'xmltodict',
 ])
+
+# The only parts of the standard library's xml package ovf/ may import, by full dotted name: xml.parsers.expat for
+# ExpatError (and xml.parsers, which holds only expat, for "from xml.parsers import expat"). Every other xml module is
+# a stdlib parser which bypasses defusedxml's protections, so the package is not allowed as a whole.
+ALLOWED_XML_MODULES = frozenset(['xml.parsers', 'xml.parsers.expat'])
 
 # The command's dependencies, refused by a rule of their own so that the
 # failure says what broke rather than that something is not on a list.
@@ -64,9 +68,15 @@ def forbidden_imports(tree):
 
 
 def unlisted_imports(tree):
-    return ['line %d: imports %s, which is not on the allow-list' % (lineno, module)
-            for lineno, module in _imports(tree)
-            if _top_level(module) not in ALLOWED_IMPORTS and _top_level(module) not in FORBIDDEN_IMPORTS]
+    problems = []
+    for lineno, module in _imports(tree):
+        if _top_level(module) == 'xml':
+            if module not in ALLOWED_XML_MODULES:
+                problems.append('line %d: imports %s; XML parsing must come through defusedxml, and only '
+                                'xml.parsers.expat is allowed from the xml package' % (lineno, module))
+        elif _top_level(module) not in ALLOWED_IMPORTS and _top_level(module) not in FORBIDDEN_IMPORTS:
+            problems.append('line %d: imports %s, which is not on the allow-list' % (lineno, module))
+    return problems
 
 
 def print_or_exit_calls(tree):
@@ -152,10 +162,18 @@ class CheckerTestCase(testtools.TestCase):
         tree = self._tree('\n'.join([
             'import json', 'from typing import List', 'import csv', 'from defusedxml import ElementTree',
             'import dpath.exceptions', 'from . import errors', 'from .model import Envelope',
-            'from xml.parsers.expat import ExpatError']))
+            'from xml.parsers.expat import ExpatError', 'import xml.parsers.expat',
+            'from xml.parsers import expat']))
         # csv is the standard library, but not used, so not listed.
         self.assertEqual(['line 3: imports csv, which is not on the allow-list'], unlisted_imports(tree))
         self.assertEqual([], forbidden_imports(tree))
+
+    def test_other_xml_parsers_are_refused(self):
+        for source in ('import xml.etree.ElementTree', 'from xml.dom import minidom', 'import xml.sax', 'import xml',
+                       'from xml import etree'):
+            problems = unlisted_imports(self._tree(source))
+            self.assertEqual(1, len(problems), source)
+            self.assertIn('must come through defusedxml', problems[0], source)
 
     def test_print_or_exit(self):
         for source in ('print("x")', 'def f():\n    exit(1)', 'quit()', 'sys.exit(1)', 'os._exit(1)',

@@ -55,7 +55,7 @@ def _walk(root, suffix):
 
 def descriptor_paths(root=FIXTURE_ROOT):
     """Every .ovf file under root, sorted."""
-    return [p for p in _walk(root, '.ovf')]
+    return _walk(root, '.ovf')
 
 
 def expected_paths(root=FIXTURE_ROOT):
