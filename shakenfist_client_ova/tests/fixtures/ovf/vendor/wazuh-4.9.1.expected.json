@@ -1,0 +1,71 @@
+{
+  "deployment_options": [],
+  "disks": [
+    {
+      "capacity_bytes": 53687091200,
+      "disk_id": "vmdisk1",
+      "file_ref": "file1",
+      "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+      "interface": null,
+      "populated_size": null
+    }
+  ],
+  "files": [
+    {
+      "chunk_size": null,
+      "compression": null,
+      "href": "wazuh-4.9.1-disk-1.vmdk",
+      "id": "file1",
+      "size": null
+    }
+  ],
+  "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+  "networks": [
+    {
+      "description": "The VM Network network",
+      "name": "VM Network"
+    }
+  ],
+  "version": null,
+  "virtual_system": {
+    "description": null,
+    "eulas": [],
+    "hardware": [
+      {
+        "controllers": [
+          {
+            "bus": "ide",
+            "instance_id": "3"
+          },
+          {
+            "bus": "ide",
+            "instance_id": "4"
+          }
+        ],
+        "disk_drives": [
+          {
+            "address_on_parent": 0,
+            "element_name": "Hard Disk 1",
+            "host_resource": null,
+            "parent": "4"
+          }
+        ],
+        "memory_bytes": 8589934592,
+        "nics": [
+          {
+            "connection": "VM Network",
+            "resource_subtype": "E1000"
+          }
+        ],
+        "system_identifier": null,
+        "system_type": null,
+        "transport": [],
+        "vcpus": 4
+      }
+    ],
+    "id": "Wazuh v4.9.1 OVA",
+    "name": null,
+    "operating_system": null,
+    "products": []
+  }
+}

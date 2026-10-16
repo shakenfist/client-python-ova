@@ -1,0 +1,67 @@
+{
+  "deployment_options": [],
+  "disks": [
+    {
+      "capacity_bytes": 10737418240,
+      "disk_id": "vmdisk1",
+      "file_ref": "file1",
+      "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+      "interface": null,
+      "populated_size": null
+    }
+  ],
+  "files": [
+    {
+      "chunk_size": null,
+      "compression": null,
+      "href": "../disk1.vmdk",
+      "id": "file1",
+      "size": null
+    }
+  ],
+  "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+  "networks": [
+    {
+      "description": "The VM Network network",
+      "name": "VM Network"
+    }
+  ],
+  "version": "1.0",
+  "virtual_system": {
+    "description": null,
+    "eulas": [],
+    "hardware": [
+      {
+        "controllers": [
+          {
+            "bus": "scsi",
+            "instance_id": "3"
+          }
+        ],
+        "disk_drives": [
+          {
+            "address_on_parent": 0,
+            "element_name": "Hard disk 1",
+            "host_resource": null,
+            "parent": "3"
+          }
+        ],
+        "memory_bytes": 1073741824,
+        "nics": [
+          {
+            "connection": "VM Network",
+            "resource_subtype": "E1000"
+          }
+        ],
+        "system_identifier": null,
+        "system_type": null,
+        "transport": [],
+        "vcpus": 1
+      }
+    ],
+    "id": "example-vm",
+    "name": null,
+    "operating_system": null,
+    "products": []
+  }
+}

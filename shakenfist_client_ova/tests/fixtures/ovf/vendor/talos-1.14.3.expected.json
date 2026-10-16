@@ -1,0 +1,4 @@
+{
+  "error": "UnparsedContentError",
+  "message_contains": "Not all of the OVF file was parsed"
+}
