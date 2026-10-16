@@ -4,3 +4,8 @@
 # git never converts their line endings. Any whitespace or end-of-file
 # hook added to pre-commit must exclude this directory too.
 shakenfist_client_ova/tests/fixtures/** -text
+# The corpus tier's ledger and curated files are generated and compared
+# byte for byte. They hold LF line endings, tabs and non-ASCII paths,
+# which line-ending conversion must not touch.
+shakenfist_client_ova/corpus_tests/*.txt -text
+shakenfist_client_ova/corpus_tests/*.json -text

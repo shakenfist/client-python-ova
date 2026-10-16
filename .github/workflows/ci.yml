@@ -1,9 +1,13 @@
 # CI for the OVA client plugin.
 #
-# One job, because there is one gate's worth of work: the pre-commit
-# hooks, the unit tests and a package build. All three run on a static
-# runner -- nothing here installs an OS package or otherwise changes the
-# machine, so nothing needs a throwaway VM.
+# Two jobs, because there are two kinds of work with different needs:
+# lint-and-build is the pre-commit hooks, the unit tests and a package
+# build, which need nothing but the repository; descriptor-corpus runs
+# the test tier that fetches two upstream descriptor collections over
+# the network, which is slower and can fail for reasons outside the
+# change, so it reports separately. Both run on a static runner --
+# nothing here installs an OS package or otherwise changes the machine,
+# so nothing needs a throwaway VM.
 #
 # That argument is about cost, not safety. Everything below executes
 # code the pull request controls: pre-commit runs the hooks its own
@@ -13,7 +17,7 @@
 # acceptable is a repository setting rather than anything in this file
 # -- Settings > Actions requires approval for all external
 # contributors, so a fork's workflows do not run until a maintainer has
-# looked. If that setting is ever relaxed, this job belongs on the
+# looked. If that setting is ever relaxed, these jobs belong on the
 # throwaway vm pool, as secret-scan.yml already is.
 name: CI
 
@@ -86,7 +90,47 @@ jobs:
         run: |
           rm -rf "${RUNNER_TEMP}/venv-ci" "${RUNNER_TEMP}/dist"
 
-  # The automatic review, gated on the job above passing: a job skipped
+  descriptor-corpus:
+    name: Descriptor corpus
+    runs-on: [self-hosted, static]
+    timeout-minutes: 15
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-descriptor-corpus
+      cancel-in-progress: true
+
+    steps:
+      # fetch-depth: 0 so setuptools_scm can derive the version when tox
+      # builds the package.
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # A venv under $RUNNER_TEMP for the reasons given in lint-and-build,
+      # with its own name so the two jobs never share a path.
+      - name: Install tox
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/venv-corpus"
+          "${RUNNER_TEMP}/venv-corpus/bin/pip" install --quiet \
+              --disable-pip-version-check tox
+
+      - name: Put the venv on PATH
+        run: echo "${RUNNER_TEMP}/venv-corpus/bin" >> "${GITHUB_PATH}"
+
+      # This fetches two upstream descriptor collections from github.com
+      # at pinned commits, about 30MB. actions/checkout's clean removes
+      # the gitignored cache, so each run fetches afresh. That is
+      # accepted rather than cached.
+      - name: Run the descriptor corpus tests
+        run: |
+          tox -edescriptor-corpus
+
+      - name: Clean up
+        if: always()
+        run: |
+          rm -rf "${RUNNER_TEMP}/venv-corpus"
+
+  # The automatic review, gated on both jobs above passing: a job skipped
   # because a dependency failed never starts the reusable workflow, so
   # the needs list is the CI-passed gate.
   #
@@ -98,7 +142,7 @@ jobs:
   # pull request, so push and dispatch runs skip it.
   automated_reviewer:
     name: "Automated reviewer"
-    needs: [lint-and-build]
+    needs: [lint-and-build, descriptor-corpus]
     permissions:
       contents: read
       pull-requests: write
