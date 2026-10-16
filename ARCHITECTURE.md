@@ -81,8 +81,9 @@ the parser uses, the ones it deliberately leaves unused and the few it
 refuses because they change what the guest sees. `ovf/quirks.py` lists
 the producer deviations from the schema that the parser accepts
 (VirtualBox's `.xsd`-suffixed CIM namespaces, the `InstanceId`
-spelling, VMware's unqualified attributes, and a drive's disk
-reference without its `ovf:` prefix), each with its evidence. What is
+spelling, VMware's unqualified attributes, a drive's disk reference
+without its `ovf:` prefix, and the non-standard `ovf:boot` on a disk,
+read from Home Assistant OS's build), each with its evidence. What is
 not yet read is tracked as Future work in [the OVF parser
 plan](docs/plans/PLAN-ovf-parser.md).
 

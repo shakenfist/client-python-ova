@@ -39,6 +39,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 8589934592,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -124,6 +125,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 1073741824,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -352,6 +354,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 5368709120,
         "disk_id": "vmdisk_data",
         "file_ref": null,
@@ -429,6 +432,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 18253611008,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -578,6 +582,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 41943040,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -716,6 +721,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 1073741824,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -725,6 +731,7 @@
         "populated_size": null
       },
       {
+        "boot": null,
         "capacity_bytes": 1073741824,
         "disk_id": "vmdisk2",
         "file_ref": "file2",
@@ -734,6 +741,7 @@
         "populated_size": null
       },
       {
+        "boot": null,
         "capacity_bytes": 1073741824,
         "disk_id": "vmdisk3",
         "file_ref": "file3",
@@ -866,6 +874,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 329197568,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -933,6 +942,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 17179869184,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -1014,6 +1024,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 104857600,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -1085,6 +1096,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 1073741824,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -1169,6 +1181,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 4194304,
         "disk_id": "vmdisk-fe8bebf7-fbc9-4e7b-8878-fcf25dc1be55-2000",
         "file_ref": "file-fe8bebf7-fbc9-4e7b-8878-fcf25dc1be55-2000",
@@ -1250,6 +1263,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 107373568,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -1331,6 +1345,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 107373568,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -1340,6 +1355,7 @@
         "populated_size": null
       },
       {
+        "boot": null,
         "capacity_bytes": 107373568,
         "disk_id": "vmdisk2",
         "file_ref": "file2",
@@ -1349,6 +1365,7 @@
         "populated_size": null
       },
       {
+        "boot": null,
         "capacity_bytes": 107373568,
         "disk_id": "vmdisk3",
         "file_ref": "file3",
@@ -1456,6 +1473,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 2097152,
         "disk_id": "vmdisk-81303793-ff25-4064-af00-ba49d67ca65b-2000",
         "file_ref": "file-81303793-ff25-4064-af00-ba49d67ca65b-2000",
@@ -1557,6 +1575,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 329197568,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -1660,6 +1679,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 107373568,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -1745,6 +1765,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 1073741824,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -2077,6 +2098,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 1073741824,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -2420,6 +2442,7 @@
     ],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 21474836480,
         "disk_id": "vmdisk1",
         "file_ref": "file1",
@@ -2429,6 +2452,7 @@
         "populated_size": null
       },
       {
+        "boot": null,
         "capacity_bytes": 5368709120,
         "disk_id": "vmdisk2",
         "file_ref": null,
@@ -2592,6 +2616,7 @@
     "deployment_options": [],
     "disks": [
       {
+        "boot": null,
         "capacity_bytes": 34359738368,
         "disk_id": "vmdisk1",
         "file_ref": "file1",

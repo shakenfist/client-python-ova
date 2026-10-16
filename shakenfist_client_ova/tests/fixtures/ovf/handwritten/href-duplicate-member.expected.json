@@ -2,6 +2,7 @@
   "deployment_options": [],
   "disks": [
     {
+      "boot": null,
       "capacity_bytes": 10737418240,
       "disk_id": "vmdisk1",
       "file_ref": "file1",
@@ -11,6 +12,7 @@
       "populated_size": null
     },
     {
+      "boot": null,
       "capacity_bytes": 10737418240,
       "disk_id": "vmdisk2",
       "file_ref": "file2",

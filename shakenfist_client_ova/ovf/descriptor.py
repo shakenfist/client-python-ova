@@ -344,6 +344,18 @@ def _boolean_attribute(node, name, default):
     return result
 
 
+def _disk_boot(node):
+    """The producer's boot-disk mark (see quirks.DISK_BOOT_ATTRIBUTE): true or false in any case, or None if absent."""
+    value = node.attribute(quirks.DISK_BOOT_ATTRIBUTE)
+    if value is None:
+        return None
+    result = {'true': True, 'false': False}.get(value.strip().lower())
+    if result is None:
+        raise InvalidValueError('%s is "%s", which is neither true nor false' % (
+            node.describe('@' + quirks.DISK_BOOT_ATTRIBUTE), value))
+    return result
+
+
 def _bytes_per_unit(text, where):
     try:
         return units.bytes_per_unit(text)
@@ -622,7 +634,8 @@ def _read_disks(envelope, files, property_values, excluded_properties):
             file_ref=file_ref,
             format=node.attribute('ovf:format'),
             populated_size=_integer_attribute(node, 'ovf:populatedSize'),
-            parent_ref=node.attribute('ovf:parentRef')))
+            parent_ref=node.attribute('ovf:parentRef'),
+            boot=_disk_boot(node)))
     return disks
 
 

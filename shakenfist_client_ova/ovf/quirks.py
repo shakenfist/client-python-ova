@@ -65,3 +65,15 @@ HOST_RESOURCE_PREFIXES = ('ovf:', '')
 # resource type CIM does not define. A descriptor that declares this namespace
 # anywhere is refused as an oVirt export rather than read in part.
 OVIRT_NAMESPACE = namespaces.OVIRT
+
+# The attribute in which a producer marks a disk as the boot disk. The
+# specification does not define it, but the parser reads it into Disk.boot
+# rather than refusing it; every other undefined attribute in an OVF namespace
+# is still refused. The Home Assistant OS OVA build writes it on its one disk
+# (tests/fixtures/ovf/vendor/home-assistant-os-18.3.ovf), capitalised as
+# "True". oVirt writes it on its disks too (the Oracle Linux 9.8 OLVM template,
+# tests/fixtures/ovf/vendor/oracle-linux-9.8-olvm.ovf), though that export is
+# refused as an oVirt export all the same. No descriptor in the upstream corpus
+# carries it. Its value is read as true or false in any case, because of the
+# capital.
+DISK_BOOT_ATTRIBUTE = 'ovf:boot'

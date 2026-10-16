@@ -2,6 +2,7 @@
   "deployment_options": [],
   "disks": [
     {
+      "boot": null,
       "capacity_bytes": 64424509440,
       "disk_id": "vmdisk1",
       "file_ref": "file1",

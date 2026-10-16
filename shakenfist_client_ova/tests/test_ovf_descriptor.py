@@ -213,6 +213,23 @@ class BasicsTestCase(DescriptorTestCase):
              ovf.Disk(disk_id='delta', capacity_bytes=1, parent_ref='vmdisk1')],
             parse(disks=disks).disks)
 
+    def test_disk_boot_is_read_in_any_case(self):
+        attributes = (' ovf:boot="True"', ' ovf:boot="false"', ' ovf:boot="TRUE"', '')
+        disks = ''.join('<Disk ovf:diskId="vmdisk%d" ovf:capacity="1"%s/>' % (i + 1, attribute)
+                        for i, attribute in enumerate(attributes))
+        self.assertEqual([True, False, True, None], [disk.boot for disk in parse(disks=disks).disks])
+
+    def test_unqualified_disk_boot_follows_the_unqualified_attribute_rule(self):
+        disks = '<Disk ovf:diskId="vmdisk1" ovf:capacity="1" boot="true"/>'
+        self.assertTrue(parse(disks=disks).disks[0].boot)
+
+    def test_disk_boot_must_be_true_or_false(self):
+        for value in ('yes', '1', ''):
+            self.assertRefused(
+                ovf.InvalidValueError, 'Envelope/DiskSection/Disk@ovf:boot is "%s", which is neither true nor false'
+                % value,
+                descriptor(disks='<Disk ovf:diskId="vmdisk1" ovf:capacity="1" ovf:boot="%s"/>' % value))
+
     def test_empty_references_and_no_disk_or_network_section(self):
         data = descriptor(files='', disks='', items=CPU + MEMORY)
         data = re.sub(rb'<DiskSection>.*?</DiskSection>|<NetworkSection>.*?</NetworkSection>', b'', data, flags=re.S)
@@ -355,9 +372,9 @@ class StrictnessTestCase(DescriptorTestCase):
 
     def test_ovf_and_cim_namespace_attributes_are_refused(self):
         self.assertUnread(
-            ['Envelope/DiskSection/Disk@ovf:boot',
+            ['Envelope/DiskSection/Disk@ovf:bogus',
              'Envelope/VirtualSystem/VirtualHardwareSection/Item/rasd:ElementName@rasd:bogus'],
-            descriptor(disks='<Disk ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:capacity="1" ovf:boot="true"/>',
+            descriptor(disks='<Disk ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:capacity="1" ovf:bogus="true"/>',
                        items=item(3, ('VirtualQuantity', '1'),
                                   extra='<rasd:ElementName rasd:bogus="1">CPU</rasd:ElementName>')))
 
@@ -368,8 +385,8 @@ class StrictnessTestCase(DescriptorTestCase):
 
     def test_unqualified_attribute_not_read_is_refused(self):
         self.assertUnread(
-            ['Envelope/DiskSection/Disk@boot', 'Envelope/VirtualSystem@bogus'],
-            descriptor(disks='<Disk ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:capacity="1" boot="true"/>',
+            ['Envelope/DiskSection/Disk@bogus', 'Envelope/VirtualSystem@bogus'],
+            descriptor(disks='<Disk ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:capacity="1" bogus="true"/>',
                        system_attributes=' bogus="1"'))
 
     def test_both_forms_of_an_attribute_are_refused(self):
@@ -787,6 +804,6 @@ class OvirtTestCase(DescriptorTestCase):
         for caption in (b'Graphical Controller', b'Drive: 1'):
             stripped = re.sub(rb'<Item>\s*<rasd:Caption>' + caption + rb'.*?</Item>', b'', stripped, flags=re.S)
         e = self.assertRefused(ovf.UnparsedContentError, 'does not understand', stripped)
-        for path in ('Envelope/DiskSection/Disk@ovf:boot', 'Envelope/DiskSection/Disk@ovf:disk-interface',
+        for path in ('Envelope/DiskSection/Disk@ovf:disk-interface',
                      'Envelope/VirtualSystem/ClusterCompatibilityVersion'):
             self.assertIn('\n    %s\n' % path, str(e))

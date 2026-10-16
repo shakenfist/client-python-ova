@@ -1,4 +1,87 @@
 {
-  "error": "UnparsedContentError",
-  "message_contains": "Envelope/DiskSection/Disk@ovf:boot"
+  "deployment_options": [],
+  "disks": [
+    {
+      "boot": true,
+      "capacity_bytes": 34359738368,
+      "disk_id": "vmdisk1",
+      "file_ref": "file1",
+      "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+      "interface": null,
+      "parent_ref": null,
+      "populated_size": null
+    }
+  ],
+  "files": [
+    {
+      "chunk_size": null,
+      "compression": null,
+      "href": "home-assistant.vmdk",
+      "id": "file1",
+      "size": null
+    }
+  ],
+  "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+  "networks": [
+    {
+      "description": "Logical network used by this appliance.",
+      "name": "Bridged"
+    }
+  ],
+  "version": "1.0",
+  "virtual_system": {
+    "description": null,
+    "eulas": [],
+    "hardware": [
+      {
+        "controllers": [
+          {
+            "bus": "scsi",
+            "instance_id": "3"
+          }
+        ],
+        "disk_drives": [
+          {
+            "address_on_parent": 0,
+            "element_name": "disk1",
+            "host_resource": "/disk/vmdisk1",
+            "parent": "3"
+          }
+        ],
+        "memory_bytes": 2147483648,
+        "nics": [
+          {
+            "connection": "Bridged",
+            "resource_subtype": "E1000"
+          }
+        ],
+        "system_identifier": "Home Assistant",
+        "system_type": "vmx-10",
+        "transport": [],
+        "vcpus": 2
+      }
+    ],
+    "id": "HomeAssistant",
+    "name": "Home Assistant",
+    "operating_system": {
+      "description": "Linux",
+      "id": 102,
+      "os_type": "otherGuest64",
+      "version": null
+    },
+    "products": [
+      {
+        "app_url": null,
+        "full_version": null,
+        "instance": null,
+        "product": "TRIMMED",
+        "product_class": null,
+        "product_url": "TRIMMED",
+        "properties": [],
+        "vendor": null,
+        "vendor_url": null,
+        "version": null
+      }
+    ]
+  }
 }

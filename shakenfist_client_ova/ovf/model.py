@@ -34,6 +34,10 @@ class Disk:                                     # DiskSection/Disk
     populated_size: Optional[int] = None        # ovf:populatedSize
     parent_ref: Optional[str] = None            # ovf:parentRef: the diskId of a delta disk's parent
     interface: Optional[str] = None             # never filled: oVirt's ovf:disk-interface, for an oVirt reader
+    # The disk the producer marks as the boot disk, from the non-standard
+    # ovf:boot, which the specification does not define. None means the
+    # descriptor does not say.
+    boot: Optional[bool] = None
 
 
 @dataclass

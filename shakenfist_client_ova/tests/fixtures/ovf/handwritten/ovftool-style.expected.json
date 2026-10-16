@@ -15,6 +15,7 @@
   ],
   "disks": [
     {
+      "boot": null,
       "capacity_bytes": 10737418240,
       "disk_id": "vmdisk1",
       "file_ref": "file1",

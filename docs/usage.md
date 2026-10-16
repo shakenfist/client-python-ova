@@ -18,22 +18,22 @@ with `--namespace <name>`.
    `SHA256(...) = ...` line is parsed and the hash recorded against
    its file. A manifest line that does not parse stops the import.
    The hashes are not yet checked against the disk images.
-3. **Parses the OVF descriptor.** The descriptor is read for:
-   the envelope's OVF version; its files; its disks and their
-   capacities (DSP0004 units, with `${property}` capacities
-   resolved); its networks; its deployment options, where the
-   default configuration is applied; the virtual system's id and
-   name; the operating system; products and their properties;
-   licences; and virtual hardware. Hardware means vCPUs, memory,
-   IDE, SCSI, SATA and NVMe controllers, network interfaces, which
-   disk sits on which controller, the system type and the transport.
-   Floppy, CD and DVD drives, USB, video and sound are recognised
-   and left to the instance's defaults. Once it has parsed, the
-   command prints a "VM description:" summary of what it found. If
-   the descriptor carries a licence, the command prints it and
-   stops unless you pass `--accept-eula`. If it has user-configurable
-   properties with no value, the command warns once that Shaken Fist
-   cannot deliver an OVF environment yet.
+3. **Parses the OVF descriptor.** The descriptor is read for: the
+   envelope's OVF version; its files; its disks and their capacities
+   (DSP0004 units, with `${property}` capacities resolved) and the
+   disk the producer marks as the boot disk; its networks; its
+   deployment options, where the default configuration is applied; the
+   virtual system's id and name; the operating system; products and
+   their properties; licences; and virtual hardware. Hardware means
+   vCPUs, memory, IDE, SCSI, SATA and NVMe controllers, network
+   interfaces, which disk sits on which controller, the system type
+   and the transport. Floppy, CD and DVD drives, USB, video and sound
+   are recognised and left to the instance's defaults. Once it has
+   parsed, the command prints a "VM description:" summary of what it
+   found. If the descriptor carries a licence, the command prints it
+   and stops unless you pass `--accept-eula`. If it has
+   user-configurable properties with no value, the command warns once
+   that Shaken Fist cannot deliver an OVF environment yet.
 4. **Uploads the disks.** Each `.vmdk` is uploaded to the cluster as a
    blob and wrapped in an artifact named after the virtual machine,
    with a source URL of `ova://<path to the OVA>/<disk name>`. Where
@@ -89,9 +89,11 @@ partly understood would otherwise become an instance that is subtly
 different from the appliance its author built. Some producers write
 descriptors that deviate from the schema; the parser accepts the known
 ones (VirtualBox's `.xsd`-suffixed CIM namespaces, `InstanceId` for
-`InstanceID`, VMware's unqualified attributes, and a drive's disk
-reference written without its `ovf:` prefix). The plan for what
-remains is in [the OVF parser plan](plans/PLAN-ovf-parser.md).
+`InstanceID`, VMware's unqualified attributes, a drive's disk
+reference written without its `ovf:` prefix, and the non-standard
+`ovf:boot` on a disk, read from Home Assistant OS's build). The plan
+for what remains is in [the OVF parser
+plan](plans/PLAN-ovf-parser.md).
 
 ## Standards
 

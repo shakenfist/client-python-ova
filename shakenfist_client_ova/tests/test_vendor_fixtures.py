@@ -249,6 +249,45 @@ class VendorFixtureTestCase(testtools.TestCase):
         self.assertEqual('vmx-13', hardware.system_type)
         self.assertEqual(['com.vmware.guestInfo'], hardware.transport)
 
+    def test_home_assistant_os_18_3(self):
+        # Home Assistant OS's OVA build: a VMware-style descriptor from VirtualBox's export, with the
+        # non-standard ovf:boot on its disk, written "True".
+        envelope = parse('home-assistant-os-18.3')
+        self.assertEqual(OVF_1, envelope.namespace)
+        self.assertEqual('1.0', envelope.version)
+        self.assertEqual([ovf.File(id='file1', href='home-assistant.vmdk')], envelope.files)
+        # No capacityAllocationUnits, so the capacity is in bytes: 32 GiB.
+        self.assertEqual(
+            [ovf.Disk(disk_id='vmdisk1', capacity_bytes=34359738368, file_ref='file1', format=STREAM_OPTIMIZED,
+                      boot=True)],
+            envelope.disks)
+        self.assertEqual(
+            [ovf.Network(name='Bridged', description='Logical network used by this appliance.')], envelope.networks)
+        self.assertEqual([], envelope.deployment_options)
+
+        system = envelope.virtual_system
+        self.assertEqual('HomeAssistant', system.id)
+        self.assertEqual('Home Assistant', system.name)
+        # vmw:osType is the only osType given.
+        self.assertEqual(
+            ovf.OperatingSystem(id=102, os_type='otherGuest64', description='Linux'), system.operating_system)
+        self.assertEqual(1, len(system.products))
+        self.assertEqual([], system.products[0].properties)
+        self.assertEqual([], system.eulas)
+
+        hardware = self.only_hardware(envelope)
+        self.assertEqual(2, hardware.vcpus)
+        self.assertEqual(2147483648, hardware.memory_bytes)    # 2048 MegaBytes, 2048 x 2^20
+        # The USB controller, resource type 23, and the sound card, resource type 1, are marked not required.
+        self.assertEqual([ovf.Controller(instance_id='3', bus='scsi')], hardware.controllers)
+        self.assertEqual(
+            [ovf.DiskDrive(parent='3', address_on_parent=0, element_name='disk1', host_resource='/disk/vmdisk1')],
+            hardware.disk_drives)
+        self.assertEqual([ovf.Nic(resource_subtype='E1000', connection='Bridged')], hardware.nics)
+        self.assertEqual([], hardware.transport)
+        self.assertEqual('vmx-10', hardware.system_type)
+        self.assertEqual('Home Assistant', hardware.system_identifier)
+
     def test_photon_3_0_hw11(self):
         envelope = parse('photon-3.0-hw11')
         self.assertEqual(OVF_1, envelope.namespace)
@@ -595,6 +634,6 @@ class VendorFixtureTestCase(testtools.TestCase):
                 except ovf.OVFError:
                     continue
                 parsing.append('test_' + name.replace('.', '_').replace('-', '_'))
-        self.assertEqual(13, len(parsing))
+        self.assertEqual(14, len(parsing))
         missing = [name for name in parsing if not hasattr(self, name)]
         self.assertEqual([], sorted(missing))

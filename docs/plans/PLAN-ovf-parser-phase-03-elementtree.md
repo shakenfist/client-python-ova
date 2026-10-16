@@ -567,12 +567,17 @@ Phase 3 ran on 2026-10-17. Where it departed from the text above:
   * An unknown declared encoding is a `MalformedDescriptorError`.
   * An `UnparsedContentError` message is a heading and one unread path
     per line, not one line. The command tests allow for that.
-* **Vendor outcomes: 13 models, not 14.** Home Assistant OS 18.3 is
-  refused with `UnparsedContentError` for `Disk@ovf:boot="True"`, an
-  attribute in the OVF namespace that the schema does not define. It
-  was refused before, for another reason, so this is not a
-  regression. Whether to accept it as a producer quirk is left to the
-  operator; see "Found and left for later".
+* **Vendor outcomes: 14 models, as planned.** Home Assistant OS 18.3
+  carries `ovf:boot="True"` on its disk, an attribute in the OVF
+  namespace that the schema does not define; oVirt writes it too. The
+  parser first refused it with `UnparsedContentError`. The operator
+  decided to read it into a new `Disk.boot` field, so that instance
+  creation can know which disk the producer marks as the boot disk.
+  It is a named quirk in `ovf/quirks.py`, read as `true` or `false` in
+  any case because Home Assistant OS capitalises it, and any other
+  value is an `InvalidValueError`. Every other undefined attribute in
+  an OVF namespace is still refused. No upstream corpus descriptor
+  carries it, so the ledger did not change.
 * **Seven upstream descriptors went from a model to a refusal,** each by
   a stated rule. Five NVDIMM descriptors carry a required type 20 item
   of a subtype the parser refuses (decision 5). Two 2009 ovftool
@@ -602,6 +607,5 @@ Phase 3 ran on 2026-10-17. Where it departed from the text above:
   | `UnsupportedHardwareError` | 6 |
   | `BrokenReferenceError` | 4 |
 * **Found and left for later:**
-  * Home Assistant OS's `ovf:boot`, above.
   * A drive's disk reference is checked, but the model does not link
     drives to disks by id. Instance creation will want that link.
