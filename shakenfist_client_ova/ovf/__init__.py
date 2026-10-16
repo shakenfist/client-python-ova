@@ -13,6 +13,8 @@ from .errors import (
 from .model import (
     Controller, DeploymentOption, Disk, DiskDrive, Envelope, Eula, File, Manifest, ManifestEntry, Network, Nic,
     OperatingSystem, Product, Property, to_json, VirtualHardware, VirtualSystem)
+from .descriptor import parse_descriptor
+from .manifest import parse_manifest
 
 
 __all__ = [
@@ -22,4 +24,6 @@ __all__ = [
     # model.py
     'Controller', 'DeploymentOption', 'Disk', 'DiskDrive', 'Envelope', 'Eula', 'File', 'Manifest', 'ManifestEntry',
     'Network', 'Nic', 'OperatingSystem', 'Product', 'Property', 'to_json', 'VirtualHardware', 'VirtualSystem',
+    # descriptor.py and manifest.py
+    'parse_descriptor', 'parse_manifest',
 ]

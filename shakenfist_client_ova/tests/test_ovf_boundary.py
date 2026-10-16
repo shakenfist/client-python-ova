@@ -22,7 +22,10 @@ ALLOWED_IMPORTS = frozenset([
     # The standard library modules ovf/ uses.
     'dataclasses',
     'json',
+    'math',
+    're',
     'typing',
+    'xml',
 
     # Third-party parsing dependencies.
     'defusedxml',
@@ -108,7 +111,7 @@ class BoundaryTestCase(testtools.TestCase):
 
     def test_modules_found(self):
         names = [os.path.basename(path) for path in _modules()]
-        for expected in ('__init__.py', 'errors.py', 'model.py', 'prose.py'):
+        for expected in ('__init__.py', 'descriptor.py', 'errors.py', 'manifest.py', 'model.py', 'prose.py'):
             self.assertIn(expected, names)
 
     def test_never_imports_the_command_dependencies(self):
@@ -147,10 +150,11 @@ class CheckerTestCase(testtools.TestCase):
 
     def test_allowed_imports(self):
         tree = self._tree('\n'.join([
-            'import json', 'from typing import List', 'import xml', 'from defusedxml import ElementTree',
-            'import dpath.exceptions', 'from . import errors', 'from .model import Envelope']))
-        # xml is the standard library, but not yet used, so not yet listed.
-        self.assertEqual(['line 3: imports xml, which is not on the allow-list'], unlisted_imports(tree))
+            'import json', 'from typing import List', 'import csv', 'from defusedxml import ElementTree',
+            'import dpath.exceptions', 'from . import errors', 'from .model import Envelope',
+            'from xml.parsers.expat import ExpatError']))
+        # csv is the standard library, but not used, so not listed.
+        self.assertEqual(['line 3: imports csv, which is not on the allow-list'], unlisted_imports(tree))
         self.assertEqual([], forbidden_imports(tree))
 
     def test_print_or_exit(self):
