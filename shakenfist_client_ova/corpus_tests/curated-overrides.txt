@@ -1,0 +1,9 @@
+# Reviewer overrides to curated.txt, applied by tools/classify-ovf-corpus.py.
+#
+# Each line is +NAME:PATH (add a descriptor) or -NAME:PATH (drop one), then a
+# single TAB, then the reason. A tab separates them because upstream paths
+# contain spaces. PATH is relative to the pinned subdirectory, as in
+# curated.txt. Blank lines and lines starting with # are ignored.
+#
+# Never edit curated.txt by hand: it is exactly the tool's output. See the
+# tool's docstring for the command which regenerates it.

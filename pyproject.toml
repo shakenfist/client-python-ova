@@ -63,7 +63,7 @@ include-package-data = false
 
 [tool.setuptools.packages.find]
 include = ["shakenfist_client_ova*"]
-exclude = ["shakenfist_client_ova.tests*"]
+exclude = ["shakenfist_client_ova.tests*", "shakenfist_client_ova.corpus_tests*"]
 
 [tool.setuptools_scm]
 git_describe_command = "git describe --dirty --tags --match v* --first-parent"

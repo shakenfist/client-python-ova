@@ -144,3 +144,6 @@ shakenfist_client_ova/_version.py
 
 # macOS Finder metadata.
 .DS_Store
+
+# Upstream descriptor corpora, fetched by tools/fetch-descriptor-corpus.sh.
+.cache/
