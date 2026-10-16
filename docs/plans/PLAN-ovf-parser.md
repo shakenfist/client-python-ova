@@ -93,8 +93,12 @@ written against, in ways a survey of the code turned up:
    networks.
 6. **Smaller defects:** every disk artifact is given the VM's name;
    `print(hardware)` sits inside the per-disk upload loop; and the
-   descriptor, which comes from an untrusted file, is parsed with no
-   protection against entity-expansion attacks.
+   descriptor, which comes from an untrusted file, is protected
+   against entity-expansion attacks only by a default. `xmltodict`
+   0.12 and later refuse any entity declaration
+   (`disable_entities=True`), but the code does not ask for that, no
+   version floor guarantees it, and the refusal escapes as a
+   `ValueError` traceback.
 
 ### Test data
 
@@ -110,22 +114,72 @@ holds disks taken from three vendor
 OVAs: VyOS 1.2.1 and Splunk DCN 4.0.6, both written by VMware ovftool,
 and Wazuh 4.9.1, written by AWS VM Export. instar does not parse OVA,
 so only the disks were kept and the `.ovf` descriptors were thrown
-away. As a result there is no VMware-produced or AWS-produced
-descriptor anywhere we can test against. These public OVAs were
-confirmed downloadable on 2026-10-15:
+away.
 
-| Appliance | Source | Size |
-|-----------|--------|------|
-| Ubuntu 24.04 server cloud image | `cloud-images.ubuntu.com/releases/noble/release/` | 595MB |
-| Flatcar Container Linux, stable, VMware | `stable.release.flatcar-linux.net/amd64-usr/current/` | 590MB |
-| Fedora CoreOS, stable, VMware | `builds.coreos.fedoraproject.org`, via the stable stream's `vmware` artifact | 1.2GB |
-| Wazuh 4.9.1 | `packages.wazuh.com/4.x/vm/` | 3.95GB |
+A survey on 2026-10-16, the day after this plan was first written,
+looked for real descriptors and appliances to replace them. No
+maintained OVF compatibility corpus exists: DMTF publishes the
+specification and schemas but no conformance suite, and no OVF plugfest
+results turned up. What exists instead:
 
-Further candidates that have not been checked: VMware Photon OS, the
-GNS3 VM (VMware and VirtualBox variants), and TurnKey Linux. DMTF
-publishes the OVF 1.1 envelope schema at
-`schemas.dmtf.org/ovf/envelope/1/dsp8023_1.1.0.xsd`. The obvious URL
-for a 2.x schema returned 404.
+- **govmomi's descriptor collection.** `vmware/govmomi` (Apache-2.0)
+  carries 958 `.ovf` files under `ovf/fixtures/`, added in March 2026
+  and still maintained. Most sit in about 180 directories under
+  `external/` and are real exports from many products and years
+  (`OVFToolTemplates`, `MultiVmVapps`, `SignedOVF`, `VM_with_nvram`,
+  `NonAsciiChars`, Bitnami, Photon OS, SLES), alongside hand-made edge
+  cases and negative cases. It has descriptors only: no OVAs, no
+  manifests and no disks. The repository licence covers govmomi's
+  work, but the descriptors were written by many third parties and no
+  per-file licence is stated.
+- **Small fixture sets in other importers.** Glance's
+  `glance/tests/var/` has five small test OVAs under Apache-2.0: a
+  valid one (`testserver.ova`) and four negative cases
+  (`testserver-not-tar.ova`, `-no-ovf`, `-no-disk` and `-bad-ovf`).
+  COT's `COT/tests/` has ten trimmed descriptors and two manifests,
+  including OVF 0.9 and 2.0 and Cisco CSR1000v and IOSv appliances,
+  under MIT. virt-v2v (GPL), VirtualBox's ValidationKit (GPL) and
+  Proxmox's `ovf_manifests/` (AGPL) cannot be copied into an
+  Apache-2.0 repository, but their designs are worth borrowing:
+  virt-v2v pairs one tiny descriptor per feature with an expected
+  output, and Proxmox tests a descriptor with no default namespace.
+- **Public appliances.** These were confirmed downloadable, with no
+  login, on 2026-10-15 and 2026-10-16:
+
+| Appliance | Producer and shape | Size |
+|-----------|--------------------|------|
+| VyOS 1.2.1, `cdn.vyos.io/1.2.1.15500/vyos-1.2.1.ova` | ovftool, `.cert` member. Its disk is the one already in `instar-testdata` (`CID=9040bba6`); SHA-256 `fef225ae1f2aa21c1983e79f9cca7c1e575ca4e9984f9a2b2b67eecf8bffd16b` | 430MB |
+| Photon OS 3.0 hw11, `packages.broadcom.com/photon/3.0/GA/ova/` | ovftool 4.2.0, `.cert`, `EulaSection`, `ProductSection` | 162MB |
+| Photon OS 5.0 aarch64 UEFI hw14, `packages.broadcom.com/photon/5.0/GA/ova/` | ovftool 4.3.0, SHA256 manifest, `.cert`, `firmware=efi` | 294MB |
+| Talos v1.14.3, `factory.talos.dev`, `vmware-amd64.ova` | ovftool output edited by hand, SHA256 manifest | 234MB |
+| Oracle Linux 9.8 OLVM, `yum.oracle.com/templates/OracleLinux/` | oVirt: `ovirt:` namespace, a disk member with no extension, no manifest | 815MB |
+| ArchiveTeam Warrior v4.1, `warriorhq.archiveteam.org/downloads/warrior4/` | VirtualBox, OVF 2.0 with `epasd` and `sasd` items | 173MB |
+| Home Assistant OS 18.3, GitHub releases | both `vbox:` and `vmw:` namespaces | 575MB |
+| Ubuntu 24.04 server cloud image, `cloud-images.ubuntu.com/releases/noble/release/` | `ProductSection` properties, `ovf:transport` | 595MB |
+| Flatcar Container Linux, stable, `stable.release.flatcar-linux.net/amd64-usr/current/` | VMware | 590MB |
+| Fedora CoreOS, stable, the stable stream's `vmware` artifact | VMware | 1.2GB |
+| Wazuh 4.9.1, `packages.wazuh.com/4.x/vm/` | AWS VM Export | 3.95GB |
+| Tails, `archive.org/download/tails_202607/Tails.ova` | VirtualBox writing OVF 0.9, an ISO member | 2.0GB |
+| REMnux 202610b, `download.remnux.org` | ovftool 9.1.1, a gzip-compressed disk reference | 8.3GB |
+| VulnHub `blogger.ova`, `download.vulnhub.com` | VirtualBox, several disk members | 761MB |
+
+VulnHub is the only large collection of whole OVAs: its
+`checksum.txt` index lists 934, mostly VirtualBox exports with some
+from ovftool, most of them 0.6 to 5GB. It rate-limits hard and its
+authors rarely state redistribution terms, so it is a place to pick
+specific shapes from, not to mirror. Splunk's OVAs, including the DCN
+4.0.6 original, are on Splunkbase behind a login, under terms that do
+not allow redistribution, so the corpus does without them.
+
+No public source was found for a SHA512 manifest, a chunked file
+reference, a `VirtualSystemCollection` in a whole OVA, or exports from
+Packer, Xen, Proxmox or virt-v2v. govmomi's descriptors and
+hand-written fixtures cover the descriptor side of those.
+
+DMTF publishes the envelope schemas at
+`schemas.dmtf.org/ovf/envelope/1/dsp8023_1.1.0.xsd` (OVF 1.1) and
+`schemas.dmtf.org/ovf/envelope/2/dsp8023.xsd` (2.0.1, the newest; OVF
+2.1.1 did not revise the schema).
 
 instar's CI reaches `instar-testdata` through
 `tools/ci/prepare-testdata.sh`. That script clones over HTTPS with a
@@ -154,8 +208,9 @@ to touch. Specifically:
   that the parser could be published as its own package later without
   a rewrite.
 - Build a corpus of real descriptors from several producers, test
-  every pull request against trimmed copies of them, and test against
-  the full appliances in CI.
+  every pull request against trimmed copies of them and against
+  govmomi's and COT's descriptor collections, and test against the
+  appliances in CI.
 - Fix the gaps listed under Situation.
 
 Out of scope, and deliberately so:
@@ -194,14 +249,15 @@ Out of scope, and deliberately so:
    dictionary-or-list ambiguity that `_coerce_to_list()` exists to
    paper over, and make supporting both the OVF 1 and OVF 2 envelope
    namespaces a matter of a lookup table rather than of duplicated
-   paths. `defusedxml` refuses the DTD entity tricks an untrusted
-   descriptor could otherwise use; no legitimate OVF descriptor
-   declares entities. It is pure Python and supports 3.7. Its last
-   stable release, 0.7.1, dates from 2021, which is a weakness, but it
-   is still the package the Python documentation recommends for
+   paths. ElementTree on its own expands internal entities, so the
+   move to it needs `defusedxml` to keep refusing the DTD entity
+   tricks an untrusted descriptor could otherwise use; no legitimate
+   OVF descriptor declares entities. It is pure Python and supports 3.7.
+   Its last stable release, 0.7.1, dates from 2021, which is a weakness,
+   but it is still the package the Python documentation recommends for
    untrusted XML. This removes two runtime dependencies and adds one.
-   ElementTree's `ParseError` and defusedxml's `DefusedXmlException`
-   are both caught inside the parser and re-raised as named `OVFError`
+   ElementTree's `ParseError` and defusedxml's `DefusedXmlException` are
+   both caught inside the parser and re-raised as named `OVFError`
    subclasses, so that a malformed or entity-declaring descriptor gets
    the same one-line refusal as any other.
 4. **Strictness stays, but follows the specification.** An element
@@ -261,32 +317,92 @@ Out of scope, and deliberately so:
    it is marked not required. This changes a documented convention, so
    the phase that implements it updates `AGENTS.md` and "When an
    import stops" in `docs/usage.md` in the same pull request.
-5. **There are two test tiers.**
-   - The *unit* tier runs on every pull request and needs no secrets.
-     It uses descriptor fixtures committed to this repository, plus
-     small synthetic OVAs built by the tests themselves. The parser
-     never reads disk contents, so a synthetic disk member can be a
-     few bytes of anything.
-   - The *corpus* tier runs the importer's parse, archive and manifest
-     paths over every appliance in `instar-testdata`, in CI on the
-     self-hosted pool. It follows instar's `prepare-testdata.sh`
+5. **There are three test tiers.**
+   - The *unit* tier runs on every pull request, offline, and needs no
+     secrets. It is what `tox -epy3` runs. It uses the fixtures
+     committed to this repository (decision 6), plus small synthetic
+     OVAs built by the tests themselves. The parser never reads disk
+     contents, so a synthetic disk member can be a few bytes of
+     anything.
+   - The *descriptor corpus* tier parses every descriptor in govmomi's
+     `ovf/fixtures/` and COT's `COT/tests/`, each fetched at a commit
+     pinned in this repository rather than copied into it. Both
+     collections hold descriptors written by third parties: govmomi's
+     come from many vendors, and COT's include Cisco appliance
+     descriptors. Fetching them leaves redistribution with their
+     owners, and needs no secret, so the tier runs on every pull
+     request, forks included. It needs the network, so it is not part
+     of `tox -epy3`. It runs in its own tox environment, `tox
+     -edescriptor-corpus`, which runs the fetch script into a
+     gitignored cache and then only the corpus tests. Those live in
+     `shakenfist_client_ova/corpus_tests/`, outside `.stestr.conf`'s
+     `test_path`, so `py3` never collects them and their fail-closed
+     guard cannot fire offline. Each corpus environment runs `stestr
+     --test-path` on its own directory, and `pyproject.toml` excludes
+     the directory from the wheel as it does `tests`. CI runs the
+     environment on one pinned Python version, because exception class
+     names can differ between versions. With nearly 1,000 descriptors,
+     hand-written expected files for each are not realistic, so the
+     tier asserts three things instead:
+     - a committed ledger maps each descriptor's path to its outcome:
+       `model`, or the class name of the exception raised. The test
+       regenerates the ledger and fails on any difference, so a
+       behaviour change across the whole collection shows up as a
+       reviewed diff. In phase 2 the ledger records today's parser as
+       it is, raw `KeyError`, `TypeError` and `xmltodict`'s entity
+       `ValueError` included. Until phase 3 removes `xmltodict`, a
+       Renovate bump of it may change the ledger, and that diff is
+       reviewed like any other.
+     - from phase 3, every descriptor yields a model or a named
+       `OVFError` subclass, never any other exception. Phase 3's
+       ledger diff then shows exactly which descriptors that fixed.
+     - a curated subset of about 50, chosen for shape coverage, has
+       full expected files in decision 7's form, committed here and
+       keyed by upstream path. They hold our parse, not the upstream
+       text: before an expected file is written or compared, the test
+       replaces every prose field in the model with the placeholder
+       decision 6 uses. The list of prose fields is defined once, as
+       pairs of OVF element and the model field it fills. Phase 1
+       keeps it in the trim tool, the only user then. Phase 2 moves it
+       into `shakenfist_client_ova/ovf/`, and the tool imports it from
+       there. That direction is allowed: the import boundary of
+       decision 1 limits what the parser imports, not what imports
+       the parser.
+   - The *appliance corpus* tier runs the importer's parse, archive and
+     manifest paths over every appliance in `instar-testdata`, in CI on
+     the self-hosted pool. It has its own tox environment too, `tox
+     -eappliance-corpus`. It follows instar's `prepare-testdata.sh`
      pattern, including the guard that fails when a fixture is
      missing.
-6. **Committed fixtures are trimmed copies of real descriptors.** This
-   repository is public, and vendor descriptors carry licence and
+
+   The two corpus tiers fail the same way when their data is missing:
+   the guard fails, it never skips. `docs/development.md` describes
+   both environments from the phase that adds each.
+6. **Committed fixtures from vendor appliances are trimmed copies.**
+   This repository is public, and vendor descriptors carry licence and
    product prose. `tools/trim-ovf-descriptor.py` replaces the text of
    the prose elements (`License`, `Annotation`, `Description`, product
    and vendor strings) with a fixed placeholder, keeping every element
    and attribute. It reads vendor files, so it parses them through
    `defusedxml` like the importer does. Re-serialising can still lose
    things the parser might see (comments, namespace prefixes), so
-   "structure unchanged" is checked rather than claimed: the corpus
-   tier asserts that the parser's model of each original descriptor
-   equals its model of the trimmed fixture, apart from the placeholder
-   text. Each fixture carries an XML comment, straight after its XML
-   declaration (which must stay first, or the file stops being XML),
-   recording where it came from, the SHA-256 of the original descriptor, and that it was
-   trimmed. The full descriptors stay in the private `instar-testdata`.
+   "structure unchanged" is checked rather than claimed: the appliance
+   corpus tier asserts that the parser's model of each original
+   descriptor equals its model of the trimmed fixture, apart from the
+   placeholder text. Each trimmed fixture carries an XML comment,
+   straight after its XML declaration (which must stay first, or the
+   file stops being XML), recording where it came from, the SHA-256 of
+   the original descriptor, and that it was trimmed. The full
+   descriptors stay in the private `instar-testdata`.
+
+   Two other kinds of committed fixture are not trimmed. Hand-written
+   fixtures carry no vendor prose to remove. Glance's five test OVAs
+   were written for Glance's own tests, contain no vendor descriptor,
+   and are Apache-2.0, so they are committed verbatim under
+   `shakenfist_client_ova/tests/fixtures/ova/imported/glance/`, with
+   their origin and licence in a `NOTICE` file there instead of a
+   comment. They are archives, so phase 4's archive tests use them; the
+   descriptor golden test does not.
 7. **Expected parses are data, not code.** Each fixture has a
    `<name>.expected.json` beside it: either the parser's model
    serialised to JSON, or, for a fixture meant to be refused,
@@ -297,22 +413,37 @@ Out of scope, and deliberately so:
    parameterises over the directory, so supporting a new appliance is
    a data change, and a behaviour change shows up as a reviewed diff
    to an expected file.
-8. **The corpus keeps full appliances up to about 1GB, and only the
-   descriptor and manifest of larger ones.** This follows the
-   descriptor-only precedent `instar-testdata` already set for the
-   Wazuh and Splunk disks. A descriptor-only entry is re-tarred from
+8. **The appliance corpus keeps a whole appliance only where the
+   archive brings a shape nothing else does, and the descriptor and
+   manifest of the rest.** Descriptor shapes are the descriptor corpus
+   tier's job (decision 5). A whole appliance earns its place through
+   what only a whole archive shows: a manifest's digest type checked
+   against real disk bytes, a `.cert` member, a disk member with no
+   extension, or no manifest at all. From the "Test data" table that
+   is VyOS 1.2.1, both Photon OS images, Talos, Oracle Linux and
+   ArchiveTeam Warrior, about 2.1GB in all. Every other appliance there
+   is descriptor-only, and so are the two local VirtualBox 6.1.10
+   exports (3.1GB and 3.8GB). Their one archive-level shape, the
+   manifest stored last, after the disks, is reproduced by a synthetic
+   OVA in phase 4's tests, and their descriptor-only copies keep the
+   manifest. The same goes for the archive shapes of the other
+   descriptor-only entries: Tails' ISO member and `blogger.ova`'s
+   several disk members are synthetic OVAs in phase 4 too. This follows
+   the precedent `instar-testdata` already set for the Wazuh and Splunk
+   disks, and keeps the CI pull small. A descriptor-only entry records
+   the original's full member listing, in order, in the provenance
+   table, so the archive layout is still on record. It is re-tarred from
    the original's `.ovf` and `.mf` members. The descriptor's own
    manifest entry is still verified on every entry, while disk hashes
-   are verified only on the full ones. The importer will refuse a
+   are verified only on the whole ones. The importer will refuse a
    descriptor-only entry, because its `References` name disks that are
-   absent, and that refusal has no opt-out. The corpus tier instead
-   asserts it: each descriptor-only entry declares, as test input, the
-   members that are deliberately absent. The test checks that list
-   against `References`, parses the descriptor, and requires the
+   absent, and that refusal has no opt-out. The appliance corpus tier
+   instead asserts it: each descriptor-only entry declares, as test
+   input, the members that are deliberately absent. The test checks that
+   list against `References`, parses the descriptor, and requires the
    archive check to fail with the missing-member error, naming exactly
-   those members. The `instar-testdata` README
-   gains a provenance table: URL, download date, original size,
-   SHA-256 and producer.
+   those members. The `instar-testdata` README gains a provenance table:
+   URL, download date, original size, SHA-256 and producer.
 
 ## Open questions
 
@@ -321,12 +452,12 @@ Out of scope, and deliberately so:
    with one live import of the Ubuntu cloud image OVA to settle it. If
    it does not, conversion moves into the instance-creation plan,
    because it changes what the importer is rather than how it parses.
-2. **Do the original VyOS 1.2.1 and Splunk DCN 4.0.6 OVAs still
-   exist?** They are the only ovftool-written appliances we know of.
-   VyOS 1.2.x images are no longer freely downloadable, and Splunk's
-   need a login. If copies survive locally, their descriptors are the
-   most valuable additions to the corpus. If not, a Photon OS OVA is
-   the next candidate to check for ovftool output.
+2. **Resolved: do the original VyOS 1.2.1 and Splunk DCN 4.0.6 OVAs
+   still exist?** VyOS 1.2.1 does, at a new URL, and it is the same
+   release: its disk matches the one in `instar-testdata`. Splunk's
+   needs a Splunkbase login and may not be redistributed, so it is left
+   out. Photon OS, Talos and REMnux add further ovftool output (see
+   "Test data").
 3. **Which runner labels reach the private GitLab with git-lfs
    installed?** Phase 5 reads instar's `functional-tests.yml` for the
    answer rather than guessing. Adding `GITLAB_TESTDATA_TOKEN` as a
@@ -361,19 +492,47 @@ matches the files. This repository is public, so its record of that
 audit holds only the verdict and the range. Detailed findings stay in
 `instar-testdata`.
 
-- Download the appliances listed under Situation, plus any that open
-  question 2 recovers, into `instar-testdata`'s `downloaded/ova/`,
-  following decision 8, with a fetch script and the provenance table.
-  The descriptor is the first member of every OVA we have seen, so a
-  descriptor-only copy of a large remote appliance can be taken by
-  streaming the start of the download and stopping. The manifest may
-  not be near the start (see the VirtualBox note under Situation), so
-  check before relying on that for the `.mf`.
+- Download the appliances in the "Test data" table, and the two local
+  VirtualBox 6.1.10 exports, into `instar-testdata`'s
+  `downloaded/ova/`, following decision 8, with a fetch script and the
+  provenance table. Before committing VyOS 1.2.1, check its SHA-256
+  against the Wayback Machine's 2019 capture of the same URL, since
+  VyOS published no checksum for it. If that capture is missing or
+  truncated, record so in the provenance table and rely on the disk
+  matching the one already in `instar-testdata`. The descriptor is the
+  first member of every OVA we have seen, so a descriptor-only copy of a
+  large remote appliance can be taken by streaming the start of the
+  download and stopping. The manifest may not be near the start (see the
+  VirtualBox note under Situation), so check before relying on that for
+  the `.mf`.
+- Write the descriptor corpus fetch as a script in `tools/` that takes
+  only govmomi's `ovf/fixtures/` and COT's `COT/tests/` (sparse,
+  blob-filtered clones), so a contributor runs the same thing CI does.
+  The pinned commits are variables at the top of that script and
+  nowhere else. Bumping them is a deliberate, hand-made pull request
+  whose ledger diff is the thing reviewed; Renovate does not track
+  them, because a bump changes test expectations, not a dependency.
+  COT is abandoned, so its pin should never need to move. Choose the
+  curated subset for decision 5, covering at least
+  OVF 0.9, 1.0, 1.1 and 2.0, `MultiVmVapps`, `SignedOVF`,
+  `VM_with_nvram`, `NonAsciiChars`, the `property-types` and
+  `virtualsystemcollection` cases and the invalid ones. Note in the
+  phase plan which of them carry `DeploymentOptionSection`, and
+  whether a hand-written one is still needed.
 - Write `tools/trim-ovf-descriptor.py` and commit a trimmed fixture
-  for every corpus descriptor under
-  `shakenfist_client_ova/tests/fixtures/ovf/`.
-- Hand-write the edge cases no real appliance in the corpus covers:
+  for every appliance corpus descriptor under
+  `shakenfist_client_ova/tests/fixtures/ovf/`. Commit Glance's five
+  test OVAs verbatim, with their `NOTICE` (decision 6). `.gitignore`
+  ignores `*.ova` everywhere, and `AGENTS.md` says to keep it that way
+  for large manual-testing files, so a plain `git add` would silently
+  skip them. Add a negation for
+  `shakenfist_client_ova/tests/fixtures/ova/**/*.ova` after that rule,
+  with a comment saying why, and check `git ls-files` lists all five.
+- Hand-write the edge cases neither corpus covers in a small, readable
+  form:
   - an OVF 2.x envelope;
+  - a descriptor with no default namespace, where every OVF element
+    carries a prefix;
   - a `required="false"` extension section, and an unknown required
     one;
   - a gzip compressed file reference, and a chunked one, both of
@@ -390,16 +549,17 @@ audit holds only the verdict and the range. Detailed findings stay in
   - an ovftool-style descriptor carrying `vmw:buildId`,
     `xsi:schemaLocation`, a `vmw:Config` marked not required,
     `ovf:transport` and a `DeploymentOptionSection` with two
-    configurations. The corpus has no ovftool descriptor (open question
-    2), so this stands in for one.
+    configurations. The real ovftool descriptors spread these across
+    several files; this one puts them in one place a reviewer can read.
 
   Some archive-level cases are built as synthetic OVAs in phase 4's
   tests rather than committed: a manifest whose entry for the
   descriptor does not match, a manifest with no entry for a referenced
   file, no manifest at all, two manifests, a manifest listing the same
-  file twice, a `.cert` member, hrefs naming a symlink, a hardlink and a
-  directory member, and members stored as `./name`, including two
-  that normalise to the same name.
+  file twice, a SHA512 manifest, a manifest stored last after the
+  disks (the VirtualBox order, decision 8), a `.cert` member, hrefs
+  naming a symlink, a hardlink and a directory member, and members
+  stored as `./name`, including two that normalise to the same name.
 
 ### 2. Extract the parser
 
@@ -422,8 +582,17 @@ A behaviour-preserving refactor, with one named exception.
 - Add the parameterised golden test over the phase 1 fixtures, with
   expected files recording *today's* behaviour in decision 7's form,
   including today's failures on the OVF 2.x and `required="false"`
-  fixtures. Those expected files are the safety net phase 3 is
-  reviewed against.
+  fixtures. Add the descriptor corpus tier (decision 5) and its tox
+  environment, with the ledger and curated expected files also
+  recording today's behaviour, unhandled exceptions included. They
+  are not part of this phase's named output change: the ledger shows
+  what today's parser does, and fixing it is phase 3's work. Those
+  expected files and the ledger are the safety net phase 3 is reviewed
+  against. Describe the new tox environment in `docs/development.md`.
+- Add a `descriptor-corpus` job to `ci.yml` that runs `tox
+  -edescriptor-corpus` on every pull request, forks included, on a
+  GitHub-hosted runner, so the safety net is in CI from the phase that
+  builds it.
 - Update `ARCHITECTURE.md` for the new shape: the subpackage and its
   import boundary, the error hierarchy, the model, and the split
   between parser and command. The document says all the code is in
@@ -454,6 +623,11 @@ A behaviour-preserving refactor, with one named exception.
   memory units. Each vendor fixture also gains a small hand-written
   assertion of those values, so the expected file is not the only
   record of what correct looks like.
+- Turn on the descriptor corpus tier's second assertion (decision 5):
+  every descriptor yields a model or a named `OVFError` subclass. The
+  ledger diff in this phase's pull request lists each descriptor whose
+  outcome changed, which is the review of what the reimplementation
+  fixed and of anything it broke.
 - Drop `xmltodict` and `dpath` from `pyproject.toml`. Update
   `AGENTS.md` and `docs/usage.md` for the new convention, and the
   parsing section of `ARCHITECTURE.md`, which still describes parsing
@@ -516,7 +690,10 @@ A behaviour-preserving refactor, with one named exception.
   not checked, and document it in `docs/usage.md`. Verifying it is
   Future work.
 - Refuse `ovf:compression="gzip"` and chunked (`ovf:chunkSize`)
-  references with named errors, documented in `docs/usage.md`. Both
+  references with named errors, documented in `docs/usage.md`. These
+  checks run after the member checks above, so a descriptor-only
+  corpus entry such as REMnux still fails with the missing-member
+  error decision 8 asserts. Both
   are rare in practice, and supporting either properly is a design of
   its own. The upload helpers need the size before they start, and for
   a gzip file only a full decompression gives it: the ISIZE trailer is
@@ -534,12 +711,18 @@ A behaviour-preserving refactor, with one named exception.
 
 ### 5. Corpus CI tier
 
+This phase covers the appliance corpus tier only. The descriptor
+corpus tier's job was added in phase 2; it needs no secret and is not
+gated.
+
 - Adapt instar's `prepare-testdata.sh` into `tools/ci/`. Pull only
-  `downloaded/ova/` from LFS (`git lfs pull --include`), not the whole
-  9GB.
+  `downloaded/ova/` from LFS (`git lfs pull --include`), about 2GB,
+  not the whole 9GB.
 - Add a corpus test that runs the parse and the archive checks over
   every appliance, and a guard that fails when the corpus is missing,
-  never one that skips.
+  never one that skips. Run it as `tox -eappliance-corpus` (decision
+  5), outside `py3`'s discovery, and describe that environment in
+  `docs/development.md`.
 - Add the job to `ci.yml` on the runner labels open question 3
   settles, after the operator has added the secret. Fork pull requests
   receive no secrets, so the job is gated at the workflow level
@@ -575,10 +758,14 @@ A behaviour-preserving refactor, with one named exception.
 
 This repository has no `PUSH-AUDIT.md`, so the phase applies the
 checklist in the `plan-push-audit-phase` block of `PLAN-TEMPLATE.md`
-to the recorded ranges, plus three questions specific to this plan:
+to the recorded ranges, plus four questions specific to this plan:
 
-- Does any committed fixture still carry vendor prose that trimming
+- Does any trimmed fixture still carry vendor prose that trimming
   missed?
+- Does anything committed copy govmomi's or COT's descriptor text,
+  rather than refer to it by path? Are the curated expected files free
+  of upstream prose? Does every Glance file appear in its `NOTICE`,
+  and does `git ls-files` list every file the `NOTICE` names?
 - Does the corpus CI path put the private GitLab hostname anywhere
   new? It already appears in the public `shakenfist/instar`, so
   carrying it here is not a new disclosure, but the audit records the
@@ -1055,9 +1242,13 @@ chosen to defer to here, so that we do not forget them.
 - Map an OVF environment onto Shaken Fist user data. The Ubuntu cloud
   image OVA, for one, takes its cloud-init configuration through
   `ProductSection` properties.
-- Validate the hand-written fixtures against the DMTF OVF 1.1 envelope
-  schema, so that our idea of a valid descriptor is checked against
-  the specification's.
+- Validate the hand-written fixtures against the DMTF envelope schemas
+  (1.1 and 2.0.1, see "Test data"), so that our idea of a valid
+  descriptor is checked against the specification's.
+- Broaden the appliance corpus from VulnHub when a shape is needed
+  that the current appliances lack. Pick specific files, and keep them
+  in `instar-testdata` only, since their authors rarely state
+  redistribution terms.
 - Publish `shakenfist_client_ova/ovf/` as its own package once a
   second consumer needs it.
 - Verify manifest digests during the upload, to save the extra read
