@@ -1,0 +1,13 @@
+# Constraints for the test environments (tox.ini sets PIP_CONSTRAINT to this file).
+#
+# The expected files under shakenfist_client_ova/tests/fixtures/ovf/ and the
+# corpus ledger record what these two libraries make of real descriptors, down
+# to the exact exception raised. A new release can change that without any
+# change here, so they are pinned and a release reaches the tests only through
+# a Renovate pull request that someone reviews. The package's own dependencies
+# are deliberately not pinned.
+#
+# These pins go when the parser moves to ElementTree, which removes the
+# dependence on both libraries (see docs/plans/PLAN-ovf-parser.md).
+xmltodict==1.0.4
+dpath==2.2.0

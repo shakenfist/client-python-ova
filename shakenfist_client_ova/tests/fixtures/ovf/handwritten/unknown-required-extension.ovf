@@ -6,12 +6,10 @@
   with no ovf:required attribute, so the default of "true" applies
   and a consumer that does not understand it must refuse it.
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "a `required="false"` extension section, and an unknown required
-    one;" (this file is the second half)
+  Tests: a required="false" extension section is ignored and an
+  unknown required one is refused. This file is the refused half.
 
-  Decision 4: refused, as the specification requires.
+  Rule: refused, as the specification requires.
 -->
 <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"
           xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"

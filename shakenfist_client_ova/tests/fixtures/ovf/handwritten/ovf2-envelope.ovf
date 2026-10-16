@@ -5,15 +5,13 @@
   Case: an OVF 2.x envelope. The envelope namespace and ovf:version
   are the 2.x ones, and the disk and network adapter use the 2.x
   StorageItem and EthernetPortItem elements, in the DMTF sasd and
-  epasd namespaces (not the ".xsd" variants VirtualBox writes, which
-  are master plan open question 5).
+  epasd namespaces (not the ".xsd" variants VirtualBox writes; whether
+  to accept those is undecided; see docs/plans/PLAN-ovf-parser.md).
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "an OVF 2.x envelope;"
+  Tests: an OVF 2.x envelope is read. The parser must read OVF 2's
+  namespace and its EthernetPortItem and StorageItem.
 
-  Decision 3: both envelope namespaces are read through one lookup
-  table.
+  Rule: both envelope namespaces are read through one lookup table.
 -->
 <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/2"
           xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/2"

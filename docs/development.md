@@ -37,6 +37,36 @@ pip install tox
 tox -epy3
 ```
 
+The tox environments install `xmltodict` and `dpath` at the exact
+versions in `tools/pinned-requirements.txt`, through `PIP_CONSTRAINT`.
+The expected files below record what those two libraries make of real
+descriptors, down to the exception raised, and a new release can
+change that with no change here. So a release reaches the tests only
+through a Renovate pull request that someone reviews. The package's
+own dependencies are not pinned. The pins go when the parser moves to
+ElementTree; see [the OVF parser plan](plans/PLAN-ovf-parser.md).
+
+`test_ovf_golden.py` runs the parser over every `.ovf` under
+`shakenfist_client_ova/tests/fixtures/ovf/`, one test per descriptor.
+Beside each descriptor is an `.expected.json` file. For a descriptor
+that parses it is exactly `ovf.to_json()` of the result. For one that
+is refused it holds the error's name (`ovf.outcome_name()`, for
+example `UnsupportedDescriptorError(KeyError)`) and a
+`message_contains` fragment, which a person chooses as a phrase that
+will survive rewording. A test fails if a descriptor has no expected
+file or an expected file has no descriptor.
+
+Never hand-edit an expected file. Regenerate them with
+`OVF_UPDATE_EXPECTED=1 tox -epy3`, which rewrites every file whose
+outcome changed and then fails, so that the variable cannot be left on
+in CI. Review the rewritten files with `git diff`, replace any
+`CHOOSE A STABLE FRAGMENT` placeholder, and run the tests again
+without the variable.
+
+`test_ovf_boundary.py` enforces that `shakenfist_client_ova/ovf/`
+imports neither `click` nor `shakenfist_client`, imports only the
+modules on its allowed list, and never prints or exits.
+
 ## Test fixtures
 
 The parser's tests draw on three kinds of input, and the path of a
@@ -45,7 +75,7 @@ fixture says where it came from.
 | Directory | Holds |
 |-----------|-------|
 | `shakenfist_client_ova/tests/fixtures/ovf/vendor/` | One trimmed descriptor per appliance in the corpus, named for the appliance and version. |
-| `shakenfist_client_ova/tests/fixtures/ovf/handwritten/` | One descriptor per edge case in the master plan. Each opens, after the XML declaration, with a comment naming its case and the master plan clause it tests. |
+| `shakenfist_client_ova/tests/fixtures/ovf/handwritten/` | One descriptor per edge case in the master plan. Each opens, after the XML declaration, with a comment naming its case and the behaviour it tests. |
 | `shakenfist_client_ova/tests/fixtures/ova/imported/glance/` | Five small archives imported unmodified from OpenStack Glance. `NOTICE` records the source commit, the licence and each file's SHA-256. |
 
 The `ova/` directory is the one place `.ova` files are committed: the
@@ -76,7 +106,10 @@ any whitespace hook added later must exclude them.
 A leak in an ignored vendor element is fixed by adding an entry to
 `EMPTIED_ELEMENTS` and re-running the tool, never by editing a
 fixture. The prose list (`PROSE_ELEMENTS`) is a defect to fix in the
-same way if it misses something.
+same way if it misses something. It lives in
+`shakenfist_client_ova/ovf/prose.py`, shared by the trim tool and the
+parser's `scrub()`, which keeps upstream prose out of the curated
+expected file described below.
 
 ### The appliance corpus
 
@@ -155,11 +188,39 @@ add a line to `curated-overrides.txt` beside it (`+<repo>:<path>` or
 is in the tool's docstring. After bumping a pin, regenerate and
 review what changed.
 
+### Descriptor corpus tier
+
+A second test tier runs the parser over every descriptor in the two
+upstream collections, in `shakenfist_client_ova/corpus_tests/`:
+
+```bash
+tox -edescriptor-corpus
+```
+
+It needs the network: it first runs `tools/fetch-descriptor-corpus.sh`.
+It is outside the default `tox -epy3` run, which stays offline. Its
+tests read the pinned commits from that script, so the pins have one
+home, and they fail, never skip, if a corpus has not been fetched, so
+a missing corpus cannot look like a clean run.
+
+* `ledger.txt` records the outcome of every descriptor, one
+  `<repo>:<path>`, a tab and `model` or the outcome name per line.
+  A change in what the parser accepts or refuses shows up as a diff
+  of the ledger.
+* `curated.expected.json` holds the full expected parse of each
+  descriptor in `curated.txt`, with prose scrubbed so that no upstream
+  text is committed.
+* A test checks that the classifier still reproduces `curated.txt`.
+
+Like the unit-tier expected files, the ledger and the curated expected
+file are regenerated with `OVF_UPDATE_EXPECTED=1 tox -edescriptor-corpus`
+(which then fails) and never hand-edited.
+
 ## CI
 
 | Workflow | Runs | What it does |
 |----------|------|--------------|
-| `ci.yml` | Pull requests, pushes to `develop`, dispatch | The pre-commit hooks, the unit tests and an sdist and wheel build, then the automated reviewer on pull requests. |
+| `ci.yml` | Pull requests, pushes to `develop`, dispatch | Two jobs: the pre-commit hooks, the unit tests and an sdist and wheel build; and the descriptor corpus tier (`tox -edescriptor-corpus`). Then the automated reviewer on pull requests. |
 | `secret-scan.yml` | Pull requests, pushes to `develop`, dispatch | gitleaks over the history, after a positive control. `tools/gitleaks-scan.sh` runs the same scan locally. |
 | `codeql-analysis.yml` | Pull requests, pushes, weekly | CodeQL. |
 | `pr-re-review.yml` | A "please re-review" comment | Another automated review. |

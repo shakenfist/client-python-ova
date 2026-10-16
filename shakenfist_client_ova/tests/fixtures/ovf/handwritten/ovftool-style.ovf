@@ -9,18 +9,15 @@
   on the VirtualHardwareSection, and a vmw:Config marked
   ovf:required="false". Values are invented.
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "an ovftool-style descriptor carrying `vmw:buildId`,
-    `xsi:schemaLocation`, a `vmw:Config` marked not required,
-    `ovf:transport` and a `DeploymentOptionSection` with two
-    configurations."
+  Tests: an ovftool-style descriptor carrying vmw:buildId,
+  xsi:schemaLocation, a vmw:Config marked not required, ovf:transport
+  and a DeploymentOptionSection with two configurations is read.
 
-  Decision 4: vmw:buildId is ignored by the attribute rule,
+  Rule: vmw:buildId is ignored by the attribute rule,
   xsi:schemaLocation is on the ignore list, vmw:Config is ignored as
   not required, ovf:transport is read into the model, and the default
-  configuration ("small") is built. Phase 1 decision 7: no upstream
-  descriptor combines these.
+  configuration ("small") is built. This file exists because no
+  descriptor in the upstream corpora combines these.
 -->
 <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"
           xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"

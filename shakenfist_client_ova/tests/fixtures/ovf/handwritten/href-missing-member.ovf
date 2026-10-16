@@ -8,11 +8,9 @@
   missing-disk1.vmdk, and expects the missing member error to name
   exactly that member.
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "`References` hrefs that are an absolute URL, contain `../`, name a
-    missing member, or name a duplicated member;"
-    (this file is the missing member)
+  Tests: a References href is refused when it is an absolute URL,
+  contains "../", names a missing member, or names a duplicated member.
+  This file is the missing member.
 -->
 <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"
           xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"

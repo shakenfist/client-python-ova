@@ -5,12 +5,10 @@
   Case: an extension section in a namespace OVF does not define,
   marked ovf:required="false", which a consumer may ignore.
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "a `required="false"` extension section, and an unknown required
-    one;" (this file is the first half)
+  Tests: a required="false" extension section is ignored and an
+  unknown required one is refused. This file is the ignored half.
 
-  Decision 4: ignored, because it carries ovf:required="false".
+  Rule: ignored, because it carries ovf:required="false".
 -->
 <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"
           xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"

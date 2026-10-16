@@ -4,10 +4,9 @@
 
   Case: a References File stored gzip compressed (ovf:compression).
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "a gzip compressed file reference, and a chunked one, both of which
-    phase 4 refuses;" (this file is the first half)
+  Tests: a gzip compressed file reference and a chunked one are both
+  refused when the archive is checked, not when the descriptor is read.
+  This file is the gzip half.
 -->
 <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"
           xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"

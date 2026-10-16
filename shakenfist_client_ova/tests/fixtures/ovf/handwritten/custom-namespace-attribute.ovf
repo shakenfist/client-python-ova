@@ -5,13 +5,11 @@
   Case: an attribute in a namespace OVF does not define, on a known
   element (VirtualSystem).
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "an unknown OVF-namespace attribute on a known element, and a
-    custom-namespace one, which are refused and ignored respectively;"
-    (this file is the ignored half)
+  Tests: an unknown OVF-namespace attribute on a known element is
+  refused and a custom-namespace one is ignored. This file is the
+  ignored half.
 
-  Decision 4: custom attributes "shall not be required for correct
+  Rule: custom attributes "shall not be required for correct
   behavior" (DSP0243 section 7.3), so they are ignored by rule.
 -->
 <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"

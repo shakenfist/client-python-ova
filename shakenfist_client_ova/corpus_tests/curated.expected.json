@@ -1,0 +1,586 @@
+{
+  "cot:ersatz_ovf_3.0.ovf": {
+    "error": "UnsupportedDescriptorError(PathNotFound)",
+    "message_contains": "Could not find **/v1:Info to delete it"
+  },
+  "cot:invalid.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "cot:minimal.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "cot:ubuntu.2.0.ovf": {
+    "error": "UnsupportedDescriptorError(PathNotFound)",
+    "message_contains": "Could not find **/v1:Info to delete it"
+  },
+  "cot:v0.9.ovf": {
+    "error": "UnsupportedDescriptorError(PathNotFound)",
+    "message_contains": "Could not find **/v1:Info to delete it"
+  },
+  "cot:vmware.ovf": {
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 1073741824,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "input.vmdk",
+        "id": "file1",
+        "size": null
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "The lanethernet0 network",
+        "name": "lanethernet0"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "4"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "5"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard disk 1",
+              "host_resource": null,
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 1610612736,
+          "nics": [
+            {
+              "connection": "lanethernet0",
+              "resource_subtype": "E1000"
+            },
+            {
+              "connection": "lanethernet0",
+              "resource_subtype": "E1000"
+            },
+            {
+              "connection": "lanethernet0",
+              "resource_subtype": "E1000"
+            },
+            {
+              "connection": "lanethernet0",
+              "resource_subtype": "E1000"
+            }
+          ],
+          "system_identifier": null,
+          "system_type": null,
+          "transport": [],
+          "vcpus": 2
+        }
+      ],
+      "id": "vmw",
+      "name": null,
+      "operating_system": null,
+      "products": []
+    }
+  },
+  "govmomi:category-grouping.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:disk-capacity-property.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/BitnamiTomcat/bitnami-tomcatstack-8.0.36-x86_64.ovf": {
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 18253611008,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "bitnami-tomcatstack-8.0.36-2-linux-ubuntu-14.04-x86_64-disk1.vmdk",
+        "id": "file1",
+        "size": null
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "The bridged network",
+        "name": "bridged"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "disk1",
+              "host_resource": null,
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 1073741824,
+          "nics": [
+            {
+              "connection": "bridged",
+              "resource_subtype": "PCNet32"
+            }
+          ],
+          "system_identifier": null,
+          "system_type": null,
+          "transport": [],
+          "vcpus": 1
+        }
+      ],
+      "id": "bitnami-tomcatstack",
+      "name": null,
+      "operating_system": null,
+      "products": []
+    }
+  },
+  "govmomi:external/DeleteHDTestdata/PvScsis_old/descriptor.ovf": {
+    "error": "UnsupportedDescriptorError(PathNotFound)",
+    "message_contains": "Could not find **/v1:Info to delete it"
+  },
+  "govmomi:external/ImportOvf2014/complete_vsc.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/ImportOvf2014/eula.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/ImportOvf2014/scaleoutUnbound.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/ImportOvf2014/trivial.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/ImportOvf2014/unknownsections.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/MultiVmVapps/MultiVmVapps.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/NonAsciiChars/chinese/虚拟机.ovf": {
+    "error": "UnknownAllocationUnitError",
+    "message_contains": "Unknown allocation unit: \"byte\""
+  },
+  "govmomi:external/OVFCerts/CorruptedCert/Nostalgia.ovf": {
+    "error": "UnsupportedDescriptorError(PathNotFound)",
+    "message_contains": "Could not find **/v1:Info to delete it"
+  },
+  "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/DeltaDiskCompression/Pos/nvapp-disks-0.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/DeltaDiskCompression/Pos/nvapp-disks-3.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/Envelope/Neg/invalid_empty_env.ovf": {
+    "error": "UnsupportedDescriptorError(PathNotFound)",
+    "message_contains": "Could not find **/v1:Info to delete it"
+  },
+  "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/Envelope/Pos/section_extensibility.ovf": {
+    "error": "UnsupportedDescriptorError(PathNotFound)",
+    "message_contains": "Could not find **/v1:Info to delete it"
+  },
+  "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/Envelope/Pos/valid_bare_minimal.ovf": {
+    "error": "UnsupportedDescriptorError(PathNotFound)",
+    "message_contains": "Could not find **/v1:Info to delete it"
+  },
+  "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/Envelope_1_0/Neg/invalid_namespace.ovf": {
+    "error": "UnsupportedDescriptorError(PathNotFound)",
+    "message_contains": "Could not find **/v1:Info to delete it"
+  },
+  "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/Envelope_1_0/Neg/section_compatibility_neg.ovf": {
+    "error": "MalformedDescriptorError",
+    "message_contains": "not well-formed XML"
+  },
+  "govmomi:external/OVFToolTemplates/OVF/xmltestfiles/VirtualAppliances/Pos/nvapp002.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/OVFToolTemplates/ovftoolresources/identity_compression.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/OvfWithSpaceInFileName/SpaceInOvfName/haoUn OS2VMs.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/PhotonOS/photon.ovf": {
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 17179869184,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "photon-disk1.vmdk",
+        "id": "file1",
+        "size": null
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "The VM Network network",
+        "name": "VM Network"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "4"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "5"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard Disk 1",
+              "host_resource": null,
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 2147483648,
+          "nics": [
+            {
+              "connection": "VM Network",
+              "resource_subtype": "E1000e"
+            }
+          ],
+          "system_identifier": null,
+          "system_type": null,
+          "transport": [],
+          "vcpus": 1
+        }
+      ],
+      "id": "111378-Photon-1.0-Rev2-64-Open-VM-Tools-HW13",
+      "name": null,
+      "operating_system": null,
+      "products": []
+    }
+  },
+  "govmomi:external/SignedOVF/dsl-with-cert.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/VM_with_nvram/newVM-with-nvram.ovf": {
+    "error": "UnknownAllocationUnitError",
+    "message_contains": "Unknown allocation unit: \"byte\""
+  },
+  "govmomi:external/VappWithFlexibleNicAdapter/FlexibleNic.ovf": {
+    "error": "UnparsedContentError",
+    "message_contains": "Not all of the OVF file was parsed"
+  },
+  "govmomi:external/invalid_ovf/path1/testLonCharacterPathLimit/testDBpathLimitwwwwwwwwwwwwwww/descriptor.ovf": {
+    "error": "MalformedDescriptorError",
+    "message_contains": "not well-formed XML"
+  },
+  "govmomi:external/nostalgia-chunkdisk.ovf": {
+    "error": "UnknownAllocationUnitError",
+    "message_contains": "Unknown allocation unit: \"byte\""
+  },
+  "govmomi:external/nostalgia-read-only-disk.ovf": {
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 107373568,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "populated_size": null
+      },
+      {
+        "capacity_bytes": 107373568,
+        "disk_id": "vmdisk2",
+        "file_ref": "file2",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "populated_size": null
+      },
+      {
+        "capacity_bytes": 107373568,
+        "disk_id": "vmdisk3",
+        "file_ref": "file3",
+        "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+        "interface": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "nostalgia-disk1.vmdk",
+        "id": "file1",
+        "size": null
+      },
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "nostalgia-disk2.vmdk",
+        "id": "file2",
+        "size": null
+      },
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "nostalgia-disk3.vmdk",
+        "id": "file3",
+        "size": null
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "The VM Network network",
+        "name": "VM Network"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "4"
+            },
+            {
+              "bus": "ide",
+              "instance_id": "5"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard disk 1",
+              "host_resource": null,
+              "parent": "3"
+            },
+            {
+              "address_on_parent": 1,
+              "element_name": "Hard disk 2",
+              "host_resource": null,
+              "parent": "3"
+            },
+            {
+              "address_on_parent": 2,
+              "element_name": "Hard disk 3",
+              "host_resource": null,
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 67108864,
+          "nics": [
+            {
+              "connection": "VM Network",
+              "resource_subtype": "PCNet32"
+            }
+          ],
+          "system_identifier": null,
+          "system_type": null,
+          "transport": [],
+          "vcpus": 1
+        }
+      ],
+      "id": "Nostalgia",
+      "name": null,
+      "operating_system": null,
+      "products": []
+    }
+  },
+  "govmomi:external/nostalgia_small/nostalgia.ovf": {
+    "error": "UnparsedContentError",
+    "message_contains": "Not all of the OVF file was parsed"
+  },
+  "govmomi:external/oldOvfs/sun-ovfEnv/sun-ovfEnv.ovf": {
+    "error": "UnparsedContentError",
+    "message_contains": "Not all of the OVF file was parsed"
+  },
+  "govmomi:external/ovftoolresources/identity_compression.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/ovftoolresources/nvm001.ovf": {
+    "error": "UnsupportedDescriptorError(PathNotFound)",
+    "message_contains": "Could not find **/v1:Info to delete it"
+  },
+  "govmomi:external/standard_ovas/eula-vm/eula-vm.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/standard_ovas/internal-sha1/internal.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:external/standard_ovas/nostalgia-chunkdisk/Nostalgia.ovf": {
+    "error": "UnknownAllocationUnitError",
+    "message_contains": "Unknown allocation unit: \"byte\""
+  },
+  "govmomi:external/vbs/vapp/extra-config-complete-vapp.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:property-types.ovf": {
+    "error": "UnsupportedDescriptorError(KeyError)",
+    "message_contains": "Could not parse the descriptor: KeyError"
+  },
+  "govmomi:qualifiers.ovf": {
+    "deployment_options": [],
+    "disks": [
+      {
+        "capacity_bytes": 1073741824,
+        "disk_id": "vmdisk1",
+        "file_ref": "file1",
+        "format": null,
+        "interface": null,
+        "populated_size": null
+      }
+    ],
+    "files": [
+      {
+        "chunk_size": null,
+        "compression": null,
+        "href": "disk.vmdk",
+        "id": "file1",
+        "size": null
+      }
+    ],
+    "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+    "networks": [
+      {
+        "description": "Management network",
+        "name": "Management"
+      },
+      {
+        "description": "Workload network",
+        "name": "Workload"
+      }
+    ],
+    "version": null,
+    "virtual_system": {
+      "description": null,
+      "eulas": [],
+      "hardware": [
+        {
+          "controllers": [
+            {
+              "bus": "scsi",
+              "instance_id": "3"
+            }
+          ],
+          "disk_drives": [
+            {
+              "address_on_parent": 0,
+              "element_name": "Hard Disk 1",
+              "host_resource": null,
+              "parent": "3"
+            }
+          ],
+          "memory_bytes": 536870912,
+          "nics": [],
+          "system_identifier": null,
+          "system_type": null,
+          "transport": [],
+          "vcpus": 1
+        }
+      ],
+      "id": "qualifiers-vm",
+      "name": null,
+      "operating_system": null,
+      "products": []
+    }
+  },
+  "govmomi:uber.ovf": {
+    "error": "UnsupportedDescriptorError(ValueError)",
+    "message_contains": "invalid literal for int()"
+  },
+  "govmomi:virtualsystemcollection.ovf": {
+    "error": "UnsupportedDescriptorError(PathNotFound)",
+    "message_contains": "Could not find **/v1:Info to delete it"
+  },
+  "govmomi:vmware/esxvmovf-25262174.ovf": {
+    "error": "UnparsedContentError",
+    "message_contains": "Not all of the OVF file was parsed"
+  }
+}

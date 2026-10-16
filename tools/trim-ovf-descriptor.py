@@ -21,8 +21,15 @@ after the XML declaration. Everything else is byte-for-byte the original's.
 
 --check re-derives the spans in both files and fails, naming the first byte
 offset and element where the rule is broken, unless the trimmed file differs
-from the original only by those changes. See decision 4 of
-docs/plans/PLAN-ovf-parser-phase-01-corpus.md for the rules this implements.
+from the original only by those changes. The tool splices bytes and
+never re-serialises, because a re-serialised descriptor is a different one:
+it would lose prolog comments and the envelope's default namespace, which are
+shapes the parser must be tested against. docs/development.md, "Test
+fixtures", describes the rules.
+
+The tool imports the prose list from shakenfist_client_ova.ovf, so it must run
+with a Python where the package and its dependencies are installed, such as the
+py3 tox environment's: .tox/py3/bin/python -I tools/trim-ovf-descriptor.py ...
 """
 
 import argparse
@@ -36,6 +43,9 @@ import xml.sax.xmlreader
 
 from defusedxml import expatreader
 
+from shakenfist_client_ova.ovf import prose
+from shakenfist_client_ova.ovf.prose import PROSE_ELEMENTS
+
 
 OVF_09_NAMESPACE = 'http://www.vmware.com/schema/ovf/1/envelope'
 OVF_1_NAMESPACE = 'http://schemas.dmtf.org/ovf/envelope/1'
@@ -45,28 +55,6 @@ ENVELOPE_NAMESPACES = (OVF_09_NAMESPACE, OVF_1_NAMESPACE, OVF_2_NAMESPACE)
 XML_NAMESPACE = 'http://www.w3.org/XML/1998/namespace'
 XSI_NAMESPACE = 'http://www.w3.org/2001/XMLSchema-instance'
 VBOX_NAMESPACE = 'http://www.virtualbox.org/ovf/machine'
-
-# The prose elements, as pairs of element path and the model field it fills.
-# A path is matched against the tail of an element's ancestry, each segment
-# being an element in one of ENVELOPE_NAMESPACES. Phase 2 moves this list into
-# shakenfist_client_ova/ovf/, and this tool then imports it from there.
-PROSE_ELEMENTS = (
-    ('EulaSection/License', 'eula.license'),
-    ('AnnotationSection/Annotation', 'annotation'),
-    ('ProductSection/Info', 'product.info'),
-    ('ProductSection/Product', 'product.product'),
-    ('ProductSection/Vendor', 'product.vendor'),
-    ('ProductSection/FullVersion', 'product.full_version'),
-    ('ProductSection/ProductUrl', 'product.product_url'),
-    ('ProductSection/VendorUrl', 'product.vendor_url'),
-    ('ProductSection/AppUrl', 'product.app_url'),
-    ('ProductSection/Category', 'product.category'),
-    ('ProductSection/Property/Label', 'product.properties[].label'),
-    ('ProductSection/Property/Description', 'product.properties[].description'),
-    ('VirtualSystem/Description', 'description'),
-    ('VirtualSystemCollection/Description', 'description'),
-    ('Strings/Msg', None),
-)
 
 # OVF 0.9 writes sections and virtual systems as generic elements typed by
 # xsi:type, for example <Section xsi:type="ovf:EulaSection_Type">. An element
@@ -86,16 +74,17 @@ def _envelope_attribute(local):
 # anything not named here is dropped, along with every child.
 EMPTIED_ELEMENTS = (
     # VirtualBox's machine configuration. It holds the exporting host's paths
-    # and shared folders (phase 1 survey finding 5), and the parser ignores it
+    # and shared folders (found when the corpus was surveyed), and the parser ignores it
     # because it is marked not required.
     (VBOX_NAMESPACE, 'Machine', _envelope_attribute('required') + ((None, 'version'),)),
 )
 
-PLACEHOLDER = b'TRIMMED'
+# The parser's scrub() replaces the same prose in a model with the same text.
+PLACEHOLDER = prose.PLACEHOLDER.encode('utf-8')
 TOOL_NAME = 'tools/trim-ovf-descriptor.py'
 COMMENT_TEMPLATE = (
     '<!-- Trimmed from {source} (SHA-256 {digest} of the original descriptor) by ' + TOOL_NAME +
-    '; prose replaced with "TRIMMED". -->')
+    '; prose replaced with "' + prose.PLACEHOLDER + '". -->')
 _COMMENT_BEFORE, _COMMENT_REST = COMMENT_TEMPLATE.split('{source}')
 _COMMENT_MIDDLE, _COMMENT_AFTER = _COMMENT_REST.split('{digest}')
 COMMENT_RE = re.compile(
@@ -106,6 +95,9 @@ COMMENT_RE = re.compile(
 UTF8_BOM = b'\xef\xbb\xbf'
 XML_WHITESPACE = b' \t\r\n'
 
+# The prose elements' paths, without the model fields this tool has no use for.
+# Each is matched against the tail of an element's ancestry, each segment being
+# an element in one of ENVELOPE_NAMESPACES.
 _PROSE_PATHS = tuple(tuple(path.split('/')) for path, _ in PROSE_ELEMENTS)
 _EMPTIED = {(namespace, local): frozenset(kept) for namespace, local, kept in EMPTIED_ELEMENTS}
 
@@ -491,7 +483,7 @@ def _compare(original, o_start, o_end, trimmed, t_start, t_end, descriptor, what
 
 
 def check(original, trimmed):
-    """Raise CheckError unless trimmed is exactly original trimmed by decision 4's rule.
+    """Raise CheckError unless trimmed is exactly original trimmed by the rules in the module docstring.
 
     Returns the Descriptor of the original.
     """
@@ -538,7 +530,7 @@ def check(original, trimmed):
                              % (o_span.kind, o_span.element.path()))
         if t_span.kind == 'prose':
             if trimmed[t_span.start:t_span.end] != PLACEHOLDER:
-                raise CheckError(t_span.start, element, 'prose content is not "TRIMMED"')
+                raise CheckError(t_span.start, element, 'prose content is not "%s"' % prose.PLACEHOLDER)
         else:
             _check_emptied(original, o_span, trimmed, t_span)
         o_position = o_span.end

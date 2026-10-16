@@ -6,12 +6,10 @@
   the ovf prefix, so every OVF element carries it, as ElementTree
   writes a descriptor when it re-serialises one.
 
-  Tests: docs/plans/PLAN-ovf-parser.md, phase 1, "Hand-write the
-  edge cases":
-    "a descriptor with no default namespace, where every OVF element
-    carries a prefix;"
+  Tests: a descriptor with no default namespace, where every OVF
+  element carries a prefix, is read the same as one with a default.
 
-  Decision 3: lookups are by namespace, never by prefix.
+  Rule: lookups are by namespace, never by prefix.
 -->
 <ovf:Envelope xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"
               xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData"

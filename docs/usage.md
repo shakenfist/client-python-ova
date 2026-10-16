@@ -24,6 +24,8 @@ with `--namespace <name>`.
    memory, IDE, SCSI and SATA (AHCI) controllers, network interfaces,
    and which disk sits on which controller. Floppy, CD and DVD drives,
    USB controllers, video and sound cards are recognised and ignored.
+   Once it has parsed, the command prints a "VM description:"
+   summary of what it found.
 4. **Uploads the disks.** Each `.vmdk` is uploaded to the cluster as a
    blob and wrapped in an artifact named after the virtual machine,
    with a source URL of `ova://<path to the OVA>/<disk name>`. Where
@@ -44,7 +46,9 @@ operating system descriptions, VirtualBox and VMware extensions) is
 removed unread. If anything is left at the end, the import stops and
 prints what remains as JSON. The same happens for a hardware element
 of a type the parser does not know, and for an allocation unit it
-cannot convert to bytes.
+cannot convert to bytes. A descriptor the parser cannot read at all,
+because it is not well-formed XML or not in a form it understands,
+stops the import with a one-line error naming the problem.
 
 That is the intended behaviour: an OVA whose description is only
 partly understood would otherwise become an instance that is subtly
