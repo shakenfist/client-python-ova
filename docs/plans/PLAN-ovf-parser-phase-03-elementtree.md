@@ -536,3 +536,72 @@ aligns with this plan. Two gates:
 * **3b's transition table.** The management session reads it before
   3b is committed. Any `model -> refusal` transition without a decision
   behind it stops the step.
+
+## Execution notes
+
+Phase 3 ran on 2026-10-17. Where it departed from the text above:
+
+* **CIM properties.** Step 3a's review found that some standard CIM
+  properties the brief would have left unused change what the guest
+  sees: SASD's `Access` (a read-only disk) and
+  `VirtualResourceBlockSize`, and EPASD's 22 switch-port policy
+  properties (VLANs, promiscuous mode, MAC filters, bandwidth). They
+  are in `cim.py`'s refused sets instead, so a descriptor carrying one
+  is refused. None appears in the corpus. `Address` and
+  `AutomaticAllocation` stay unused: they are common, and Shaken Fist
+  assigns its own addresses and attaches every device.
+* **`ovf:required="false"` on a section the parser reads** also covers
+  unread content inside it. Without this, VMware's vCenter Server and
+  NSX 9.1 appliances would be refused. Both put `vmw:Config` entries
+  that are not marked optional inside a `VirtualHardwareSection`
+  marked `required="false"`. The cost is that such a setting is
+  ignored silently. Hardware resource-type refusals still look at each
+  item's own attribute.
+* **Decisions step 3b took that the plan left open.**
+  * An `ovf:configuration` naming a configuration that does not exist
+    is a `BrokenReferenceError`.
+  * Both forms of one attribute on an element is an
+    `UnparsedContentError`.
+  * A `${key}` capacity is looked up by full key, then by the key
+    alone, as DSP0243 2.x words it; `uber.ovf` needs the second.
+  * An unknown declared encoding is a `MalformedDescriptorError`.
+  * An `UnparsedContentError` message is a heading and one unread path
+    per line, not one line. The command tests allow for that.
+* **Vendor outcomes: 13 models, not 14.** Home Assistant OS 18.3 is
+  refused with `UnparsedContentError` for `Disk@ovf:boot="True"`, an
+  attribute in the OVF namespace that the schema does not define. It
+  was refused before, for another reason, so this is not a
+  regression. Whether to accept it as a producer quirk is left to the
+  operator; see "Found and left for later".
+* **Seven upstream descriptors went from a model to a refusal,** each by
+  a stated rule. Five NVDIMM descriptors carry a required type 20 item
+  of a subtype the parser refuses (decision 5). Two 2009 ovftool
+  descriptors carry a non-standard `ovf:allocationUnits` on `Disk`
+  (decision 2).
+* **A fourth quirk.** Step 3c's field-by-field check found that
+  VirtualBox writes a drive's `HostResource` as `/disk/<id>`, without
+  `ovf:`. That form went unchecked, and 189 upstream descriptors use
+  it, mostly VMware test templates. It is now a named quirk and is
+  checked like the prefixed form. One upstream negative test moved from
+  `UnparsedContentError` to `BrokenReferenceError`.
+* **Step 3c found no discrepancy** between any newly parsing vendor
+  fixture and its descriptor. The curated expected file holds no vendor
+  prose, only short labels and three lines of generic network
+  boilerplate.
+* **Final ledger:**
+
+  | Outcome | Descriptors |
+  |---------|-------------|
+  | model | 537 (118 before) |
+  | `VirtualSystemCollectionError` | 165 |
+  | `UnsupportedEnvelopeError` | 156 |
+  | `MissingContentError` | 40 |
+  | `UnparsedContentError` | 38 |
+  | `MalformedDescriptorError` | 15 |
+  | `InvalidValueError` | 7 |
+  | `UnsupportedHardwareError` | 6 |
+  | `BrokenReferenceError` | 4 |
+* **Found and left for later:**
+  * Home Assistant OS's `ovf:boot`, above.
+  * A drive's disk reference is checked, but the model does not link
+    drives to disks by id. Instance creation will want that link.
