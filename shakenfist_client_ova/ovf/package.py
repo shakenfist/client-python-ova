@@ -48,6 +48,7 @@ descriptor can rewrite the manifest, and the certificate is not checked.
 
 from dataclasses import dataclass, field
 import hashlib
+import io
 import posixpath
 import re
 import tarfile
@@ -149,6 +150,10 @@ class Package:
             raise ValueError('"%s" is %s, not a regular file, and is never read' % (member, _kind(info)))
         return info
 
+    def member_size(self, member):
+        """A regular member's size in bytes, as its tar header gives it."""
+        return self._regular(member).size
+
     def digests(self, member, algorithms, progress=None):
         """Read a regular member once, returning its digest in each of algorithms, as a dict of hexdigests.
 
@@ -189,8 +194,69 @@ class Package:
         _check_digest(self.manifest_member, entry, digests[entry.algorithm])
 
     def open_member(self, member):
-        """A seekable, binary file object reading a regular member, for an upload. Close it after use."""
-        return _extract(self._archive, self._regular(member), member)
+        """A seekable, binary file object reading a regular member, for an upload. Close it after use.
+
+        It is a MemberFile: it has read(), seek(), tell(), close() and closed,
+        and is a context manager. An archive that cannot be read, or that ends
+        before the member does, is a NotAnArchiveError from whichever of these
+        finds it, however far into the member the reader is.
+        """
+        info = self._regular(member)
+        return MemberFile(_extract(self._archive, info, member), member, info.size)
+
+
+class MemberFile:
+    """A member opened for reading, which raises NotAnArchiveError where tarfile would raise its own errors.
+
+    A read that finds the end of the member before its size, as its tar
+    header gives it, is a NotAnArchiveError too, rather than the end of a
+    shorter file.
+    """
+
+    def __init__(self, f, member, size):
+        self._file = f
+        self._member = member
+        self._size = size
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self.close()
+
+    def read(self, size=-1):
+        """Up to size bytes, or the rest of the member when size is negative or None."""
+        data = _read(self._file, size, self._member)
+        if not data and size != 0:
+            length = self.tell()
+            if length < self._size:
+                raise _ends_early(self._member, length, self._size)
+        return data
+
+    def seek(self, offset, whence=io.SEEK_SET):
+        try:
+            return self._file.seek(offset, whence)
+        except TAR_ERRORS as e:
+            raise _cannot_read_member(self._member, e) from e
+
+    def tell(self):
+        try:
+            return self._file.tell()
+        except TAR_ERRORS as e:
+            raise _cannot_read_member(self._member, e) from e
+
+    def readable(self):
+        return True
+
+    def seekable(self):
+        return True
+
+    @property
+    def closed(self):
+        return self._file.closed
+
+    def close(self):
+        self._file.close()
 
 
 def _cannot_read(e):
@@ -218,8 +284,12 @@ def _read(f, size, member):
 
 def _check_length(member, info, length):
     if length != info.size:
-        raise NotAnArchiveError('The OVA ends part way through "%s": %d of its %d bytes could be read'
-                                % (member, length, info.size))
+        raise _ends_early(member, length, info.size)
+
+
+def _ends_early(member, length, size):
+    return NotAnArchiveError('The OVA ends part way through "%s": %d of its %d bytes could be read'
+                             % (member, length, size))
 
 
 def _read_whole(archive, member, info):

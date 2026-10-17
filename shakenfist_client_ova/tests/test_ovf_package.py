@@ -785,6 +785,100 @@ class DigestsTestCase(PackageTestCase):
         self.assertRaises(KeyError, package.digests, 'absent.vmdk', ['sha256'])
 
 
+class MemberFileTestCase(PackageTestCase):
+    """open_member()'s file, read as shakenfist_client's upload helper reads it."""
+
+    def _large(self):
+        """A package whose last member, disk1.vmdk, is large enough to outrun the read buffer, and that disk."""
+        disk = b'0123456789' * 300000
+        package = self._open(_members(descriptor=_file1('ovf:href="disk1.vmdk"'), algorithm=None, disks=[
+            ('disk2.vmdk', DISK2), ('disk1.vmdk', disk)]))
+        return package, disk
+
+    def test_reads_in_pieces_and_seeks_back(self):
+        package, disk = self._large()
+        with package.open_member('disk1.vmdk') as f:
+            self.assertEqual(disk[:4096], f.read(4096))
+            self.assertEqual(disk[4096:8192], f.read(4096))
+            self.assertEqual(8192, f.tell())
+            # The upload helper seeks back to the last chunk the server has.
+            self.assertEqual(4096, f.seek(4096))
+            self.assertEqual(disk[4096:], f.read())
+            self.assertEqual(b'', f.read(4096))
+            self.assertEqual(b'', f.read(0))
+            f.seek(0)
+            self.assertEqual(disk, f.read(None))
+        self.assertRaises(ValueError, f.read, 1)
+
+    def test_close(self):
+        package = self._open(_members())
+        f = package.open_member('disk1.vmdk')
+        self.assertEqual(DISK1, f.read())
+        f.close()
+        self.assertRaises(ValueError, f.read, 1)
+
+    def test_archive_shrinking_while_reading(self):
+        # The archive is complete when the member is opened, and loses its end
+        # part way through the read, as an OVA overwritten during an import does.
+        package, disk = self._large()
+        with package.open_member('disk1.vmdk') as f:
+            self.assertEqual(disk[:4096], f.read(4096))
+            os.truncate(self.path, os.path.getsize(self.path) // 2)
+            e = self.assertRaises(ovf.NotAnArchiveError, lambda: [f.read(4096) for _ in range(len(disk) // 4096)])
+        self.assertTrue(str(e).startswith('Could not read "disk1.vmdk" from the OVA: ReadError: '), str(e))
+        self.assertIsInstance(e.__cause__, tarfile.ReadError)
+        self.assertEqual('NotAnArchiveError(ReadError)', ovf.outcome_name(e))
+
+    def test_archive_shrinking_before_a_seek_back(self):
+        package, disk = self._large()
+        with package.open_member('disk1.vmdk') as f:
+            f.read(4096)
+            os.truncate(self.path, os.path.getsize(self.path) // 2)
+            f.seek(len(disk) - 4096)
+            e = self.assertRaises(ovf.NotAnArchiveError, f.read, 4096)
+        self.assertIsInstance(e.__cause__, tarfile.ReadError)
+
+    def test_errors_reading_seeking_and_telling(self):
+        class Failing(io.RawIOBase):
+            def readable(self):
+                return True
+
+            def seekable(self):
+                return True
+
+            def readinto(self, buffer):
+                raise OSError(errno.EIO, 'Input/output error')
+
+            def seek(self, offset, whence=io.SEEK_SET):
+                raise EOFError('end of file')
+
+            def tell(self):
+                raise tarfile.ReadError('unexpected end of data')
+
+        package = self._open(_members())
+        with mock.patch.object(tarfile.TarFile, 'extractfile', return_value=Failing()):
+            f = package.open_member('disk1.vmdk')
+        for call, cause in ((lambda: f.read(4096), OSError), (lambda: f.seek(0), EOFError),
+                            (f.tell, tarfile.ReadError)):
+            e = self.assertRaises(ovf.NotAnArchiveError, call)
+            self.assertIs(cause, type(e.__cause__))
+            self.assertTrue(str(e).startswith('Could not read "disk1.vmdk" from the OVA: %s: ' % cause.__name__),
+                            str(e))
+
+    def test_read_that_ends_early(self):
+        package = self._open(_members())
+        with mock.patch.object(tarfile.TarFile, 'extractfile', return_value=io.BytesIO(b'dis')):
+            f = package.open_member('disk1.vmdk')
+        self.assertEqual(b'dis', f.read(4096))
+        e = self.assertRaises(ovf.NotAnArchiveError, f.read, 4096)
+        self.assertEqual('The OVA ends part way through "disk1.vmdk": 3 of its 5 bytes could be read', str(e))
+
+    def test_errors_of_the_caller_are_its_own(self):
+        package = self._open(_members())
+        with package.open_member('disk1.vmdk') as f:
+            self.assertRaises(TypeError, f.read, 'many')
+
+
 class ClosingTestCase(PackageTestCase):
     def _recording(self):
         """A patch of tarfile.open that records each archive it opens in self.opened."""

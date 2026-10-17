@@ -1,9 +1,10 @@
 import click
 import humanize
 import math
+import os
 from shakenfist_client import apiclient, util
 import sys
-import tarfile
+from tqdm import tqdm
 import unicodedata
 
 from shakenfist_client_ova import ovf
@@ -25,8 +26,10 @@ def _printable(text):
     visible escape instead, such as \\x1b for ESC. A format character
     (Unicode category Cf), which covers the bidirectional overrides and the
     zero-width characters that make text read differently from how it is
-    stored, is written as \\uXXXX. A backslash is written as two, so that
-    text cannot pass for one of these escapes.
+    stored, is written as \\uXXXX. So is a lone surrogate (category Cs),
+    which is how a member name that is not valid UTF-8 is read, and which
+    could not be printed at all. A backslash is written as two, so that text
+    cannot pass for one of these escapes.
     """
     return ''.join(_printable_character(character) for character in str(text))
 
@@ -39,7 +42,7 @@ def _printable_character(character):
     code = ord(character)
     if code < 0x20 or 0x7f <= code <= 0x9f:
         return '\\x%02x' % code
-    if unicodedata.category(character) == 'Cf':
+    if unicodedata.category(character) in ('Cf', 'Cs'):
         return '\\u%04x' % code if code <= 0xffff else '\\U%08x' % code
     return character
 
@@ -52,7 +55,7 @@ def _mib(size):
 
 
 def _hardware_summary(hardware):
-    """The lines describing one VirtualHardware, for the summary and the upload loop."""
+    """The lines describing one VirtualHardware, for the summary."""
     lines = [
         '    vCPUs: %s' % ('not stated' if hardware.vcpus is None else hardware.vcpus),
         '    Memory: %s' % ('not stated' if hardware.memory_bytes is None
@@ -121,6 +124,175 @@ def _envelope_summary(envelope, version, name):
     return lines
 
 
+def _archive_summary(package):
+    """The lines describing an opened OVA: which member is which, and what the import leaves alone."""
+    lines = [
+        '    Descriptor: %s' % package.descriptor_member,
+        '    Manifest: %s' % ('none' if package.manifest_member is None else package.manifest_member),
+        '    Certificate: %s' % ('none' if package.certificate_member is None else package.certificate_member),
+    ]
+    unused = set(file.id for file in package.unused_files)
+    for file in package.envelope.files:
+        line = '    File %s: %s' % (file.id, package.file_members[file.id])
+        if file.id in unused:
+            line += ', which no disk uses, so it is neither verified nor uploaded'
+        lines.append(line)
+    for disk in package.blank_disks:
+        lines.append('    Disk %s: no file, so it is created empty at deployment and not uploaded' % disk.disk_id)
+    for member in package.unreferenced_members:
+        lines.append('    Ignored, as nothing references it: %s' % member)
+    return lines
+
+
+def _archive_warnings(package):
+    """The warnings and notices about an opened OVA's manifest and certificate, as lines."""
+    lines = []
+    if package.manifest_member is None:
+        lines.append('Warning: the OVA has no manifest, so the disks cannot be checked for corruption.')
+    elif package.manifest_name_differs:
+        lines.append('Warning: the manifest %s is not named after the descriptor %s, as an OVA\'s manifest should be.'
+                     % (package.manifest_member, package.descriptor_member))
+    if package.unreferenced_entries:
+        lines.append('Warning: the manifest has entries for members the descriptor does not reference, which are '
+                     'not checked:')
+        lines.extend('    %s' % entry.name for entry in package.unreferenced_entries)
+    if package.certificate_member is not None:
+        lines.append('Notice: the OVA has the certificate %s, whose signature was not checked.'
+                     % package.certificate_member)
+    return lines
+
+
+def _refuse(message):
+    """Print why the import stops, as untrusted text, and exit 1."""
+    print(_printable(message))
+    sys.exit(1)
+
+
+def _artifact_names(package, system_id):
+    """Each upload's artifact name, in order, refusing a name that Shaken Fist would refuse only after the upload."""
+    names = []
+    for upload in package.uploads:
+        name = '%s-%s' % (system_id, upload.disk.disk_id)
+        if '/' in name:
+            print()
+            _refuse('The artifact name "%s", made from the VirtualSystem\'s ovf:id and the Disk\'s ovf:diskId, '
+                    'contains a /, which an artifact name may not' % name)
+        names.append(name)
+    return names
+
+
+def _verify(package, blob_search):
+    """Read each disk that needs reading once, checking it against the manifest, and return each upload's digests.
+
+    With a manifest, every disk is read for its manifest algorithm. When the
+    server can search for a blob by hash, every disk is read for SHA-512 as
+    well, in the same read. Otherwise a disk is not read until it is uploaded.
+    """
+    if package.manifest is not None or blob_search:
+        print()
+        print('Checking disk images...')
+
+    digests = []
+    for upload in package.uploads:
+        entry = package.manifest_entry(upload.member)
+        algorithms = [] if entry is None else [entry.algorithm]
+        if blob_search and 'sha512' not in algorithms:
+            algorithms.append('sha512')
+        if not algorithms:
+            digests.append({})
+            continue
+
+        with tqdm(total=package.member_size(upload.member), unit='B', unit_scale=True,
+                  desc=_printable('Reading %s' % upload.member)) as progress:
+            computed = package.digests(upload.member, algorithms, progress.update)
+        if entry is not None:
+            package.check_digest(upload.member, computed)
+            print(_printable('    %s: its %s digest matches the manifest' % (upload.member, entry.algorithm.upper())))
+        digests.append(computed)
+    return digests
+
+
+def _upload(client, package, path, names, digests, blob_search):
+    """Upload each disk, or reuse the blob already holding it, as one artifact per disk."""
+    print()
+    print('Uploading disk images...')
+
+    for upload, name, computed in zip(package.uploads, names, digests):
+        size = package.member_size(upload.member)
+        print()
+        print(_printable('%s with size %s, as the artifact %s' % (upload.member, humanize.naturalsize(size), name)))
+        source_url = 'ova://%s/%s' % (path, upload.member)
+
+        blob = None
+        if blob_search:
+            print('Searching for a pre-existing blob with this hash...')
+            blob = client.get_blob_by_sha512(computed['sha512'])
+
+        if blob:
+            print('Disk is already present in the cluster')
+            artifact = client.blob_artifact(name, blob['uuid'], source_url=source_url)
+        else:
+            with package.open_member(upload.member) as f:
+                artifact = util.upload_artifact_with_progress_file_like_object(client, name, f, size, source_url)
+        print('Disk artifact is %s' % artifact['uuid'])
+
+
+def _import_package(client, package, path, accept_eula):
+    """Describe an opened OVA, stop if it cannot be imported as it is, and then verify and upload its disks."""
+    print('Archive members:')
+    for line in _archive_summary(package):
+        print(_printable(line))
+    warnings = _archive_warnings(package)
+    if warnings:
+        print()
+        for line in warnings:
+            print(_printable(line))
+    print()
+
+    envelope = package.envelope
+    version = envelope.version
+    if version is None:
+        version = 1
+    name = envelope.virtual_system.id
+    if name is None:
+        name = 'Imported OVA VM'
+
+    print('VM description:')
+    for line in _envelope_summary(envelope, version, name):
+        print(_printable(line))
+
+    eulas = envelope.virtual_system.eulas
+    for eula in eulas:
+        print()
+        print('Licence agreement:')
+        print(_printable(eula.license))
+    if eulas and not accept_eula:
+        print()
+        print('This appliance has a licence agreement, printed above. '
+              'Re-run with --accept-eula to accept it.')
+        sys.exit(1)
+
+    unset = _unset_properties(envelope)
+    if unset:
+        print()
+        print('Warning: this appliance expects the following properties to be set at first boot, '
+              'and Shaken Fist cannot deliver them yet:')
+        for prop in unset:
+            print(_printable(
+                '    %s' % (prop.key if not prop.label else '%s (%s)' % (prop.key, prop.label))))
+
+    names = _artifact_names(package, name)
+    blob_search = client.check_capability('blob-search-by-hash')
+    try:
+        # Every disk is checked before any is uploaded, so that a corrupt
+        # second disk does not leave the first behind as an artifact.
+        digests = _verify(package, blob_search)
+        _upload(client, package, path, names, digests, blob_search)
+    except ovf.OVFError as e:
+        print()
+        _refuse(e)
+
+
 @ova.command(name='import', help='Import an OVA file')
 @click.argument('source', type=click.Path(exists=True))
 @click.option('--namespace', type=click.STRING,
@@ -135,116 +307,12 @@ def ova_import(ctx, source=None, namespace=None, accept_eula=False):
     ctx.obj['CLIENT'] = apiclient.Client(
         async_strategy=apiclient.ASYNC_CONTINUE, namespace=namespace)
 
-    ovf_files = []
-    disk_files = {}
-    manifest_files = []
-    other_files = []
-
-    with tarfile.open(source) as archive:
-        for name in archive.getnames():
-            if name.endswith('.ovf'):
-                ovf_files.append(name)
-            elif name.endswith('.vmdk'):
-                disk_files[name] = {}
-            elif name.endswith('.mf'):
-                manifest_files.append(name)
-            else:
-                other_files.append(name)
-
-        print('Detected archive members:')
-        print(_printable('    OVF:      %s' % ', '.join(ovf_files)))
-        print(_printable('    Disk:     %s' % ', '.join(disk_files.keys())))
-        print(_printable('    Manifest: %s' % ', '.join(manifest_files)))
-        print(_printable('    Other:    %s' % ', '.join(other_files)))
-        print()
-
-        try:
-            element_hashes = {}
-            for manifest_file in manifest_files:
-                with archive.extractfile(manifest_file) as f:
-                    manifest = ovf.parse_manifest(f.read())
-                for entry in manifest.entries:
-                    element_hashes[entry.name] = (entry.algorithm, entry.digest)
-                    if entry.name in disk_files:
-                        disk_files[entry.name]['hash'] = (entry.algorithm, entry.digest)
-
-            # A second descriptor replaces the first, as it always has.
-            # Checking the archive will refuse it instead; see
-            # docs/plans/PLAN-ovf-parser.md.
-            for ovf_file in ovf_files:
-                with archive.extractfile(ovf_file) as f:
-                    envelope = ovf.parse_descriptor(f.read())
-
-                version = envelope.version
-                if version is None:
-                    version = 1
-                name = envelope.virtual_system.id
-                if name is None:
-                    name = 'Imported OVA VM'
-                hardware = envelope.virtual_system.hardware[0]
-
-                print('VM description:')
-                for line in _envelope_summary(envelope, version, name):
-                    print(_printable(line))
-
-                eulas = envelope.virtual_system.eulas
-                for eula in eulas:
-                    print()
-                    print('Licence agreement:')
-                    print(_printable(eula.license))
-                if eulas and not accept_eula:
-                    print()
-                    print('This appliance has a licence agreement, printed above. '
-                          'Re-run with --accept-eula to accept it.')
-                    sys.exit(1)
-
-                unset = _unset_properties(envelope)
-                if unset:
-                    print()
-                    print('Warning: this appliance expects the following properties to be set at first boot, '
-                          'and Shaken Fist cannot deliver them yet:')
-                    for prop in unset:
-                        print(_printable(
-                            '    %s' % (prop.key if not prop.label else '%s (%s)' % (prop.key, prop.label))))
-        except ovf.OVFError as e:
-            print(_printable(e))
-            sys.exit(1)
-
-        print()
-        print('Uploading disk images...')
-        print()
-
-        for disk_file in disk_files:
-            ti = archive.getmember(disk_file)
-            disk_files[disk_file]['size'] = ti.size
-
-            print(_printable(f'{disk_file} with size '
-                             f'{humanize.naturalsize(disk_files[disk_file]["size"])}'))
-            source_url = f'ova://{source}/{disk_file}'
-            if not ctx.obj['CLIENT'].check_capability('blob-search-by-hash'):
-                blob = None
-            else:
-                with archive.extractfile(disk_file) as f:
-                    blob = util.checksum_with_progress_from_file_like_object(
-                        ctx.obj['CLIENT'], f, disk_files[disk_file]['size'])
-
-            if not blob:
-                with archive.extractfile(disk_file) as f:
-                    artifact = util.upload_artifact_with_progress_file_like_object(
-                        ctx.obj['CLIENT'], name, f, disk_files[disk_file]['size'],
-                        source_url)
-            else:
-                print('Disk is already present in the cluster')
-                artifact = ctx.obj['CLIENT'].blob_artifact(
-                    name, blob['uuid'], source_url=source_url)
-
-            print('Disk artifact is %s' % artifact['uuid'])
-            disk_files[disk_file]['artifact'] = artifact
-
-            print()
-            for line in _hardware_summary(hardware):
-                print(_printable(line))
-            print()
+    try:
+        package = ovf.open_package(source)
+    except ovf.OVFError as e:
+        _refuse(e)
+    with package:
+        _import_package(ctx.obj['CLIENT'], package, os.path.abspath(source), accept_eula)
 
 
 ova.add_command(ova_import)
