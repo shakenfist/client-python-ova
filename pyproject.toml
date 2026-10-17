@@ -49,6 +49,10 @@ dependencies = [
     # 0.7.6 is the first release with the file-like object upload and
     # checksum helpers in shakenfist_client.util that the import uses.
     "shakenfist_client >= 0.7.6",  # apache2
+    # The import shows its progress reading each disk with it, as the upload
+    # helper in shakenfist_client.util does. shakenfist_client depends on it
+    # too, but the import uses it directly, so it is declared here.
+    "tqdm",                        # mpl2 and mit
 ]
 
 [project.urls]

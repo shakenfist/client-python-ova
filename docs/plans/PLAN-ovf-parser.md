@@ -106,9 +106,9 @@ written against, in ways a survey of the code turned up:
 The appliances the parser was developed against are two VirtualBox
 6.1.10 exports, CyberOps Workstation and CyberOps Security Onion, which
 exist only as untracked files in a working copy. In both, the manifest
-is the *last* tar member, after the disks. OVF 1.1 section 5.3 says it
-should come straight after the descriptor, so VirtualBox does not
-follow the order, and the importer must not assume it.
+is the *last* tar member, after the disks. OVF 1.1 section 5.3 allows
+that order as well as the manifest straight after the descriptor, so
+the importer must not assume either.
 
 `instar-testdata` (a private GitLab repository, about 9.2GB of LFS)
 holds disks taken from three vendor
@@ -448,7 +448,10 @@ Out of scope, and deliberately so:
    input, the members that are deliberately absent. The test checks that
    list against `References`, parses the descriptor, and requires the
    archive check to fail with the missing-member error, naming exactly
-   those members. The `instar-testdata` README gains a provenance table:
+   those members. Tails is the exception: its descriptor is refused at
+   the envelope, before any archive check runs, so the tier asserts that
+   refusal for it instead (phase 4 plan, survey finding 8). The
+   `instar-testdata` README gains a provenance table:
    URL, download date, original size, SHA-256 and producer.
 
 ## Open questions
@@ -513,8 +516,8 @@ attribute tables; the evidence is in the phase 1 plan's survey finding
 |-------|------|--------|--------|
 | 1. Corpus and fixtures | [PLAN-ovf-parser-phase-01-corpus.md](PLAN-ovf-parser-phase-01-corpus.md) | Complete | instar-testdata 18a5ea5421..cf67642bbb; db7bdaa |
 | 2. Extract the parser | [PLAN-ovf-parser-phase-02-extract.md](PLAN-ovf-parser-phase-02-extract.md) | Complete | 97273c7 |
-| 3. ElementTree and the specification | [PLAN-ovf-parser-phase-03-elementtree.md](PLAN-ovf-parser-phase-03-elementtree.md) | In progress | |
-| 4. Archive correctness | - | Not started | |
+| 3. ElementTree and the specification | [PLAN-ovf-parser-phase-03-elementtree.md](PLAN-ovf-parser-phase-03-elementtree.md) | Complete | b1f8894 |
+| 4. Archive correctness | [PLAN-ovf-parser-phase-04-archive.md](PLAN-ovf-parser-phase-04-archive.md) | In progress | |
 | 5. Corpus CI tier | - | Not started | |
 | 6. Push audit | - | Not started | |
 
@@ -702,6 +705,25 @@ to the master plan".
 
 ### 4. Archive correctness
 
+The phase plan's survey sharpened this section. It added rules the
+section did not state:
+
+- only a plain tar is opened;
+- a `.cert` needs a manifest;
+- an href may not name the descriptor, manifest or certificate, and two
+  `File`s may not share one;
+- `ovf:compression="identity"` means uncompressed;
+- a chunked reference is refused before its member is looked for,
+  because its href names no member;
+- an `ovf:size` that differs from its member's size is refused;
+- a delta disk (`ovf:parentRef`) is refused, because uploaded alone it
+  cannot boot.
+
+Glance's `testserver.ova` never reaches the archive checks. Its
+`ResourceAllocationSection` sits outside a `VirtualSystemCollection`,
+which DSP0243 9.3 does not allow, so the parser refuses it, and the
+archive tests' passing cases are synthetic.
+
 - Find disks from `References` and the `DiskSection`, not by suffix.
   An `ovf:href` is untrusted input that now selects archive members,
   so it must be a relative name that matches exactly one tar member,
@@ -768,8 +790,11 @@ to the master plan".
   manifest digest covers the compressed bytes while dedup needs the
   decompressed ones. Decompressing an untrusted file also needs a cap.
   Support waits until a corpus appliance needs it (see Future work).
-- Name each disk artifact after its disk, and move the stray
-  `print(hardware)` out of the upload loop.
+- Name each disk artifact after its disk, as `<system id>-<disk id>`,
+  and build its source URL from the OVA's absolute path, since the
+  server identifies an artifact by its source URL. Move the hardware
+  summary, which phase 2 left printing after every disk, out of the
+  upload loop.
 - Test with synthetic OVAs built in the tests, which needs no
   cluster. That includes `CliRunner` tests showing the no-manifest
   warning, the `.cert` notice, and that nothing is uploaded after a
@@ -1334,6 +1359,9 @@ chosen to defer to here, so that we do not forget them.
 - Read oVirt's OVF dialect, so that Oracle Linux's OLVM templates
   import. Phase 3 refuses it by name; its plan's survey finding 4 lists
   what one export carries, including cloud-init in `VmInit`.
+- Link each disk drive in the model to the `Disk` it holds, by id.
+  Phase 3 checks that a drive's `HostResource` names a disk, but keeps
+  only the reference's text, and instance creation will need the link.
 - Test the declared `requires-python` floor, which nothing exercises
   today. client-python-k3s#82 has the same gap.
 

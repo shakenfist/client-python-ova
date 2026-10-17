@@ -19,7 +19,7 @@ instead.
 ## Documentation
 
 * [Importing an OVA](https://github.com/shakenfist/client-python-ova/blob/develop/docs/usage.md)
-  -- what an import does, and why it stops on a descriptor it does not
-  fully understand.
+  -- what an import does, and why it stops on a descriptor or archive it
+  cannot account for.
 * [Development](https://github.com/shakenfist/client-python-ova/blob/develop/docs/development.md)
   -- setup, linting, CI and releasing.

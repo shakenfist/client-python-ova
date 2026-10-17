@@ -10,7 +10,13 @@ class OVFError(Exception):
 
 
 class ManifestError(OVFError):
-    """A manifest does not parse: a line that is malformed, or a manifest that cannot be read."""
+    """A manifest does not parse, or cannot be read.
+
+    That is a line that is not ALGORITHM(name)= digest, an algorithm other
+    than SHA1, SHA256 or SHA512, a digest that is not hexadecimal of the
+    algorithm's length, a second entry for one name, or a manifest that is
+    not UTF-8.
+    """
 
 
 class UnknownAllocationUnitError(OVFError):
@@ -79,6 +85,99 @@ class BrokenReferenceError(OVFError):
     or whose ovf:parentRef names no Disk, or an ovf:configuration naming no
     Configuration in the DeploymentOptionSection.
     """
+
+
+class NotAnArchiveError(OVFError):
+    """The OVA cannot be read as an uncompressed tar archive.
+
+    That is a file that is not a tar at all, a compressed tar, or an archive
+    that ends early, including one that ends part way through a member being
+    read. It is raised from the tarfile, EOFError or OSError exception that
+    found the problem.
+    """
+
+
+class PackageLayoutError(OVFError):
+    """The archive's members do not make an OVA package.
+
+    The descriptor, manifest and certificate are the top-level members whose
+    names end in .ovf, .mf and .cert. This is raised for two members with one
+    name once a leading ./ is removed, for a package with no descriptor or
+    more than one, more than one manifest or more than one certificate, for a
+    certificate without a manifest, for a descriptor, manifest or certificate
+    that is not a regular file, and for a descriptor or manifest larger than
+    the parser will read.
+    """
+
+
+class FileReferenceError(OVFError):
+    """A File's ovf:href cannot name a member of the archive.
+
+    That is an href that is empty, has a URL scheme, starts with / or has a .
+    or .. segment, two Files with one href, or an href naming the descriptor,
+    manifest or certificate, none of which References may hold.
+    """
+
+
+class ChunkedFileError(OVFError):
+    """A File is split into chunks, which the importer does not join.
+
+    A File with ovf:chunkSize is refused before its member is looked for,
+    because a chunked file's href names no member of its own.
+    """
+
+
+class MissingMemberError(OVFError):
+    """Files in References name members the archive does not hold.
+
+    Every File's member must exist, whether or not a Disk uses the File. All
+    the missing members are reported in one error, in References order, and
+    the members attribute holds their names as a tuple.
+    """
+
+    def __init__(self, members):
+        self.members = tuple(members)
+        if not self.members:
+            raise ValueError('MissingMemberError needs at least one missing member')
+        if len(self.members) == 1:
+            what = 'a file'
+        else:
+            what = '%d files' % len(self.members)
+        super().__init__('References names %s the archive does not hold: %s' % (
+            what, ', '.join('"%s"' % member for member in self.members)))
+
+
+class MemberTypeError(OVFError):
+    """A File names a member that is not a regular file.
+
+    The message says which kind it is: a symbolic link, a hard link, a
+    directory, a device or a FIFO. Reading one would follow a link to another
+    member, or read nothing.
+    """
+
+
+class FileSizeError(OVFError):
+    """A File's ovf:size differs from the size of its member. The message gives both sizes."""
+
+
+class CompressedFileError(OVFError):
+    """A File's ovf:compression is neither absent nor identity, such as gzip, which the importer does not undo."""
+
+
+class UnlistedFileError(OVFError):
+    """The package has a manifest with no entry for the descriptor, or for a File's member."""
+
+
+class DigestMismatchError(OVFError):
+    """A member's digest differs from the one its manifest entry gives.
+
+    The descriptor is checked before it is parsed, and every disk before any
+    disk is uploaded. The message names the member and both digests.
+    """
+
+
+class DeltaDiskError(OVFError):
+    """A Disk has an ovf:parentRef: it holds only the changes from its parent, and alone would not boot."""
 
 
 def outcome_name(exc):

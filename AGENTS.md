@@ -50,6 +50,9 @@ releasing.
 - Expected files and the corpus ledger are regenerated with
   `OVF_UPDATE_EXPECTED=1` and never hand-edited. See "Unit tests" in
   `docs/development.md`.
+- The manifest check detects corruption and accidental mismatch, and is
+  never described as a security control. See "What the manifest does
+  and does not do" in `docs/usage.md`.
 - Vendor OVF descriptors are committed only as trimmed copies made by
   `tools/trim-ovf-descriptor.py`, never by hand, because this
   repository is public. See "Test fixtures" in `docs/development.md`.
