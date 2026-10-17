@@ -17,31 +17,45 @@ dependency comes from.
 
 ## Import pipeline
 
-`ova import` is one Click command that works through the archive in
-four stages without extracting it to disk. Each archive member is
-read through `tarfile.extractfile()` as a stream.
+`ova import` is one Click command that never extracts the archive to
+disk: it reads members through the `Package` that
+`ovf.open_package()` returns, and never through `tarfile` itself. It
+works in stages, and the first rule broken is the refusal reported.
 
-| Stage | Input | Output |
-|-------|-------|--------|
-| Classify | tar member names | lists of `.ovf`, `.vmdk`, `.mf` and other members |
-| Manifest | `.mf` members, through `ovf.parse_manifest()` | a `Manifest` of `(name, algorithm, digest)` entries, from which the command records a hash per file name |
-| Descriptor | `.ovf` members, through `ovf.parse_descriptor()` | an `Envelope`: the VM name, file references, disks, networks, deployment options, products and virtual hardware |
-| Upload | `.vmdk` members | one artifact per disk |
+1. **Open.** `open_package()` checks the layout (one descriptor, at
+   most one manifest and certificate), reads the manifest first and
+   checks the descriptor's digest against it, and only then parses the
+   descriptor.
+2. **Check the references.** Each `File` the descriptor names must
+   map to a regular member of the right size, uncompressed and
+   unchunked, and listed in the manifest; no disk may be a delta disk.
+3. **Describe.** The command prints the archive summary and the VM
+   description, handles the licence, and refuses an artifact name
+   Shaken Fist would refuse.
+4. **Verify and upload.** Two passes run over the disks. The first,
+   `_verify()`, reads every disk once, computing its manifest digest
+   and, when the server supports `blob-search-by-hash`, its SHA-512 in
+   the same read. It stops on a mismatch before any disk is uploaded
+   or looked up. Without a manifest it reads a disk only when blob
+   search is available. The second, `_upload()`, uploads each disk, or
+   reuses an existing blob found by its SHA-512, as one artifact.
 
-The hardware description is not yet turned into an instance, and the
-manifest hashes are not yet checked; both are where the import is
-expected to grow.
+The manifest detects corruption and accidental mismatch, not
+tampering; see `docs/usage.md`. The hardware description is not yet
+turned into an instance, which is where the import is expected to
+grow.
 
 ## The OVF subpackage
 
 `shakenfist_client_ova/ovf/` holds everything that reads an OVF
-descriptor or a manifest: `descriptor.py` and `manifest.py` are the
-parsers, `model.py` the dataclasses they return, `errors.py` the
-errors they raise, and `prose.py` the list of prose elements shared
-with `tools/trim-ovf-descriptor.py`. It is built to be spun out of
-this repository, so it imports only the standard library and its
-parsing dependencies, never `click` or `shakenfist_client`. It never
-prints and never exits. `shakenfist_client_ova/tests/test_ovf_boundary.py`
+descriptor, a manifest or an OVA: `descriptor.py` and `manifest.py` are
+the parsers, `package.py` the archive reader that checks an OVA
+against its descriptor and manifest, `model.py` the dataclasses they
+return, `errors.py` the errors they raise, and `prose.py` the list of
+prose elements shared with `tools/trim-ovf-descriptor.py`. It is built
+to be spun out of this repository, so it imports only the standard
+library and its parsing dependencies, never `click` or
+`shakenfist_client`. It never prints and never exits. `shakenfist_client_ova/tests/test_ovf_boundary.py`
 reads the source of every module in it and fails on a forbidden
 import, a `print` or an exit. That boundary covers the code inside
 `ovf/` only: importing `shakenfist_client_ova.ovf` still runs the parent
@@ -84,14 +98,6 @@ accepts, with the evidence for it; read it for the list, which is
 kept only there so that it cannot drift. What is not yet read is
 tracked as Future work in [the OVF parser
 plan](docs/plans/PLAN-ovf-parser.md).
-
-## Disk upload
-
-Before uploading a disk, the plugin asks the server whether it
-supports the `blob-search-by-hash` capability. If it does, the disk is
-checksummed and an existing blob with the same content is wrapped in a
-new artifact rather than uploaded again. Otherwise the disk is
-streamed straight from the archive.
 
 ## Build and packaging
 

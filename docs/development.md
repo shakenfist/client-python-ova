@@ -69,6 +69,17 @@ fixture says where it came from.
 | `shakenfist_client_ova/tests/fixtures/ovf/handwritten/` | One descriptor per edge case in the master plan. Each opens, after the XML declaration, with a comment naming its case and the behaviour it tests. |
 | `shakenfist_client_ova/tests/fixtures/ova/imported/glance/` | Five small archives imported unmodified from OpenStack Glance. `NOTICE` records the source commit, the licence and each file's SHA-256. |
 
+`shakenfist_client_ova/tests/synthetic.py` builds the archives that no
+surveyed producer writes, so the archive checks are tested without
+committing binaries. `build()` writes a USTAR tar from a list of
+members, each a `(name, data)` pair or one of `regular()`,
+`symlink()`, `hardlink()`, `directory()`, `fifo()` and `device()`.
+Names are written exactly as given, so a `./` prefix is kept and two
+members may share a name, and every member has the same owner, mode
+and time, so one list always builds the same bytes. Pass
+`compressed=True` for a gzipped archive or `truncated=True` for one
+cut short. Build into a temporary directory the test owns.
+
 The `ova/` directory is the one place `.ova` files are committed: the
 global `*.ova` rule in `.gitignore` is negated for it, so keep
 fixtures there small and deliberate.
