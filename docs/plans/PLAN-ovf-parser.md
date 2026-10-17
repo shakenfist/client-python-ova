@@ -513,7 +513,7 @@ attribute tables; the evidence is in the phase 1 plan's survey finding
 |-------|------|--------|--------|
 | 1. Corpus and fixtures | [PLAN-ovf-parser-phase-01-corpus.md](PLAN-ovf-parser-phase-01-corpus.md) | Complete | instar-testdata 18a5ea5421..cf67642bbb; db7bdaa |
 | 2. Extract the parser | [PLAN-ovf-parser-phase-02-extract.md](PLAN-ovf-parser-phase-02-extract.md) | Complete | 97273c7 |
-| 3. ElementTree and the specification | [PLAN-ovf-parser-phase-03-elementtree.md](PLAN-ovf-parser-phase-03-elementtree.md) | In progress | |
+| 3. ElementTree and the specification | [PLAN-ovf-parser-phase-03-elementtree.md](PLAN-ovf-parser-phase-03-elementtree.md) | Complete | b1f8894 |
 | 4. Archive correctness | - | Not started | |
 | 5. Corpus CI tier | - | Not started | |
 | 6. Push audit | - | Not started | |
@@ -1334,6 +1334,9 @@ chosen to defer to here, so that we do not forget them.
 - Read oVirt's OVF dialect, so that Oracle Linux's OLVM templates
   import. Phase 3 refuses it by name; its plan's survey finding 4 lists
   what one export carries, including cloud-init in `VmInit`.
+- Link each disk drive in the model to the `Disk` it holds, by id.
+  Phase 3 checks that a drive's `HostResource` names a disk, but keeps
+  only the reference's text, and instance creation will need the link.
 - Test the declared `requires-python` floor, which nothing exercises
   today. client-python-k3s#82 has the same gap.
 
