@@ -6,6 +6,11 @@ self-hosted-runner:
   labels:
     - claude-code
     - debian-13
+    # A runner carrying the fleet's pre-built instar-testdata disk, which
+    # the appliance corpus job reads. actionlint rejects an unknown
+    # self-hosted label, so it has to be listed before a job can name it.
+    - instar
     - static
     - vm
     - s
+    - xl
