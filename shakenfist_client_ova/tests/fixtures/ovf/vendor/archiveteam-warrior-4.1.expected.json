@@ -1,4 +1,87 @@
 {
-  "error": "UnsupportedDescriptorError(PathNotFound)",
-  "message_contains": "Could not find **/v1:Info to delete it"
+  "deployment_options": [],
+  "disks": [
+    {
+      "boot": null,
+      "capacity_bytes": 64424509440,
+      "disk_id": "vmdisk1",
+      "file_ref": "file1",
+      "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+      "interface": null,
+      "parent_ref": null,
+      "populated_size": null
+    }
+  ],
+  "files": [
+    {
+      "chunk_size": null,
+      "compression": null,
+      "href": "archiveteam-warrior-v4.1-20240906-215354-disk001.vmdk",
+      "id": "file1",
+      "size": null
+    }
+  ],
+  "namespace": "http://schemas.dmtf.org/ovf/envelope/2",
+  "networks": [
+    {
+      "description": "Logical network used by this appliance.",
+      "name": "NAT"
+    }
+  ],
+  "version": "2.0",
+  "virtual_system": {
+    "description": null,
+    "eulas": [],
+    "hardware": [
+      {
+        "controllers": [
+          {
+            "bus": "sata",
+            "instance_id": "3"
+          }
+        ],
+        "disk_drives": [
+          {
+            "address_on_parent": 0,
+            "element_name": null,
+            "host_resource": "/disk/vmdisk1",
+            "parent": "3"
+          }
+        ],
+        "memory_bytes": 536870912,
+        "nics": [
+          {
+            "connection": "NAT",
+            "resource_subtype": "E1000"
+          }
+        ],
+        "system_identifier": "archiveteam-warrior-4.1",
+        "system_type": "virtualbox-2.2",
+        "transport": [],
+        "vcpus": 1
+      }
+    ],
+    "id": "archiveteam-warrior-4.1",
+    "name": null,
+    "operating_system": {
+      "description": "Other_64",
+      "id": 102,
+      "os_type": null,
+      "version": null
+    },
+    "products": [
+      {
+        "app_url": null,
+        "full_version": null,
+        "instance": null,
+        "product": "TRIMMED",
+        "product_class": null,
+        "product_url": null,
+        "properties": [],
+        "vendor": "TRIMMED",
+        "vendor_url": "TRIMMED",
+        "version": "4.1"
+      }
+    ]
+  }
 }

@@ -1,16 +1,15 @@
 """What the OVF parser returns: plain dataclasses, and their one serialisation.
 
 Lists keep document order. Sizes are integers in bytes; any conversion to MiB
-or GiB is the command's. Fields commented "not read yet" exist so that the
-serialised shape is final; the parser does not fill them yet, and they hold
-None or an empty list. See docs/plans/PLAN-ovf-parser.md. Each class lists its
-required fields first, because a dataclass refuses a field without a default
-after one with a default; to_json sorts keys, so the order never reaches an
-expected file.
+or GiB is the command's. Each class lists its required fields first, because a
+dataclass refuses a field without a default after one with a default; to_json
+sorts keys, so the order never reaches an expected file.
 
-While the parser still walks xmltodict's output, a field typed str may hold
-None when the walk did not refuse that value's absence. Once the parser moves
-to ElementTree, a missing required value is refused instead.
+A field that is not Optional always holds a value: the parser refuses a
+descriptor that does not give it. The converse does not hold: an Optional
+field may still always be filled, as VirtualSystem.id is, and its comment then
+says so. An element's text is stripped of surrounding whitespace, and empty
+text is None; an attribute's value is kept as written.
 """
 
 import dataclasses
@@ -23,9 +22,9 @@ from typing import List, Optional
 class File:                                     # References/File
     id: str
     href: str
-    size: Optional[int] = None                  # not read yet; will be checked against the archive member
-    compression: Optional[str] = None           # not read yet; a gzip reference will be refused
-    chunk_size: Optional[int] = None            # not read yet; a chunked reference will be refused
+    size: Optional[int] = None                  # ovf:size
+    compression: Optional[str] = None           # ovf:compression, such as 'gzip'
+    chunk_size: Optional[int] = None            # ovf:chunkSize
 
 
 @dataclass
@@ -34,8 +33,13 @@ class Disk:                                     # DiskSection/Disk
     capacity_bytes: int                         # ovf:capacity x its allocation units
     file_ref: Optional[str] = None
     format: Optional[str] = None
-    populated_size: Optional[int] = None        # not read yet
-    interface: Optional[str] = None             # not read yet: ovf:disk-interface, the disk bus (oVirt writes it)
+    populated_size: Optional[int] = None        # ovf:populatedSize
+    parent_ref: Optional[str] = None            # ovf:parentRef: the diskId of a delta disk's parent
+    interface: Optional[str] = None             # never filled: oVirt's ovf:disk-interface, for an oVirt reader
+    # The disk the producer marks as the boot disk, from the non-standard
+    # ovf:boot, which the specification does not define. None means the
+    # descriptor does not say.
+    boot: Optional[bool] = None
 
 
 @dataclass
@@ -45,9 +49,9 @@ class Network:                                  # NetworkSection/Network
 
 
 @dataclass
-class Controller:                               # ResourceType 5, 6, and 20 with subtype AHCI
+class Controller:                               # ResourceType 5 and 6, and 20 with a SATA or NVMe subtype
     instance_id: str
-    bus: str                                    # 'ide', 'scsi' or 'sata'
+    bus: str                                    # 'ide', 'scsi', 'sata' or 'nvme'
 
 
 @dataclass
@@ -55,7 +59,7 @@ class DiskDrive:                                # ResourceType 17
     parent: str                                 # the controller's instance_id
     address_on_parent: int
     element_name: Optional[str] = None
-    host_resource: Optional[str] = None         # not read yet: which Disk it holds
+    host_resource: Optional[str] = None         # which Disk it holds, such as 'ovf:/disk/vmdisk1'
 
 
 @dataclass
@@ -71,18 +75,18 @@ class VirtualHardware:                          # VirtualHardwareSection
     controllers: List[Controller] = field(default_factory=list)
     disk_drives: List[DiskDrive] = field(default_factory=list)
     nics: List[Nic] = field(default_factory=list)
-    transport: List[str] = field(default_factory=list)  # not read yet: ovf:transport, split on spaces
-    system_type: Optional[str] = None           # not read yet: vssd:VirtualSystemType
-    system_identifier: Optional[str] = None     # not read yet: vssd:VirtualSystemIdentifier
+    transport: List[str] = field(default_factory=list)  # ovf:transport, split on spaces
+    system_type: Optional[str] = None           # vssd:VirtualSystemType
+    system_identifier: Optional[str] = None     # vssd:VirtualSystemIdentifier
 
 
 @dataclass
-class Property:                                 # ProductSection/Property, not read yet
+class Property:                                 # ProductSection/Property, in the default configuration
     key: str
     type: str
     user_configurable: bool
     password: bool
-    value: Optional[str] = None
+    value: Optional[str] = None                 # ovf:value, or the Value child for the default configuration
     qualifiers: Optional[str] = None
     category: Optional[str] = None              # the Category element before it
     label: Optional[str] = None
@@ -90,7 +94,7 @@ class Property:                                 # ProductSection/Property, not r
 
 
 @dataclass
-class Product:                                  # ProductSection, not read yet
+class Product:                                  # ProductSection
     product_class: Optional[str] = None         # ovf:class
     instance: Optional[str] = None              # ovf:instance
     product: Optional[str] = None
@@ -104,35 +108,35 @@ class Product:                                  # ProductSection, not read yet
 
 
 @dataclass
-class Eula:                                     # EulaSection, not read yet
+class Eula:                                     # EulaSection
     license: str
 
 
 @dataclass
-class OperatingSystem:                          # OperatingSystemSection, not read yet
+class OperatingSystem:                          # OperatingSystemSection
     id: int
     version: Optional[str] = None
-    os_type: Optional[str] = None
+    os_type: Optional[str] = None               # ovf:osType, or VMware's vmw:osType
     description: Optional[str] = None
 
 
 @dataclass
-class DeploymentOption:                         # DeploymentOptionSection/Configuration, not read yet
+class DeploymentOption:                         # DeploymentOptionSection/Configuration
     id: str
-    default: bool
+    default: bool                               # true for the one configuration the parser builds
     label: Optional[str] = None
     description: Optional[str] = None
 
 
 @dataclass
 class VirtualSystem:
-    id: Optional[str] = None
-    name: Optional[str] = None                  # not read yet: VirtualSystem/Name
-    description: Optional[str] = None           # not read yet
-    hardware: List[VirtualHardware] = field(default_factory=list)  # the parser fills exactly one
-    products: List[Product] = field(default_factory=list)          # not read yet
-    eulas: List[Eula] = field(default_factory=list)                # not read yet
-    operating_system: Optional[OperatingSystem] = None             # not read yet
+    id: Optional[str] = None                    # ovf:id: the parser always fills it, as the attribute is required
+    name: Optional[str] = None                  # VirtualSystem/Name
+    description: Optional[str] = None           # VirtualSystem/Description
+    hardware: List[VirtualHardware] = field(default_factory=list)  # every VirtualHardwareSection; at least one
+    products: List[Product] = field(default_factory=list)
+    eulas: List[Eula] = field(default_factory=list)
+    operating_system: Optional[OperatingSystem] = None
 
 
 @dataclass
@@ -143,7 +147,7 @@ class Envelope:
     files: List[File] = field(default_factory=list)
     disks: List[Disk] = field(default_factory=list)
     networks: List[Network] = field(default_factory=list)
-    deployment_options: List[DeploymentOption] = field(default_factory=list)  # not read yet
+    deployment_options: List[DeploymentOption] = field(default_factory=list)
 
 
 @dataclass

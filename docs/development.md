@@ -37,21 +37,12 @@ pip install tox
 tox -epy3
 ```
 
-The tox environments install `xmltodict` and `dpath` at the exact
-versions in `tools/pinned-requirements.txt`, through `PIP_CONSTRAINT`.
-The expected files below record what those two libraries make of real
-descriptors, down to the exception raised, and a new release can
-change that with no change here. So a release reaches the tests only
-through a Renovate pull request that someone reviews. The package's
-own dependencies are not pinned. The pins go when the parser moves to
-ElementTree; see [the OVF parser plan](plans/PLAN-ovf-parser.md).
-
 `test_ovf_golden.py` runs the parser over every `.ovf` under
 `shakenfist_client_ova/tests/fixtures/ovf/`, one test per descriptor.
 Beside each descriptor is an `.expected.json` file. For a descriptor
 that parses it is exactly `ovf.to_json()` of the result. For one that
-is refused it holds the error's name (`ovf.outcome_name()`, for
-example `UnsupportedDescriptorError(KeyError)`) and a
+is refused it holds the error's name (`ovf.outcome_name()`, a bare
+class name such as `UnparsedContentError`) and a
 `message_contains` fragment, which a person chooses as a phrase that
 will survive rewording. A test fails if a descriptor has no expected
 file or an expected file has no descriptor.
@@ -215,6 +206,16 @@ a missing corpus cannot look like a clean run.
 Like the unit-tier expected files, the ledger and the curated expected
 file are regenerated with `OVF_UPDATE_EXPECTED=1 tox -edescriptor-corpus`
 (which then fails) and never hand-edited.
+
+### Adding a producer quirk
+
+When an appliance is refused because its producer deviates from the
+schema, add an entry to `shakenfist_client_ova/ovf/quirks.py` naming
+the producer and giving the evidence: a fixture, or the corpus
+descriptors that show it. Never special-case the deviation in the
+parser. Then regenerate the expected files with
+`OVF_UPDATE_EXPECTED=1 tox -epy3` (and `-edescriptor-corpus`), and
+review the diff.
 
 ## CI
 

@@ -264,10 +264,12 @@ Out of scope, and deliberately so:
 4. **Strictness stays, but follows the specification.** An element
    the parser does not understand stops the import, unless the element
    carries `ovf:required="false"`, which OVF says a consumer may
-   ignore. The only elements ignored unread are `Info` and
-   `AnnotationSection`. They describe the appliance to a person and
-   nothing reads them; that list is closed and lives in one place in
-   the code, with the reason. Three sections look informational but
+   ignore. The only elements ignored unread are `Info`,
+   `AnnotationSection` and `Strings` (with the `ovf:msgid` attributes
+   that point into it, added by phase 3's survey). They describe the
+   appliance to a person and nothing reads them; that list is closed
+   and lives in one place in the code, with the reason. Three sections
+   look informational but
    are not, so they are parsed into the model instead:
    - `ProductSection` carries `Property` elements. A property with
      `ovf:userConfigurable="true"` and no `ovf:value` is input the
@@ -480,6 +482,11 @@ attribute tables; the evidence is in the phase 1 plan's survey finding
    read `ovf:disk-interface` into the model as the disk bus, which
    instance creation needs, and to ignore a closed, named list of the
    others, with oVirt given as the reason.
+   **Settled by phase 3, against the recommendation:** oVirt exports
+   are refused by name. The OLVM export carries 33 oVirt elements in the
+   OVF namespace, cloud-init in `VmInit`, and non-CIM hardware
+   properties, not three attributes (phase 3 plan, survey finding 4 and
+   decision 3). An oVirt reader is Future work.
 5. **Should VirtualBox's `.xsd`-suffixed CIM namespaces be accepted?**
    VirtualBox's OVF 2.0 export declares `epasd` and `sasd` with a
    `.xsd` suffix on the DMTF namespace URI. Taken literally, its
@@ -487,7 +494,8 @@ attribute tables; the evidence is in the phase 1 plan's survey finding
    elements, and every VirtualBox OVF 2.0 export is refused. The
    recommendation is to treat the two suffixed URIs as aliases of the
    DMTF ones, in the namespace table, with VirtualBox given as the
-   reason.
+   reason. **Settled by phase 3, as recommended** (phase 3 plan,
+   decision 3).
 6. **Should OVF 0.9 be supported or refused by name?** The
    pre-standard `http://www.vmware.com/schema/ovf/1/envelope`
    namespace, with generic `Section` elements typed by `xsi:type`,
@@ -495,15 +503,17 @@ attribute tables; the evidence is in the phase 1 plan's survey finding
    export. The recommendation is to refuse it with a named
    unsupported-version error. Supporting it means a second section
    dispatch, and the producers that write it today (VirtualBox's
-   legacy export option) can also write 1.0.
+   legacy export option) can also write 1.0. **Settled by phase 3, as
+   recommended:** it is refused as `UnsupportedEnvelopeError` (phase 3
+   plan, decision 1).
 
 ## Execution
 
 | Phase | Plan | Status | Merged |
 |-------|------|--------|--------|
 | 1. Corpus and fixtures | [PLAN-ovf-parser-phase-01-corpus.md](PLAN-ovf-parser-phase-01-corpus.md) | Complete | instar-testdata 18a5ea5421..cf67642bbb; db7bdaa |
-| 2. Extract the parser | [PLAN-ovf-parser-phase-02-extract.md](PLAN-ovf-parser-phase-02-extract.md) | In progress | |
-| 3. ElementTree and the specification | - | Not started | |
+| 2. Extract the parser | [PLAN-ovf-parser-phase-02-extract.md](PLAN-ovf-parser-phase-02-extract.md) | Complete | 97273c7 |
+| 3. ElementTree and the specification | [PLAN-ovf-parser-phase-03-elementtree.md](PLAN-ovf-parser-phase-03-elementtree.md) | In progress | |
 | 4. Archive correctness | - | Not started | |
 | 5. Corpus CI tier | - | Not started | |
 | 6. Push audit | - | Not started | |
@@ -677,7 +687,15 @@ to the master plan".
   ledger diff in this phase's pull request lists each descriptor whose
   outcome changed, which is the review of what the reimplementation
   fixed and of anything it broke.
-- Drop `xmltodict` and `dpath` from `pyproject.toml`. Update
+- Parse allocation units by DSP0004's programmatic-unit grammar,
+  which fixes #11, and resolve `${property}` disk capacities. Select
+  the default deployment configuration for items, networks and
+  property values. Accept the producer quirks the phase plan's survey
+  found (VMware's unqualified attributes, `InstanceId`, VirtualBox's
+  `.xsd` namespaces) from one named table, and refuse oVirt exports by
+  name.
+- Drop `xmltodict` and `dpath` from `pyproject.toml`, and the test
+  environments' pins of them with them. Update
   `AGENTS.md` and `docs/usage.md` for the new convention, and the
   parsing section of `ARCHITECTURE.md`, which still describes parsing
   by consumption.
@@ -1313,6 +1331,9 @@ chosen to defer to here, so that we do not forget them.
   over the compressed bytes, the decompressed size comes from one
   decompressing pass capped at `ovf:size` or the disk's capacity (not
   from ISIZE), and that pass must not cost a second full read.
+- Read oVirt's OVF dialect, so that Oracle Linux's OLVM templates
+  import. Phase 3 refuses it by name; its plan's survey finding 4 lists
+  what one export carries, including cloud-init in `VmInit`.
 - Test the declared `requires-python` floor, which nothing exercises
   today. client-python-k3s#82 has the same gap.
 

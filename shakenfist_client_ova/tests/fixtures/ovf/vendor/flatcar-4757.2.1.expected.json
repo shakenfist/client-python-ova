@@ -1,4 +1,351 @@
 {
-  "error": "UnknownAllocationUnitError",
-  "message_contains": "Unknown allocation unit: \"byte\""
+  "deployment_options": [],
+  "disks": [
+    {
+      "boot": null,
+      "capacity_bytes": 13212057600,
+      "disk_id": "vmdisk1",
+      "file_ref": "file1",
+      "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+      "interface": null,
+      "parent_ref": null,
+      "populated_size": 0
+    }
+  ],
+  "files": [
+    {
+      "chunk_size": null,
+      "compression": null,
+      "href": "flatcar_production_vmware_ova_image.vmdk",
+      "id": "file1",
+      "size": 590454272
+    }
+  ],
+  "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+  "networks": [
+    {
+      "description": "The VM Network network",
+      "name": "VM Network"
+    }
+  ],
+  "version": null,
+  "virtual_system": {
+    "description": null,
+    "eulas": [],
+    "hardware": [
+      {
+        "controllers": [
+          {
+            "bus": "scsi",
+            "instance_id": "3"
+          },
+          {
+            "bus": "ide",
+            "instance_id": "4"
+          },
+          {
+            "bus": "ide",
+            "instance_id": "5"
+          }
+        ],
+        "disk_drives": [
+          {
+            "address_on_parent": 0,
+            "element_name": "Hard Disk 1",
+            "host_resource": "ovf:/disk/vmdisk1",
+            "parent": "3"
+          }
+        ],
+        "memory_bytes": 1073741824,
+        "nics": [
+          {
+            "connection": "VM Network",
+            "resource_subtype": "VmxNet3"
+          }
+        ],
+        "system_identifier": "flatcar_production_vmware_ova",
+        "system_type": "vmx-13",
+        "transport": [
+          "com.vmware.guestInfo"
+        ],
+        "vcpus": 2
+      }
+    ],
+    "id": "flatcar_production_vmware_ova",
+    "name": "flatcar_production_vmware_ova",
+    "operating_system": {
+      "description": null,
+      "id": 100,
+      "os_type": "other3xLinux64Guest",
+      "version": null
+    },
+    "products": [
+      {
+        "app_url": null,
+        "full_version": null,
+        "instance": null,
+        "product": null,
+        "product_class": null,
+        "product_url": null,
+        "properties": [
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.hostname",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.ignition.config.data",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.ignition.config.data.encoding",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.ignition.config.url",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.dns.server.0",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.dns.server.1",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.0.name",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.0.mac",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.0.dhcp",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": "no"
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.0.role",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": "public"
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.0.ip.0.address",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.0.ip.1.address",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.0.route.0.gateway",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.0.route.0.destination",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.0.route.1.gateway",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.0.route.1.destination",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.1.name",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.1.mac",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.1.dhcp",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": "no"
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.1.role",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": "private"
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.1.ip.0.address",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.1.route.0.gateway",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "guestinfo.interface.1.route.0.destination",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          }
+        ],
+        "vendor": null,
+        "vendor_url": null,
+        "version": null
+      }
+    ]
+  }
 }

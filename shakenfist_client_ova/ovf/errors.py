@@ -33,11 +33,51 @@ class EntityDeclarationError(OVFError):
     """The descriptor declares an entity, which no legitimate descriptor does."""
 
 
-class UnsupportedDescriptorError(OVFError):
-    """Any other failure inside the descriptor parser, raised from the original exception.
+class UnsupportedEnvelopeError(OVFError):
+    """The descriptor's root is not an Envelope in the OVF 1.x or 2.x namespace.
 
-    It exists only until the parser names each of these failures itself, when
-    this class goes (see docs/plans/PLAN-ovf-parser.md).
+    That is an OVF 0.9 envelope, which the message names as such, a root in no
+    namespace or an unknown one, or a root element that is not Envelope.
+    """
+
+
+class VirtualSystemCollectionError(OVFError):
+    """The envelope holds a VirtualSystemCollection, several virtual machines rather than one.
+
+    It is raised before any other check of the envelope's content.
+    """
+
+
+class UnsupportedProducerError(OVFError):
+    """The descriptor is written in a producer's own dialect of OVF, which the parser does not read.
+
+    An oVirt export, which declares the oVirt namespace, is refused with this.
+    """
+
+
+class MissingContentError(OVFError):
+    """Something the descriptor must hold is absent, such as an envelope with no VirtualSystem."""
+
+
+class InvalidValueError(OVFError):
+    """A value does not parse as its type: a capacity that is not an integer, or a boolean neither true nor false.
+
+    A capacity given as ${key} is one too when no ProductSection property has
+    that key, or the property's value is not an integer. So is an id or key
+    repeated where it must be unique, such as two Files with one ovf:id, and
+    a value out of range, such as a Disk's ovf:populatedSize larger than its
+    capacity or a Property's ovf:type that is not a property type.
+    """
+
+
+class BrokenReferenceError(OVFError):
+    """A reference names something the descriptor does not hold.
+
+    That is a drive whose HostResource names no Disk (ovf:/disk/<id>) or no
+    File (ovf:/file/<id>), a drive whose Parent names no controller, a NIC
+    whose Connection names no Network, a Disk whose ovf:fileRef names no File
+    or whose ovf:parentRef names no Disk, or an ovf:configuration naming no
+    Configuration in the DeploymentOptionSection.
     """
 
 
@@ -46,7 +86,9 @@ def outcome_name(exc):
 
     This is the exception's class name, followed by its cause's class name in
     brackets when it was raised from an exception that is not an OVFError, for
-    example UnsupportedDescriptorError(KeyError).
+    example ManifestError(UnicodeDecodeError). The descriptor parser raises
+    each of its errors itself, never from another exception, so its outcomes
+    are bare class names.
     """
     name = type(exc).__name__
     cause = exc.__cause__

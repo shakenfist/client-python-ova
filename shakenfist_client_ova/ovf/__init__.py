@@ -1,15 +1,15 @@
 """An OVF descriptor and manifest parser.
 
 This subpackage is built to be spun out. It imports only the standard library
-and defusedxml (and, until the parser moves to ElementTree, xmltodict and
-dpath; see docs/plans/PLAN-ovf-parser.md). It never imports click or shakenfist_client, never prints and
+and defusedxml. It never imports click or shakenfist_client, never prints and
 never exits: it raises OVFError subclasses and returns the dataclasses in
 model.py. tests/test_ovf_boundary.py enforces this.
 """
 
 from .errors import (
-    EntityDeclarationError, MalformedDescriptorError, ManifestError, OVFError, outcome_name,
-    UnknownAllocationUnitError, UnparsedContentError, UnsupportedDescriptorError, UnsupportedHardwareError)
+    BrokenReferenceError, EntityDeclarationError, InvalidValueError, MalformedDescriptorError, ManifestError,
+    MissingContentError, OVFError, outcome_name, UnknownAllocationUnitError, UnparsedContentError,
+    UnsupportedEnvelopeError, UnsupportedHardwareError, UnsupportedProducerError, VirtualSystemCollectionError)
 from .model import (
     Controller, DeploymentOption, Disk, DiskDrive, Envelope, Eula, File, Manifest, ManifestEntry, Network, Nic,
     OperatingSystem, Product, Property, to_json, VirtualHardware, VirtualSystem)
@@ -19,8 +19,10 @@ from .manifest import parse_manifest
 
 __all__ = [
     # errors.py
-    'EntityDeclarationError', 'MalformedDescriptorError', 'ManifestError', 'OVFError', 'outcome_name',
-    'UnknownAllocationUnitError', 'UnparsedContentError', 'UnsupportedDescriptorError', 'UnsupportedHardwareError',
+    'BrokenReferenceError', 'EntityDeclarationError', 'InvalidValueError', 'MalformedDescriptorError',
+    'ManifestError', 'MissingContentError', 'OVFError', 'outcome_name', 'UnknownAllocationUnitError',
+    'UnparsedContentError', 'UnsupportedEnvelopeError', 'UnsupportedHardwareError', 'UnsupportedProducerError',
+    'VirtualSystemCollectionError',
     # model.py
     'Controller', 'DeploymentOption', 'Disk', 'DiskDrive', 'Envelope', 'Eula', 'File', 'Manifest', 'ManifestEntry',
     'Network', 'Nic', 'OperatingSystem', 'Product', 'Property', 'to_json', 'VirtualHardware', 'VirtualSystem',

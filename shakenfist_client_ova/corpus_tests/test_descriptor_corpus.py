@@ -8,7 +8,8 @@ tier never collects it.
 A descriptor is named by a key, "<repo>:<path>", where <repo> is govmomi or cot and <path> is relative to the pinned
 subdirectory, using "/". That is the form of the lines in curated.txt.
 
-* ledger.txt records the outcome of every descriptor: "<key>", a tab, and "model" or the parser's outcome_name.
+* ledger.txt records the outcome of every descriptor: "<key>", a tab, and "model" or the parser's outcome_name, which
+  is always the bare name of an OVFError subclass.
 * curated.expected.json holds the full expected parse of each descriptor in curated.txt, as one JSON object keyed by
   key. Prose fields are scrubbed first, so that no vendor text is committed.
 
@@ -45,6 +46,9 @@ CURATED_EXPECTED = os.path.join(HERE, 'curated.expected.json')
 
 # The corpora in the order the classifier takes them, with the variable prefix each has in the fetch script.
 REPOS = ('govmomi', 'cot')
+
+# A ledger outcome: a model, or the bare name of the OVFError subclass raised.
+BARE_OUTCOME_RE = re.compile(r'^(model|[A-Za-z]+Error)$')
 
 
 class CorpusUnavailable(Exception):
@@ -145,6 +149,12 @@ class DescriptorCorpusTestCase(CorpusTestCase):
                 model_text, exc = self.outcome_of(key)
                 outcomes[key] = 'model' if exc is None else ovf.outcome_name(exc)
         actual = ''.join('%s\t%s\n' % (key, outcomes[key]) for key in sorted(outcomes))
+
+        # The parser names every failure itself: an outcome carrying another
+        # exception as its cause, such as KeyError, means a failure it does not.
+        raw = ['%s: %s' % (key, outcome) for key, outcome in sorted(outcomes.items())
+               if not BARE_OUTCOME_RE.match(outcome)]
+        self.assertEqual([], raw, 'descriptors whose outcome is not a model or a bare OVFError subclass')
 
         if golden.update_mode():
             golden.write(LEDGER, actual)

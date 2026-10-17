@@ -1,4 +1,4 @@
 {
-  "error": "UnsupportedDescriptorError(PathNotFound)",
-  "message_contains": "Could not find **/v1:Info to delete it"
+  "error": "UnsupportedEnvelopeError",
+  "message_contains": "OVF 0.9 envelope"
 }

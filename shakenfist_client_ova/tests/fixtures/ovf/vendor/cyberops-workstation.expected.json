@@ -2,19 +2,23 @@
   "deployment_options": [],
   "disks": [
     {
+      "boot": null,
       "capacity_bytes": 10737418240,
       "disk_id": "vmdisk1",
       "file_ref": "file1",
       "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
       "interface": null,
+      "parent_ref": null,
       "populated_size": null
     },
     {
+      "boot": null,
       "capacity_bytes": 1073741824,
       "disk_id": "vmdisk2",
       "file_ref": "file2",
       "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
       "interface": null,
+      "parent_ref": null,
       "populated_size": null
     }
   ],
@@ -65,13 +69,13 @@
           {
             "address_on_parent": 0,
             "element_name": "disk1",
-            "host_resource": null,
+            "host_resource": "/disk/vmdisk1",
             "parent": "5"
           },
           {
             "address_on_parent": 1,
             "element_name": "disk2",
-            "host_resource": null,
+            "host_resource": "/disk/vmdisk2",
             "parent": "5"
           }
         ],
@@ -82,15 +86,33 @@
             "resource_subtype": "E1000"
           }
         ],
-        "system_identifier": null,
-        "system_type": null,
+        "system_identifier": "CyberOps Workstation",
+        "system_type": "virtualbox-2.2",
         "transport": [],
         "vcpus": 1
       }
     ],
     "id": "CyberOps Workstation",
     "name": null,
-    "operating_system": null,
-    "products": []
+    "operating_system": {
+      "description": "Linux26_64",
+      "id": 100,
+      "os_type": null,
+      "version": null
+    },
+    "products": [
+      {
+        "app_url": null,
+        "full_version": null,
+        "instance": null,
+        "product": "TRIMMED",
+        "product_class": null,
+        "product_url": null,
+        "properties": [],
+        "vendor": null,
+        "vendor_url": null,
+        "version": null
+      }
+    ]
   }
 }

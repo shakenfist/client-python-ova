@@ -2,11 +2,13 @@
   "deployment_options": [],
   "disks": [
     {
+      "boot": null,
       "capacity_bytes": 53687091200,
       "disk_id": "vmdisk1",
       "file_ref": "file1",
       "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
       "interface": null,
+      "parent_ref": null,
       "populated_size": null
     }
   ],
@@ -16,7 +18,7 @@
       "compression": null,
       "href": "wazuh-4.9.1-disk-1.vmdk",
       "id": "file1",
-      "size": null
+      "size": 3950369280
     }
   ],
   "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
@@ -46,7 +48,7 @@
           {
             "address_on_parent": 0,
             "element_name": "Hard Disk 1",
-            "host_resource": null,
+            "host_resource": "ovf:/disk/vmdisk1",
             "parent": "4"
           }
         ],
@@ -57,15 +59,33 @@
             "resource_subtype": "E1000"
           }
         ],
-        "system_identifier": null,
-        "system_type": null,
+        "system_identifier": "wazuh-4.9.1",
+        "system_type": "vmx-07",
         "transport": [],
         "vcpus": 4
       }
     ],
     "id": "Wazuh v4.9.1 OVA",
     "name": null,
-    "operating_system": null,
-    "products": []
+    "operating_system": {
+      "description": "Linux - Amazon Linux 2",
+      "id": 101,
+      "os_type": "otherLinux64Guest",
+      "version": null
+    },
+    "products": [
+      {
+        "app_url": null,
+        "full_version": null,
+        "instance": null,
+        "product": "TRIMMED",
+        "product_class": null,
+        "product_url": "TRIMMED",
+        "properties": [],
+        "vendor": "TRIMMED",
+        "vendor_url": "TRIMMED",
+        "version": "4.9.1"
+      }
+    ]
   }
 }

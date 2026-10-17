@@ -38,12 +38,17 @@ classifiers = [
 requires-python = ">=3.7"
 dependencies = [
     "click >= 8.0.0",              # bsd
-    "dpath",                       # mit
+    # The parser reads descriptors through it, as untrusted XML. The trim
+    # tool in tools/ does too. The parser uses iterparse's forbid_*
+    # arguments and the top-level forbidden-declaration exceptions. 0.7.1
+    # is the first release supporting the Python versions this package
+    # does: 0.7.0 added Python 3.9, and 0.7.1 made ParseError, which the
+    # parser catches, the standard library's class again.
+    "defusedxml >= 0.7.1",         # psf
     "humanize",                    # mit
     # 0.7.6 is the first release with the file-like object upload and
     # checksum helpers in shakenfist_client.util that the import uses.
     "shakenfist_client >= 0.7.6",  # apache2
-    "xmltodict",                   # mit
 ]
 
 [project.urls]
@@ -74,7 +79,4 @@ test = [
     "flake8",              # mit
     "testtools",           # mit
     "stestr",              # apache2
-    # The trim tool in tools/ reads vendor descriptors through it; it joins
-    # the runtime dependencies when the parser does.
-    "defusedxml",          # psf
 ]

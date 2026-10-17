@@ -1,4 +1,4 @@
 {
-  "error": "UnsupportedHardwareError",
-  "message_contains": "Unknown hardware element"
+  "error": "UnsupportedProducerError",
+  "message_contains": "oVirt export"
 }

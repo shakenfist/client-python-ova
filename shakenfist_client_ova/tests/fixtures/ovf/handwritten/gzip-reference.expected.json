@@ -2,21 +2,23 @@
   "deployment_options": [],
   "disks": [
     {
+      "boot": null,
       "capacity_bytes": 10737418240,
       "disk_id": "vmdisk1",
       "file_ref": "file1",
       "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
       "interface": null,
+      "parent_ref": null,
       "populated_size": null
     }
   ],
   "files": [
     {
       "chunk_size": null,
-      "compression": null,
+      "compression": "gzip",
       "href": "disk1.vmdk",
       "id": "file1",
-      "size": null
+      "size": 1048576
     }
   ],
   "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
@@ -42,7 +44,7 @@
           {
             "address_on_parent": 0,
             "element_name": "Hard disk 1",
-            "host_resource": null,
+            "host_resource": "ovf:/disk/vmdisk1",
             "parent": "3"
           }
         ],
@@ -53,15 +55,20 @@
             "resource_subtype": "E1000"
           }
         ],
-        "system_identifier": null,
-        "system_type": null,
+        "system_identifier": "example-vm",
+        "system_type": "vmx-13",
         "transport": [],
         "vcpus": 1
       }
     ],
     "id": "example-vm",
-    "name": null,
-    "operating_system": null,
+    "name": "example-vm",
+    "operating_system": {
+      "description": "Linux",
+      "id": 36,
+      "os_type": null,
+      "version": null
+    },
     "products": []
   }
 }

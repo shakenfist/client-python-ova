@@ -1,4 +1,164 @@
 {
-  "error": "UnknownAllocationUnitError",
-  "message_contains": "Unknown allocation unit: \"byte\""
+  "deployment_options": [],
+  "disks": [
+    {
+      "boot": null,
+      "capacity_bytes": 10737418240,
+      "disk_id": "vmdisk1",
+      "file_ref": "file1",
+      "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+      "interface": null,
+      "parent_ref": null,
+      "populated_size": 0
+    }
+  ],
+  "files": [
+    {
+      "chunk_size": null,
+      "compression": null,
+      "href": "ubuntu-noble-24.04-cloudimg.vmdk",
+      "id": "file1",
+      "size": 594777600
+    }
+  ],
+  "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+  "networks": [
+    {
+      "description": "The VM Network network",
+      "name": "VM Network"
+    }
+  ],
+  "version": null,
+  "virtual_system": {
+    "description": null,
+    "eulas": [],
+    "hardware": [
+      {
+        "controllers": [
+          {
+            "bus": "scsi",
+            "instance_id": "3"
+          },
+          {
+            "bus": "ide",
+            "instance_id": "5"
+          },
+          {
+            "bus": "ide",
+            "instance_id": "6"
+          }
+        ],
+        "disk_drives": [
+          {
+            "address_on_parent": 0,
+            "element_name": "Hard Disk 1",
+            "host_resource": "ovf:/disk/vmdisk1",
+            "parent": "3"
+          }
+        ],
+        "memory_bytes": 1073741824,
+        "nics": [
+          {
+            "connection": "VM Network",
+            "resource_subtype": "VmxNet3"
+          }
+        ],
+        "system_identifier": "ubuntu-noble-24.04-cloudimg-20260926",
+        "system_type": "vmx-10",
+        "transport": [
+          "iso"
+        ],
+        "vcpus": 2
+      }
+    ],
+    "id": "ubuntu-noble-24.04-cloudimg-20260926",
+    "name": "ubuntu-noble-24.04-cloudimg-20260926",
+    "operating_system": {
+      "description": "Ubuntu Linux (64-bit)",
+      "id": 94,
+      "os_type": "ubuntu64Guest",
+      "version": null
+    },
+    "products": [
+      {
+        "app_url": null,
+        "full_version": null,
+        "instance": null,
+        "product": "TRIMMED",
+        "product_class": null,
+        "product_url": null,
+        "properties": [
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "instance-id",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": "id-ovf"
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "hostname",
+            "label": null,
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": "ubuntuguest"
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "seedfrom",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": null
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "public-keys",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "user-data",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": null,
+            "description": "TRIMMED",
+            "key": "password",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          }
+        ],
+        "vendor": null,
+        "vendor_url": null,
+        "version": null
+      }
+    ]
+  }
 }

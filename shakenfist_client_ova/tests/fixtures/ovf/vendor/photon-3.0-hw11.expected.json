@@ -1,4 +1,95 @@
 {
-  "error": "UnparsedContentError",
-  "message_contains": "Not all of the OVF file was parsed"
+  "deployment_options": [],
+  "disks": [
+    {
+      "boot": null,
+      "capacity_bytes": 17179869184,
+      "disk_id": "vmdisk1",
+      "file_ref": "file1",
+      "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+      "interface": null,
+      "parent_ref": null,
+      "populated_size": 494862336
+    }
+  ],
+  "files": [
+    {
+      "chunk_size": null,
+      "compression": null,
+      "href": "photon-ova-disk1.vmdk",
+      "id": "file1",
+      "size": 161960448
+    }
+  ],
+  "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+  "networks": [
+    {
+      "description": "The None network",
+      "name": "None"
+    }
+  ],
+  "version": null,
+  "virtual_system": {
+    "description": null,
+    "eulas": [
+      {
+        "license": "TRIMMED"
+      }
+    ],
+    "hardware": [
+      {
+        "controllers": [
+          {
+            "bus": "scsi",
+            "instance_id": "3"
+          },
+          {
+            "bus": "ide",
+            "instance_id": "4"
+          }
+        ],
+        "disk_drives": [
+          {
+            "address_on_parent": 0,
+            "element_name": "disk0",
+            "host_resource": "ovf:/disk/vmdisk1",
+            "parent": "3"
+          }
+        ],
+        "memory_bytes": 2147483648,
+        "nics": [
+          {
+            "connection": "None",
+            "resource_subtype": "VmxNet3"
+          }
+        ],
+        "system_identifier": "Photon OS",
+        "system_type": "vmx-11",
+        "transport": [],
+        "vcpus": 1
+      }
+    ],
+    "id": "vm",
+    "name": "Photon OS",
+    "operating_system": {
+      "description": null,
+      "id": 100,
+      "os_type": "other3xLinux64Guest",
+      "version": null
+    },
+    "products": [
+      {
+        "app_url": null,
+        "full_version": "TRIMMED",
+        "instance": null,
+        "product": "TRIMMED",
+        "product_class": null,
+        "product_url": null,
+        "properties": [],
+        "vendor": "TRIMMED",
+        "vendor_url": null,
+        "version": "3.0"
+      }
+    ]
+  }
 }

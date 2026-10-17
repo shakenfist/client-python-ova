@@ -1,4 +1,233 @@
 {
-  "error": "UnsupportedDescriptorError(TypeError)",
-  "message_contains": "Could not parse the descriptor: TypeError"
+  "deployment_options": [
+    {
+      "default": true,
+      "description": "Minimal hardware profile - 1 vCPU, 512 MB RAM",
+      "id": "1CPU-512MB",
+      "label": "Small"
+    },
+    {
+      "default": false,
+      "description": "Medium hardware profile - 4 vCPUs, 16 GB RAM",
+      "id": "4CPU-16GB",
+      "label": "Medium"
+    },
+    {
+      "default": false,
+      "description": "Large hardware profile - 8 vCPUs, 32 GB RAM",
+      "id": "8CPU-32GB",
+      "label": "Large"
+    }
+  ],
+  "disks": [
+    {
+      "boot": null,
+      "capacity_bytes": 10737418240,
+      "disk_id": "vmdisk1",
+      "file_ref": "file1",
+      "format": "http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized",
+      "interface": null,
+      "parent_ref": null,
+      "populated_size": 439156736
+    }
+  ],
+  "files": [
+    {
+      "chunk_size": null,
+      "compression": null,
+      "href": "vyos-1.2.1-disk1.vmdk",
+      "id": "file1",
+      "size": 429361664
+    }
+  ],
+  "namespace": "http://schemas.dmtf.org/ovf/envelope/1",
+  "networks": [
+    {
+      "description": "LAN network",
+      "name": "LAN"
+    },
+    {
+      "description": "WAN network",
+      "name": "WAN"
+    }
+  ],
+  "version": null,
+  "virtual_system": {
+    "description": null,
+    "eulas": [],
+    "hardware": [
+      {
+        "controllers": [
+          {
+            "bus": "scsi",
+            "instance_id": "3"
+          },
+          {
+            "bus": "ide",
+            "instance_id": "5"
+          }
+        ],
+        "disk_drives": [
+          {
+            "address_on_parent": 0,
+            "element_name": "disk0",
+            "host_resource": "ovf:/disk/vmdisk1",
+            "parent": "3"
+          }
+        ],
+        "memory_bytes": 536870912,
+        "nics": [
+          {
+            "connection": "LAN",
+            "resource_subtype": "vmxnet3"
+          },
+          {
+            "connection": "WAN",
+            "resource_subtype": "vmxnet3"
+          }
+        ],
+        "system_identifier": null,
+        "system_type": "vmx-11",
+        "transport": [
+          "com.vmware.guestInfo"
+        ],
+        "vcpus": 1
+      }
+    ],
+    "id": "VyOS",
+    "name": null,
+    "operating_system": {
+      "description": "Debian GNU/Linux 8 (64-bit)",
+      "id": 96,
+      "os_type": "debian8_64Guest",
+      "version": "6"
+    },
+    "products": [
+      {
+        "app_url": null,
+        "full_version": null,
+        "instance": null,
+        "product": "TRIMMED",
+        "product_class": null,
+        "product_url": "TRIMMED",
+        "properties": [
+          {
+            "category": "TRIMMED",
+            "description": "TRIMMED",
+            "key": "password",
+            "label": "TRIMMED",
+            "password": true,
+            "qualifiers": "MinLen(8)",
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": "TRIMMED",
+            "description": "TRIMMED",
+            "key": "public-keys",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": "TRIMMED",
+            "description": "TRIMMED",
+            "key": "local-hostname",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": "MinLen(0),MaxLen(65535)",
+            "type": "string",
+            "user_configurable": true,
+            "value": ""
+          },
+          {
+            "category": "TRIMMED",
+            "description": "TRIMMED",
+            "key": "ip0",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": null
+          },
+          {
+            "category": "TRIMMED",
+            "description": "TRIMMED",
+            "key": "netmask0",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": null
+          },
+          {
+            "category": "TRIMMED",
+            "description": "TRIMMED",
+            "key": "gateway",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": null
+          },
+          {
+            "category": "TRIMMED",
+            "description": "TRIMMED",
+            "key": "DNS",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": null
+          },
+          {
+            "category": "TRIMMED",
+            "description": "TRIMMED",
+            "key": "NTP",
+            "label": "TRIMMED",
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": true,
+            "value": null
+          }
+        ],
+        "vendor": "TRIMMED",
+        "vendor_url": "TRIMMED",
+        "version": "1.2.1"
+      },
+      {
+        "app_url": null,
+        "full_version": null,
+        "instance": null,
+        "product": null,
+        "product_class": "vm",
+        "product_url": null,
+        "properties": [
+          {
+            "category": null,
+            "description": null,
+            "key": "vmname",
+            "label": null,
+            "password": false,
+            "qualifiers": null,
+            "type": "string",
+            "user_configurable": false,
+            "value": "VyOS"
+          }
+        ],
+        "vendor": null,
+        "vendor_url": null,
+        "version": null
+      }
+    ]
+  }
 }
