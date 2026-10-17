@@ -251,6 +251,33 @@ if [ ! -d "${CONTRACT_CACHE}/.git" ]; then
          "a test failure, and there is deliberately no fresh-clone fallback."
 fi
 
+# Everything below rests on git honouring GIT_CONFIG_COUNT/KEY/VALUE (git
+# 2.31) and GIT_CONFIG_GLOBAL (git 2.32). An older git ignores both
+# silently: it would run without the hardening and with the runner's
+# global configuration, and the fetch would go out without the header.
+# So prove both are honoured, rather than parse a version string. This
+# is the first git command, and it runs outside any repository, with no
+# credential anywhere.
+git_selftest() {
+    local global rc=0 seen
+    local -a vars
+    global="$(mktemp)"
+    printf '[corpus]\n\tglobal = ok\n' > "${global}"
+    vars=(GIT_CONFIG_NOSYSTEM=1 "GIT_CONFIG_GLOBAL=${global}" GIT_CONFIG_COUNT=1
+          GIT_CONFIG_KEY_0=corpus.selftest GIT_CONFIG_VALUE_0=ok)
+    seen="$(cd / && env "${vars[@]}" git config --get corpus.selftest \
+        && env "${vars[@]}" git config --get corpus.global)" || rc=$?
+    rm -f -- "${global}"
+    if [ "${rc}" != 0 ] || [ "${seen}" != $'ok\nok' ]; then
+        fail "git on this runner does not honour GIT_CONFIG_COUNT and" \
+             "GIT_CONFIG_GLOBAL, which this script relies on to give git" \
+             "the credential and its hardening without writing them down," \
+             "and to leave the runner's own configuration out." \
+             "git 2.32 or later is required."
+    fi
+}
+git_selftest
+
 # Before any git command runs in the tree, and before the credential is
 # prepared.
 check_cache_config
@@ -437,6 +464,21 @@ on_exit() {
     exit "${status}"
 }
 trap on_exit EXIT
+# An interrupted or terminated run exits through on_exit too, with the
+# status a shell gives a death by that signal; credential_checked keeps
+# the check from running a second time.
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# A git-lfs error log left from an earlier run -- one killed before its
+# EXIT trap, or one that recorded a token since rotated, which the
+# token-matching scrub in check_no_credential cannot recognise -- would
+# otherwise survive this run. So every file there goes before the first
+# authenticated command, whatever it holds. The scrub stays, for the
+# logs this run writes.
+if [ -d "${cache}/.git/lfs/logs" ]; then
+    find "${cache}/.git/lfs/logs" -mindepth 1 -type f -delete
+fi
 
 echo "Updating ${cache} to ${REPO_BRANCH} of ${REPO_URL}"
 authed_git fetch --quiet --depth 1 "${REPO_URL}" "${REPO_BRANCH}"

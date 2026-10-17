@@ -605,6 +605,31 @@ class VerificationTestCase(CommandTestCase):
         self.assertEqual(2, result.output.count(', a new artifact\n'), result.output)
         self.assertNotIn('shared-uuid', result.output)
 
+    def test_an_artifact_without_a_namespace_is_not_added_to(self):
+        def configure(client):
+            client.get_artifact.side_effect = lambda name: {
+                'uuid': 'unowned-uuid', 'source_url': 'sf://upload/%s/%s' % (NAMESPACE, name)}
+
+        result, client, util = self._import(SMALL, disks=DISKS, configure=configure)
+        self.assertEqual(0, result.exit_code, result.output)
+        self.assertNotIn('Traceback', result.output)
+        self.assertEqual(2, result.output.count(', a new artifact\n'), result.output)
+        self.assertNotIn('unowned-uuid', result.output)
+
+    def test_an_artifact_without_a_source_url_is_refused(self):
+        for artifact in ({'uuid': 'bare-uuid', 'namespace': NAMESPACE},
+                         {'uuid': 'bare-uuid', 'namespace': NAMESPACE, 'source_url': None}):
+            def configure(client, artifact=artifact):
+                client.get_artifact.side_effect = lambda name: artifact
+
+            result, client, util = self._import(SMALL, disks=DISKS, configure=configure)
+            self.assertEqual(1, result.exit_code, result.output)
+            self.assertNotIn('Traceback', result.output)
+            self.assertEqual('An artifact named example-vm-vmdisk1 already exists in the namespace mine, but was not '
+                             'created by an upload, so the import cannot add to it: rename or delete the artifact '
+                             'bare-uuid first', self._lines(result.output)[-1])
+            self.assertNoArtifacts(client, util)
+
     def test_an_artifact_not_made_by_an_upload_is_refused_before_any_read(self):
         # An upload would make a second artifact of the name, rather than go into this one.
         def configure(client):

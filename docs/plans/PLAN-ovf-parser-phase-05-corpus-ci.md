@@ -418,6 +418,9 @@ output is pushed:
 
 ## Execution notes
 
+Dates here are the operator's local time, AEDT (UTC+11); CI timestamps
+are UTC.
+
 * **The steps ran in sequence, not in parallel.** 5a and 5c both run
   `pre-commit` and `tox` in the same worktree, so running them together
   would have had each tripping over the other's half-finished work. The
@@ -508,3 +511,16 @@ output is pushed:
   The allow-list refuses a developer checkout's `pull.rebase` and
   `remote.origin.glab-resolved`. That is deliberate, because the script
   runs only on the fleet disk.
+* **The config guard accepts the real fleet disk.** The
+  `appliance-corpus` job passed again at `8adbe7a`, with the guard and
+  the git hardening in place.
+* **The second review round raised one fix item, which was wrong.** It
+  said `ApiErrorTestCase` re-ran every command test. Its base class,
+  `CommandTestCase`, defines no tests, and `stestr list` shows no
+  duplicate ids. The round's document and consider items were taken:
+  * missing server fields are handled without a traceback;
+  * the fetch script self-tests that git honours `GIT_CONFIG_*` and
+    `GIT_CONFIG_GLOBAL` (git 2.32);
+  * it deletes every LFS log before authenticating, and exits through
+    its credential check on INT and TERM;
+  * a whole appliance must check at least one disk's digest.

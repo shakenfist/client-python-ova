@@ -266,9 +266,12 @@ def _existing_artifacts(client, names):
         except apiclient.APIException as e:
             print()
             _refuse('Could not look up the artifact %s: %s' % (name, _api_error(e)))
-        if artifact is not None and artifact['namespace'] != client.namespace:
+        # A server that leaves either field out is answered as for any other
+        # value: an artifact without a namespace is not the caller's, and one
+        # of the caller's without a source URL was not created by an upload.
+        if artifact is not None and artifact.get('namespace') != client.namespace:
             artifact = None
-        if artifact is not None and artifact['source_url'] != 'sf://upload/%s/%s' % (client.namespace, name):
+        if artifact is not None and artifact.get('source_url') != 'sf://upload/%s/%s' % (client.namespace, name):
             print()
             _refuse('An artifact named %s already exists in the namespace %s, but was not created by an upload, '
                     'so the import cannot add to it: rename or delete the artifact %s first'

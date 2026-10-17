@@ -161,6 +161,12 @@ class ApplianceCorpusTestCase(testtools.TestCase):
         self.expected = read_expected()
 
     def test_corpus_is_complete(self):
+        """Every expected.json entry still names an appliance in the corpus.
+
+        Whether the corpus itself is complete is checked in setUp, so that
+        every test fails without it; this checks the expected outcomes against
+        the appliances that are there.
+        """
         stale = sorted(set(self.expected) - set(self.names))
         self.assertEqual([], stale, 'expected.json names appliances which are not in the corpus')
 
@@ -212,6 +218,7 @@ class ApplianceCorpusTestCase(testtools.TestCase):
             uploads = [('%s-%s' % (system_id, upload.disk.disk_id), package.member_size(upload.member))
                        for upload in package.uploads]
             members = [upload.member for upload in package.uploads]
+            checked = 0
             for number, upload in enumerate(package.uploads, 1):
                 entry = package.manifest_entry(upload.member)
                 if entry is None:
@@ -221,6 +228,10 @@ class ApplianceCorpusTestCase(testtools.TestCase):
                     _, outcome = _attempt(package.check_digest, upload.member, digests)
                 if outcome is not None:
                     self.fail('%s: checking disk %d against the manifest gives %s' % (name, number, outcome))
+                checked += 1
+            # Otherwise a whole appliance would pass with no disk checked at all.
+            if not checked:
+                self.fail('%s: a whole appliance, but has no manifest entry for any disk' % name)
 
         self.assertEqual(uploads, self.run_import(name, path, members), '%s: what the import uploads' % name)
 

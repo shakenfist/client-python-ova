@@ -12,7 +12,10 @@
 # configuration carries a key a clone does not, before any git command
 # but the configuration reads; that it fails, without printing the
 # token, when the token turns up under .git after the authenticated
-# commands; and that it removes a git-lfs log that recorded the token.
+# commands; that it removes a git-lfs log that recorded the token, and
+# any log an earlier run left, before the first authenticated command;
+# and that it refuses a git too old to honour the configuration
+# variables it relies on.
 # There, `git` is a stub that passes configuration reads through to the
 # real git and stands in for the rest, so that nothing needs the
 # network, the real token or the private repository. What the stub
@@ -174,6 +177,9 @@ if [ "\$1" = config ]; then
     exec "${real_git}" "\$@"
 fi
 echo "\$1" >> "${scratch}/run-calls"
+if [ -n "\$(find "\${dir}/.git/lfs/logs" -type f 2>/dev/null)" ]; then
+    echo "\$1" >> "${scratch}/logs-seen"
+fi
 case "\$1:\$(cat "${scratch}/stub-mode")" in
     fetch:config)
         printf '[remote "copy"]\\n\\turl = https://oauth2:%s@example.invalid/x.git\\n' \\
@@ -216,14 +222,15 @@ make_tree() {
     printf '{"kind": "whole"}\n' > "${tree}/downloaded/ova/a.provenance.json"
 }
 
-# run_tree NAME MODE: runs the script on the tree NAME with the run stub
-# in MODE, setting output and status.
+# run_tree NAME MODE [STUBS]: runs the script on the tree NAME with the
+# run stub in MODE, setting output and status. STUBS is a PATH directory
+# to use in place of path-run.
 run_tree() {
     local tree="${scratch}/$1"
     printf '%s\n' "$2" > "${scratch}/stub-mode"
-    rm -f "${scratch}/run-calls"
+    rm -f "${scratch}/run-calls" "${scratch}/logs-seen"
     status=0
-    output=$(env -i HOME="${scratch}" PATH="${scratch}/path-run:/usr/bin:/bin" \
+    output=$(env -i HOME="${scratch}" PATH="${3:-${scratch}/path-run}:/usr/bin:/bin" \
         TESTDATA_TOKEN="${sentinel}" TESTDATA_CONTRACT_CACHE="${tree}" TESTDATA_CACHE="${tree}" \
         "${BASH}" "${script}" 2>&1) || status=$?
 }
@@ -365,6 +372,71 @@ if [ "$(paste -sd ' ' "${scratch}/run-calls" 2>/dev/null)" != 'fetch reset clean
     problems+=("ran '$(paste -sd ' ' "${scratch}/run-calls" 2>/dev/null)', not 'fetch reset clean lfs'")
 fi
 report 'a git-lfs log holding the token' "${problems[@]}"
+
+# A git-lfs log left by an earlier run is removed before any
+# authenticated command, whatever it holds: here, nothing this run's
+# token would match, as with a log from before the token was rotated.
+make_tree stale-log
+mkdir -p "${scratch}/stale-log/.git/lfs/logs"
+printf 'GIT_CONFIG_VALUE_1=an-earlier-token\n' > "${scratch}/stale-log/.git/lfs/logs/old.log"
+run_tree stale-log none
+problems=()
+if [ "${status}" != 0 ]; then
+    problems+=("exited ${status}")
+fi
+if [ -e "${scratch}/stale-log/.git/lfs/logs/old.log" ]; then
+    problems+=("left the log in place")
+fi
+if [ -e "${scratch}/logs-seen" ]; then
+    problems+=("ran git $(paste -sd ' ' "${scratch}/logs-seen") with the log still there")
+fi
+if [[ "${output}" == *"${sentinel}"* || "${output}" == *"${encoded}"* ]]; then
+    problems+=("printed the token")
+fi
+report 'a git-lfs log from an earlier run' "${problems[@]}"
+
+# expect_old_git NAME UNSET...: a git that ignores the given environment
+# variables, as one older than 2.32 does, must be refused before it is
+# run on the tree.
+expect_old_git() {
+    local name=$1 stubs tree
+    shift
+    stubs="${scratch}/path-old-$(printf '%s' "${name}" | tr -c 'a-z0-9' '-')"
+    tree="old-$(printf '%s' "${name}" | tr -c 'a-z0-9' '-')"
+    mkdir -p "${stubs}"
+    # The stub's own variables are written for it to expand, not this shell.
+    # shellcheck disable=SC2016
+    {
+        printf '#!/bin/sh\n'
+        printf 'sub=$1; [ "$1" = -C ] && sub=$3\n'
+        printf '[ "${sub}" = config ] || echo "${sub}" >> "%s/run-calls"\n' "${scratch}"
+        printf 'exec env'
+        printf ' -u %s' "$@"
+        printf ' "%s" "$@"\n' "${real_git}"
+    } > "${stubs}/git"
+    printf '#!/bin/sh\nexit 0\n' > "${stubs}/git-lfs"
+    chmod +x "${stubs}/git" "${stubs}/git-lfs"
+    make_tree "${tree}"
+    run_tree "${tree}" none "${stubs}"
+    local problems=()
+    if [ "${status}" = 0 ]; then
+        problems+=("exited 0")
+    fi
+    if [[ "${output}" != *'git 2.32 or later is required'* ]]; then
+        problems+=("did not refuse the git")
+    fi
+    if [[ "${output}" == *"${sentinel}"* || "${output}" == *"${encoded}"* ]]; then
+        problems+=("printed the token")
+    fi
+    if [ -e "${scratch}/run-calls" ]; then
+        problems+=("ran git $(paste -sd ' ' "${scratch}/run-calls") before refusing")
+    fi
+    report "${name}" "${problems[@]}"
+}
+
+expect_old_git 'a git that ignores GIT_CONFIG_COUNT and GIT_CONFIG_GLOBAL' \
+    GIT_CONFIG_COUNT GIT_CONFIG_GLOBAL
+expect_old_git 'a git that ignores GIT_CONFIG_GLOBAL alone' GIT_CONFIG_GLOBAL
 
 if [ "${failures}" != 0 ]; then
     echo "${failures} case(s) failed" >&2
