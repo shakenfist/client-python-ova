@@ -473,6 +473,15 @@ output is pushed:
     passes.
   * No `ova://` remains.
   * `descriptor-corpus` passes 4 of 4.
-* **Still to come:** the token's expiry date, from the operator (step
-  5e), and the first run of the `appliance-corpus` job on this phase's
-  pull request.
+* **Step 5e departed from decision 4.** The operator shared the
+  organisation-wide `GITLAB_TESTDATA_TOKEN` secret with this
+  repository, rather than creating a token dedicated to it. It is the
+  token instar's jobs use, with the `oauth2` username, which is the
+  fetch script's default, so no `GITLAB_TESTDATA_USER` variable is
+  needed. The consequence decision 4 was written to avoid now applies:
+  revoking the token breaks instar and this repository together, and
+  its scope and expiry are whatever the organisation secret's are. That
+  was the operator's call. The script's handling of the credential does
+  not depend on which token it is given.
+* **Still to come:** the first run of the `appliance-corpus` job on
+  this phase's pull request.
