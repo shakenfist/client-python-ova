@@ -31,6 +31,15 @@ class ParseManifestTestCase(testtools.TestCase):
                 self.assertEqual([ovf.ManifestEntry(name='a.vmdk', algorithm=algorithm.lower(), digest=digest)],
                                  manifest.entries, written)
 
+    def test_a_leading_byte_order_mark_is_ignored(self):
+        manifest = ovf.parse_manifest(b'\xef\xbb\xbf' + ('SHA1(a.vmdk)= %s\n' % SHA1).encode())
+        self.assertEqual([ovf.ManifestEntry(name='a.vmdk', algorithm='sha1', digest=SHA1)], manifest.entries)
+
+    def test_a_byte_order_mark_elsewhere_is_refused(self):
+        data = ('SHA1(a.vmdk)= %s\n' % SHA1).encode() + b'\xef\xbb\xbf' + ('SHA1(b.vmdk)= %s\n' % SHA1).encode()
+        e = self.assertRaises(ovf.ManifestError, ovf.parse_manifest, data)
+        self.assertIn('line 2', str(e))
+
     def test_keeps_entries_in_order(self):
         manifest = ovf.parse_manifest(('SHA1(b.vmdk)= %s\nSHA1(a.ovf)= %s\nSHA1(c.iso)= %s\n'
                                        % (SHA1, SHA1, SHA1)).encode())

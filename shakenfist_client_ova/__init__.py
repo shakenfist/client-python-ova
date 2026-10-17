@@ -254,8 +254,6 @@ def _import_package(client, package, path, accept_eula):
     if version is None:
         version = 1
     name = envelope.virtual_system.id
-    if name is None:
-        name = 'Imported OVA VM'
 
     print('VM description:')
     for line in _envelope_summary(envelope, version, name):
@@ -294,7 +292,7 @@ def _import_package(client, package, path, accept_eula):
 
 
 @ova.command(name='import', help='Import an OVA file')
-@click.argument('source', type=click.Path(exists=True))
+@click.argument('source', type=click.Path(exists=True, dir_okay=False, readable=True))
 @click.option('--namespace', type=click.STRING,
               help=('If you are an admin, you can import the OVA into a '
                     'different namespace.'))
@@ -312,7 +310,7 @@ def ova_import(ctx, source=None, namespace=None, accept_eula=False):
     except ovf.OVFError as e:
         _refuse(e)
     with package:
-        _import_package(ctx.obj['CLIENT'], package, os.path.abspath(source), accept_eula)
+        _import_package(ctx.obj['CLIENT'], package, os.path.realpath(source), accept_eula)
 
 
 ova.add_command(ova_import)

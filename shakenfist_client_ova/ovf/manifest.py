@@ -13,10 +13,12 @@ The digest is hexadecimal of the algorithm's length, in either case; it is
 kept as written, so a comparison with a computed digest must ignore case.
 
 A carriage return before a line's newline is ignored, so a manifest with
-CRLF line endings parses. Blank lines are skipped, and the last line needs no
-newline. Each name may have only one entry. A line that breaks any of these
-rules is a ManifestError, whose message gives its line number, and so is a
-manifest that is not UTF-8.
+CRLF line endings parses. One UTF-8 byte order mark at the very start is
+ignored too; a byte order mark anywhere else is part of the text, and so a
+ManifestError. Nothing is ambiguous about either. Blank lines are skipped,
+and the last line needs no newline. Each name may have only one entry. A
+line that breaks any of these rules is a ManifestError, whose message gives
+its line number, and so is a manifest that is not UTF-8.
 """
 
 import re
@@ -51,7 +53,7 @@ def _lines(text):
 def _parse_manifest(data):
     manifest = Manifest()
     first_lines = {}
-    for number, line in _lines(data.decode()):
+    for number, line in _lines(data.decode('utf-8-sig')):
         if not line:
             continue
 

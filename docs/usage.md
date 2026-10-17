@@ -14,7 +14,8 @@ with `--namespace <name>`.
 1. **Opens the archive and prints its summary.** An OVA must be a
    plain, uncompressed tar file. The command finds the descriptor
    (the one top-level `.ovf` member), the manifest (`.mf`) and the
-   certificate (`.cert`), checks the archive against them, and prints
+   certificate (`.cert`), matching those suffixes in lower case as
+   DSP0243 gives them, so `APPLIANCE.OVF` is not found, checks the archive against them, and prints
    "Archive members:": which member is the descriptor, the manifest
    and the certificate, which member holds each file the descriptor
    lists, each disk that has no file (it is created empty at
@@ -66,15 +67,19 @@ with `--namespace <name>`.
    cluster can be reused. With neither a manifest nor blob search, a
    disk is not read until it is uploaded. Every disk is checked before
    any is uploaded, so that a corrupt second disk does not leave the
-   first behind as an artifact.
+   first behind as an artifact. The upload in the next step reads each
+   disk again, and that read is not checked.
 7. **Uploads the disks.** Each disk is uploaded as a blob, or an
    existing blob with the same SHA-512 is reused, and wrapped in an
    artifact named `<system>-<disk>`, from the virtual system's
    `ovf:id` and the disk's `ovf:diskId`. The artifact's source URL is
-   `ova://` followed by the absolute path of the OVA, a `/` and the
-   member name, such as `ova:///home/me/appliance.ova/disk1.vmdk`. A
-   name containing a `/` is refused before anything is read, because
-   Shaken Fist would refuse it only after the upload.
+   `ova://` followed by the absolute path of the OVA with any symlinks
+   resolved, so the same OVA reached through a symlinked directory is
+   the same artifact, a `/` and the member name, such as
+   `ova:///home/me/appliance.ova/disk1.vmdk`. Nothing is
+   percent-encoded. A name containing a `/` is refused before
+   anything is read, because Shaken Fist would refuse it only after
+   the upload.
 
 The import does not yet create an instance from what it has parsed.
 
@@ -92,6 +97,11 @@ cut short, a disk damaged in storage, a descriptor from one export
 paired with disks from another. It does not detect tampering. Anyone
 who can change the descriptor or a disk can rewrite or remove the
 manifest to match, and nothing in the OVA says who wrote it.
+
+The upload reads each disk from the archive again, and that second
+read is not checked against the manifest. An OVA changed on disk
+during the import, to a file of the same size, would not be
+detected.
 
 The `.cert` member, if there is one, is not checked: its signature is
 not verified and its certificate is not validated. The command says so

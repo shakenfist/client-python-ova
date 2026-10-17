@@ -512,7 +512,7 @@ class VerificationTestCase(CommandTestCase):
         self.assertEqual(0, result.exit_code, result.output)
         self.assertEqual(2, result.output.count('Searching for a pre-existing blob with this hash...\n'
                                                 'Disk is already present in the cluster\n'), result.output)
-        url = 'ova://%s/' % os.path.abspath(self.path)
+        url = 'ova://%s/' % os.path.realpath(self.path)
         self.assertEqual(
             [mock.call('example-vm-vmdisk1', 'blob-uuid', source_url=url + 'disk1.vmdk'),
              mock.call('example-vm-vmdisk2', 'blob-uuid', source_url=url + 'disk2.vmdk')],
@@ -534,6 +534,25 @@ class VerificationTestCase(CommandTestCase):
         self.assertEqual([mock.call(client, 'example-vm-vmdisk1', mock.ANY, 5, 'ova://%s/disk1.vmdk' % path),
                           mock.call(client, 'example-vm-vmdisk2', mock.ANY, 5, 'ova://%s/disk2.vmdk' % path)],
                          util.upload_artifact_with_progress_file_like_object.call_args_list)
+
+    def test_source_url_names_the_real_path_through_a_symlinked_directory(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            real = os.path.realpath(tmpdir)
+            os.mkdir(os.path.join(real, 'real'))
+            path = synthetic.build(os.path.join(real, 'real', 'x.ova'), _members(SMALL, disks=DISKS))
+            os.symlink(os.path.join(real, 'real'), os.path.join(real, 'link'))
+            result, client, util = self._invoke(os.path.join(real, 'link', 'x.ova'))
+        self.assertEqual(0, result.exit_code, result.output)
+        self.assertEqual(['ova://%s/disk1.vmdk' % path, 'ova://%s/disk2.vmdk' % path],
+                         [upload[3] for upload in self.uploads])
+
+    def test_a_directory_is_refused_by_click_before_the_archive_is_opened(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with mock.patch('shakenfist_client_ova.apiclient.Client'), \
+                    mock.patch('shakenfist_client_ova.ovf.open_package') as open_package:
+                result = CliRunner().invoke(ova.ova, ['import', tmpdir], obj={})
+        self.assertEqual(2, result.exit_code, result.output)
+        open_package.assert_not_called()
 
     def test_slash_in_an_artifact_name_is_refused_before_any_read(self):
         descriptor = _replace(SMALL, '<VirtualSystem ovf:id="example-vm">', '<VirtualSystem ovf:id="example/vm">')
