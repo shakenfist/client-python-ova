@@ -53,6 +53,9 @@ releasing.
 - The manifest check detects corruption and accidental mismatch, and is
   never described as a security control. See "What the manifest does
   and does not do" in `docs/usage.md`.
+- The appliance corpus is private, so tests and logs carry appliance and outcome
+  names, never descriptor or manifest text. See "Appliance corpus tier" in
+  `docs/development.md`.
 - Vendor OVF descriptors are committed only as trimmed copies made by
   `tools/trim-ovf-descriptor.py`, never by hand, because this
   repository is public. See "Test fixtures" in `docs/development.md`.

@@ -195,8 +195,8 @@ when the checkout goes wrong.
 Shaken Fist identifies an uploaded image with `qemu-img info`
 (`shakenfist/util/image.py`), and transcodes cached images to qcow2.
 No allow-list of input formats turned up, so a streamOptimized VMDK
-artifact is probably usable as it is. No import has been booted live
-to prove it.
+artifact is usable as it is. Phase 4's live import of the Ubuntu
+cloud image proved it.
 
 ## Mission and problem statement
 
@@ -456,21 +456,24 @@ Out of scope, and deliberately so:
 
 ## Open questions
 
-1. **Does Shaken Fist boot an uploaded streamOptimized VMDK?** The
-   server code suggests it does (see "The server side"). Phase 4 ends
-   with one live import of the Ubuntu cloud image OVA to settle it. If
-   it does not, conversion moves into the instance-creation plan,
-   because it changes what the importer is rather than how it parses.
+1. **Resolved: does Shaken Fist boot an uploaded streamOptimized VMDK?**
+   The server code suggested it did (see "The server side"), and phase 4
+   ended with one live import of the Ubuntu cloud image OVA to settle
+   it. It boots: the server transcodes the VMDK itself, so conversion
+   does not move into the instance-creation plan (phase 4 plan,
+   execution notes).
 2. **Resolved: do the original VyOS 1.2.1 and Splunk DCN 4.0.6 OVAs
    still exist?** VyOS 1.2.1 does, at a new URL, and it is the same
    release: its disk matches the one in `instar-testdata`. Splunk's
    needs a Splunkbase login and may not be redistributed, so it is left
    out. Photon OS, Talos and REMnux add further ovftool output (see
    "Test data").
-3. **Which runner labels reach the private GitLab with git-lfs
-   installed?** Phase 5 reads instar's `functional-tests.yml` for the
-   answer rather than guessing. Adding `GITLAB_TESTDATA_TOKEN` as a
-   secret on this repository is the operator's step, not an agent's.
+3. **Resolved: which runner labels reach the private GitLab with
+   git-lfs installed?** `[self-hosted, debian-13, xl, instar]`, the set
+   every instar job that reads the testdata uses. The `instar` label is
+   what promises the fleet's pre-built testdata disk (phase 5 plan,
+   survey finding 3). Adding `GITLAB_TESTDATA_TOKEN` as a secret on this
+   repository is still the operator's step, not an agent's.
 
 Phase 1's survey found three shapes the decisions above would refuse.
 Each is for phase 3 to settle, before it writes the namespace and
@@ -517,8 +520,8 @@ attribute tables; the evidence is in the phase 1 plan's survey finding
 | 1. Corpus and fixtures | [PLAN-ovf-parser-phase-01-corpus.md](PLAN-ovf-parser-phase-01-corpus.md) | Complete | instar-testdata 18a5ea5421..cf67642bbb; db7bdaa |
 | 2. Extract the parser | [PLAN-ovf-parser-phase-02-extract.md](PLAN-ovf-parser-phase-02-extract.md) | Complete | 97273c7 |
 | 3. ElementTree and the specification | [PLAN-ovf-parser-phase-03-elementtree.md](PLAN-ovf-parser-phase-03-elementtree.md) | Complete | b1f8894 |
-| 4. Archive correctness | [PLAN-ovf-parser-phase-04-archive.md](PLAN-ovf-parser-phase-04-archive.md) | In progress | |
-| 5. Corpus CI tier | - | Not started | |
+| 4. Archive correctness | [PLAN-ovf-parser-phase-04-archive.md](PLAN-ovf-parser-phase-04-archive.md) | Complete | a8f44bf |
+| 5. Corpus CI tier | [PLAN-ovf-parser-phase-05-corpus-ci.md](PLAN-ovf-parser-phase-05-corpus-ci.md) | In progress | |
 | 6. Push audit | - | Not started | |
 
 Phase plans are written when each phase starts, from this plan and
@@ -791,8 +794,9 @@ archive tests' passing cases are synthetic.
   decompressed ones. Decompressing an untrusted file also needs a cap.
   Support waits until a corpus appliance needs it (see Future work).
 - Name each disk artifact after its disk, as `<system id>-<disk id>`,
-  and build its source URL from the OVA's absolute path, since the
-  server identifies an artifact by its source URL. Move the hardware
+  and build its source URL from the OVA's real path, since the server
+  identifies an artifact by its source URL. (Phase 5 replaced that URL
+  with the server's `sf://upload/` default.) Move the hardware
   summary, which phase 2 left printing after every disk, out of the
   upload loop.
 - Test with synthetic OVAs built in the tests, which needs no
@@ -807,16 +811,21 @@ This phase covers the appliance corpus tier only. The descriptor
 corpus tier's job was added in phase 2; it needs no secret and is not
 gated.
 
-- Adapt instar's `prepare-testdata.sh` into `tools/ci/`. Pull only
-  `downloaded/ova/` from LFS (`git lfs pull --include`), about 2GB,
-  not the whole 9GB.
+- Write a small fetch script in `tools/ci/`. instar's
+  `prepare-testdata.sh` has grown into a contract with the runner
+  fleet's pre-built testdata disk, and it leaves the token in the
+  clone's remote URL, so it is not adapted (phase 5 plan, survey
+  finding 2). On an `instar` runner the tree is that disk. The script
+  updates it, and pulls only `downloaded/ova/`'s LFS objects, about
+  2GB (`git lfs pull --include`). It passes the token in a header on
+  each command, never in a URL or a file.
 - Add a corpus test that runs the parse and the archive checks over
   every appliance, and a guard that fails when the corpus is missing,
   never one that skips. Run it as `tox -eappliance-corpus` (decision
   5), outside `py3`'s discovery, and describe that environment in
   `docs/development.md`.
 - Add the job to `ci.yml` on the runner labels open question 3
-  settles, after the operator has added the secret. Fork pull requests
+  settled, after the operator has added the secret. Fork pull requests
   receive no secrets, so the job is gated at the workflow level
   (`if: github.event_name != 'pull_request' ||
   github.event.pull_request.head.repo.full_name == github.repository`)
@@ -845,6 +854,12 @@ gated.
   here on the same terms. The phase plan records the token's scope,
   who rotates it, and every trigger that can reach the job: pull
   requests, `workflow_dispatch`, and the re-test workflow.
+- Stop giving artifacts an `ova://` source URL. Phase 4's live import
+  found that it boots only through the server's fallback for
+  unreachable sources. The command sends no source URL, so the server
+  applies `sf://upload/<namespace>/<name>`, and it records the OVA's
+  path and the member name as artifact metadata instead. The operator
+  added this after phase 4 merged.
 
 ### 6. Push audit
 
