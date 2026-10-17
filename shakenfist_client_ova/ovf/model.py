@@ -159,7 +159,7 @@ class ManifestEntry:
 
 @dataclass
 class Manifest:
-    entries: List[ManifestEntry] = field(default_factory=list)  # every line, duplicates included
+    entries: List[ManifestEntry] = field(default_factory=list)  # every entry, in the manifest's order
 
 
 def to_json(model):

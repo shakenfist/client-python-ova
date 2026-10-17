@@ -21,9 +21,16 @@ OVF_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'ovf')
 ALLOWED_IMPORTS = frozenset([
     # The standard library modules ovf/ uses.
     'dataclasses',
+    # package.py hashes members to check them against the manifest.
+    'hashlib',
     'io',
     'json',
+    # package.py compares the manifest's and the descriptor's base names. A
+    # member name is a POSIX path whatever the platform, so never os.path.
+    'posixpath',
     're',
+    # package.py reads the OVA, which is a tar archive.
+    'tarfile',
     'typing',
 
     # The one third-party parsing dependency.
@@ -113,7 +120,7 @@ class BoundaryTestCase(testtools.TestCase):
     def test_modules_found(self):
         names = [os.path.basename(path) for path in _modules()]
         for expected in ('__init__.py', 'cim.py', 'descriptor.py', 'errors.py', 'manifest.py', 'model.py',
-                         'namespaces.py', 'prose.py', 'quirks.py', 'units.py'):
+                         'namespaces.py', 'package.py', 'prose.py', 'quirks.py', 'units.py'):
             self.assertIn(expected, names)
 
     def test_never_imports_the_command_dependencies(self):

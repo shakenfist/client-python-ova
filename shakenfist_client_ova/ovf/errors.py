@@ -104,8 +104,9 @@ class PackageLayoutError(OVFError):
     names end in .ovf, .mf and .cert. This is raised for two members with one
     name once a leading ./ is removed, for a package with no descriptor or
     more than one, more than one manifest or more than one certificate, for a
-    certificate without a manifest, and for a descriptor or manifest larger
-    than the parser will read.
+    certificate without a manifest, for a descriptor, manifest or certificate
+    that is not a regular file, and for a descriptor or manifest larger than
+    the parser will read.
     """
 
 
