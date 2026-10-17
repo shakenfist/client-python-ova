@@ -195,8 +195,8 @@ when the checkout goes wrong.
 Shaken Fist identifies an uploaded image with `qemu-img info`
 (`shakenfist/util/image.py`), and transcodes cached images to qcow2.
 No allow-list of input formats turned up, so a streamOptimized VMDK
-artifact is probably usable as it is. No import has been booted live
-to prove it.
+artifact is usable as it is. Phase 4's live import of the Ubuntu
+cloud image proved it.
 
 ## Mission and problem statement
 
@@ -456,11 +456,12 @@ Out of scope, and deliberately so:
 
 ## Open questions
 
-1. **Does Shaken Fist boot an uploaded streamOptimized VMDK?** The
-   server code suggests it does (see "The server side"). Phase 4 ends
-   with one live import of the Ubuntu cloud image OVA to settle it. If
-   it does not, conversion moves into the instance-creation plan,
-   because it changes what the importer is rather than how it parses.
+1. **Resolved: does Shaken Fist boot an uploaded streamOptimized VMDK?**
+   The server code suggested it did (see "The server side"), and phase 4
+   ended with one live import of the Ubuntu cloud image OVA to settle
+   it. It boots: the server transcodes the VMDK itself, so conversion
+   does not move into the instance-creation plan (phase 4 plan,
+   execution notes).
 2. **Resolved: do the original VyOS 1.2.1 and Splunk DCN 4.0.6 OVAs
    still exist?** VyOS 1.2.1 does, at a new URL, and it is the same
    release: its disk matches the one in `instar-testdata`. Splunk's
@@ -517,7 +518,7 @@ attribute tables; the evidence is in the phase 1 plan's survey finding
 | 1. Corpus and fixtures | [PLAN-ovf-parser-phase-01-corpus.md](PLAN-ovf-parser-phase-01-corpus.md) | Complete | instar-testdata 18a5ea5421..cf67642bbb; db7bdaa |
 | 2. Extract the parser | [PLAN-ovf-parser-phase-02-extract.md](PLAN-ovf-parser-phase-02-extract.md) | Complete | 97273c7 |
 | 3. ElementTree and the specification | [PLAN-ovf-parser-phase-03-elementtree.md](PLAN-ovf-parser-phase-03-elementtree.md) | Complete | b1f8894 |
-| 4. Archive correctness | [PLAN-ovf-parser-phase-04-archive.md](PLAN-ovf-parser-phase-04-archive.md) | In progress | |
+| 4. Archive correctness | [PLAN-ovf-parser-phase-04-archive.md](PLAN-ovf-parser-phase-04-archive.md) | Complete | a8f44bf |
 | 5. Corpus CI tier | - | Not started | |
 | 6. Push audit | - | Not started | |
 

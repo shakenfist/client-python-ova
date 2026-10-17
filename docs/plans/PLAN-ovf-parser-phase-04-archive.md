@@ -643,5 +643,27 @@ departed from the text above:
   | `tails-202607` | descriptor-only | `UnsupportedEnvelopeError` |
   | the other nine | descriptor-only | `MissingMemberError`, naming exactly the provenance file's absent members |
 
-* **Step 4e has not run.** The live import of the Ubuntu cloud image
-  needs an operator and a cluster, so open question 1 is still open.
+* **Step 4e ran after the merge, and the image boots.** It ran on
+  2026-10-17, against `develop` at a8f44bf, so it is recorded here by
+  phase 5's close-out.
+  * The Ubuntu 24.04 cloud image OVA (release-20260926, 594,800,640
+    bytes) matched the vendor SHA-256 recorded in `instar-testdata`
+    (`513a22eb...`).
+  * `sf-client ova import` verified the VMDK against the manifest and
+    uploaded it as `ubuntu-noble-24.04-cloudimg-20260926-vmdisk1`.
+  * The server recorded the blob as a streamOptimized VMDK, with the
+    SHA-256 the provenance file gives for the member (`58001251...`).
+  * An instance with that blob as its base (2 vCPUs, 2 GiB, no network)
+    booted to a login prompt. cloud-init finished from Shaken Fist's
+    config drive, which also set the hostname.
+
+  Open question 1 is answered: Shaken Fist transcodes the
+  streamOptimized VMDK itself, and the importer needs no conversion.
+* **A disk base names an artifact by its URL, not its bare UUID.** A
+  bare UUID was taken as an internet URL, and the fetch failed with
+  `MissingSchema`. `sf://artifact/<uuid>` and `sf://blob/<uuid>` work.
+  The artifact's `ova://` source URL also booted, but only through the
+  server's cached-version fallback, which logged "updating image
+  failed, using already cached version". Phase 5 replaces that scheme
+  with the server's own `sf://upload/` default. Refusing an unfetchable
+  base at create time is shakenfist/shakenfist#4557.
