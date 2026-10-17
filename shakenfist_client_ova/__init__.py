@@ -4,6 +4,7 @@ import math
 from shakenfist_client import apiclient, util
 import sys
 import tarfile
+import unicodedata
 
 from shakenfist_client_ova import ovf
 
@@ -21,13 +22,26 @@ def _printable(text):
     escape sequence can clear the screen, retitle the window or rewrite what
     was printed before. So every C0 and C1 control character (U+0000 to
     U+001F and U+007F to U+009F), except a newline and a tab, is written as a
-    visible escape instead, such as \\x1b for ESC.
+    visible escape instead, such as \\x1b for ESC. A format character
+    (Unicode category Cf), which covers the bidirectional overrides and the
+    zero-width characters that make text read differently from how it is
+    stored, is written as \\uXXXX. A backslash is written as two, so that
+    text cannot pass for one of these escapes.
     """
-    return ''.join(
-        '\\x%02x' % ord(character)
-        if (ord(character) < 0x20 or 0x7f <= ord(character) <= 0x9f) and character not in '\n\t'
-        else character
-        for character in str(text))
+    return ''.join(_printable_character(character) for character in str(text))
+
+
+def _printable_character(character):
+    if character == '\\':
+        return '\\\\'
+    if character in '\n\t':
+        return character
+    code = ord(character)
+    if code < 0x20 or 0x7f <= code <= 0x9f:
+        return '\\x%02x' % code
+    if unicodedata.category(character) == 'Cf':
+        return '\\u%04x' % code if code <= 0xffff else '\\U%08x' % code
+    return character
 
 
 def _mib(size):

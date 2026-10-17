@@ -323,6 +323,10 @@ class _Node(object):
                 self.path, self.reader.display(*_name(name, ''), attribute=True)))
         return value
 
+    def members(self):
+        """The descriptor elements the node is read from: itself, or for a combined item each item combined."""
+        return [self]
+
     def skip(self):
         """Record the element and its whole subtree as read, for content deliberately passed over."""
         self.reader.read_whole.add(id(self.element))
@@ -346,7 +350,9 @@ class _CombinedItem(_Node):
     Each child is taken from the last item that has a child of its name, and
     the like-named children of the items before it are passed over, as DSP0243
     says. Attributes are read from the last item, and so is the path that
-    messages name, but each child's path names the item it came from.
+    messages name, but each child's path names the item it came from. The one
+    exception is ovf:required, which is read from every item: see
+    _item_required.
     """
 
     def __init__(self, items):
@@ -366,6 +372,9 @@ class _CombinedItem(_Node):
 
     def entries(self):
         return self._entries
+
+    def members(self):
+        return self.items
 
     def skip(self):
         for item in self.items:
@@ -456,6 +465,10 @@ class _Configurations(object):
         return self.default in self.selected(node, required=required)
 
 
+_ENCODING_MESSAGE = 'The descriptor declares a character encoding the parser cannot read'
+_MULTI_BYTE_ENCODING = 'multi-byte encodings are not supported'
+
+
 def _read_tree(data):
     """Parse the descriptor's bytes, returning its root element and each namespace URI it declares, with a prefix."""
     prefixes = {}
@@ -487,11 +500,18 @@ def _read_tree(data):
         # an entity declaration is refused through EntitiesForbidden above.
         raise EntityDeclarationError(
             'The descriptor declares a document type, which the parser refuses: no OVF descriptor needs one') from None
-    except (LookupError, ValueError):
+    except (LookupError, UnicodeError):
         # The XML parser decodes an encoding it does not know itself through
-        # Python's codecs, which refuse an unknown or a multi-byte one with one
-        # of these. defusedxml's refusals are ValueErrors too, so come first.
-        raise MalformedDescriptorError('The descriptor declares a character encoding the parser cannot read') from None
+        # Python's codecs, which refuse an unknown one with a LookupError.
+        raise MalformedDescriptorError(_ENCODING_MESSAGE) from None
+    except ValueError as e:
+        # expat refuses a multi-byte encoding other than UTF-16 with a plain
+        # ValueError. Any other ValueError is not an encoding failure, and is
+        # left to propagate. defusedxml's refusals are ValueErrors too, so
+        # come first.
+        if _MULTI_BYTE_ENCODING not in str(e):
+            raise
+        raise MalformedDescriptorError(_ENCODING_MESSAGE) from None
     return root, prefixes
 
 
@@ -797,11 +817,20 @@ def _host_resource(item, cim_class, disk_ids, file_ids):
     return first
 
 
-def _read_item(item, instance_id, resource_type, hardware, drives, references):
+def _item_required(item):
+    """Whether a hardware item is required: not if it says ovf:required="false", and for a combined item not unless
+    every item combined says so, because a device that any of its items needs is needed."""
+    return any(_boolean_attribute(member, 'ovf:required', True) for member in item.members())
+
+
+def _read_item(item, instance_id, resource_type, hardware, drives, references, singletons):
     """Read a hardware item that applies into hardware, collecting a disk drive in drives with its item.
 
     references holds the ids of the descriptor's disks and files, and the
-    names of the networks in the default configuration, by kind.
+    names of the networks in the default configuration, by kind. singletons
+    records the path of the item read for each resource type that a virtual
+    system has only one of, the processor and the memory, so that a second is
+    refused rather than silently replacing the first.
     """
     cim_class = ITEMS[item.key[1]]
 
@@ -809,7 +838,7 @@ def _read_item(item, instance_id, resource_type, hardware, drives, references):
         return '%s:%s' % (cim_class, local)
 
     subtype = item.child_text(name('ResourceSubType'))
-    required = _boolean_attribute(item, 'ovf:required', True)
+    required = _item_required(item)
 
     bus = CONTROLLER_BUSES.get(resource_type)
     if resource_type == OTHER_STORAGE_CONTROLLER:
@@ -820,11 +849,17 @@ def _read_item(item, instance_id, resource_type, hardware, drives, references):
             return
         kind = 'resource type %d' % resource_type
         if resource_type == OTHER_STORAGE_CONTROLLER:
-            kind += ' with the subtype "%s"' % subtype
+            kind += ' with no ResourceSubType' if subtype is None else ' with the subtype "%s"' % subtype
         raise UnsupportedHardwareError(
             '%s is a hardware item of %s, which the parser does not support' % (item.path, kind))
 
     host_resource = _host_resource(item, cim_class, references['disk'], references['file'])
+
+    if resource_type in (CPU, MEMORY):
+        if resource_type in singletons:
+            raise InvalidValueError('%s is a second %s item for the default configuration, after %s' % (
+                item.path, 'processor' if resource_type == CPU else 'memory', singletons[resource_type]))
+        singletons[resource_type] = item.path
 
     if resource_type == CPU:
         hardware.vcpus = _integer_text(item, name('VirtualQuantity'), required=True)
@@ -936,9 +971,10 @@ def _read_hardware(section, configurations, references):
     # Normal items sharing an InstanceID are one device, as DSP0243 says, so
     # that a reference to that InstanceID names one thing.
     drives = []
+    singletons = {}
     for instance_id, (resource_type, items) in groups.items():
         item = items[0] if len(items) == 1 else _CombinedItem(items)
-        _read_item(item, instance_id, resource_type, hardware, drives, references)
+        _read_item(item, instance_id, resource_type, hardware, drives, references, singletons)
 
     controller_ids = set(controller.instance_id for controller in hardware.controllers)
     for item, drive in drives:

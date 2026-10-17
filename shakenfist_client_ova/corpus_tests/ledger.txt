@@ -435,7 +435,7 @@ govmomi:external/OVFToolTemplates/OVF/xmltestfiles/VirtualHardware_1_0/Neg/dup_i
 govmomi:external/OVFToolTemplates/OVF/xmltestfiles/VirtualHardware_1_0/Neg/empty_item.ovf	MissingContentError
 govmomi:external/OVFToolTemplates/OVF/xmltestfiles/VirtualHardware_1_0/Neg/empty_system.ovf	MalformedDescriptorError
 govmomi:external/OVFToolTemplates/OVF/xmltestfiles/VirtualHardware_1_0/Neg/invalid_multiple_vh.ovf	MissingContentError
-govmomi:external/OVFToolTemplates/OVF/xmltestfiles/VirtualHardware_1_0/Neg/maxwith_nonormal.ovf	MissingContentError
+govmomi:external/OVFToolTemplates/OVF/xmltestfiles/VirtualHardware_1_0/Neg/maxwith_nonormal.ovf	InvalidValueError
 govmomi:external/OVFToolTemplates/OVF/xmltestfiles/VirtualHardware_1_0/Neg/no_instanceid.ovf	MissingContentError
 govmomi:external/OVFToolTemplates/OVF/xmltestfiles/VirtualHardware_1_0/Neg/no_resourcetype.ovf	MissingContentError
 govmomi:external/OVFToolTemplates/OVF/xmltestfiles/VirtualHardware_1_0/Neg/no_vh.ovf	MissingContentError

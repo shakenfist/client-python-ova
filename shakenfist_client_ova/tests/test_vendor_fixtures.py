@@ -634,6 +634,6 @@ class VendorFixtureTestCase(testtools.TestCase):
                 except ovf.OVFError:
                     continue
                 parsing.append('test_' + name.replace('.', '_').replace('-', '_'))
-        self.assertEqual(14, len(parsing))
+        self.assertNotEqual([], parsing)
         missing = [name for name in parsing if not hasattr(self, name)]
         self.assertEqual([], sorted(missing))

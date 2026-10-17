@@ -400,7 +400,9 @@ field-by-field check test.
      because a future oVirt reader would fill it. Dropping it would
      churn every expected file for nothing.
 
-   `Disk.parent_ref` is the model's only change of shape.
+   `Disk.parent_ref` is the model's only change of shape. (`Disk.boot`
+   was added later, at the operator's decision, when Home Assistant OS's
+   `ovf:boot` was found; see the execution notes.)
 
 8. **The command.** It prints every `EulaSection`'s licence and stops
    with exit 1 unless `--accept-eula` is given. The refusal says which

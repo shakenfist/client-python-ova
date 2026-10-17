@@ -231,6 +231,19 @@ class UntrustedTextTestCase(CommandTestCase):
         self.assertEqual('a\\x1b[2Jb\\x07\\x9b\\x00\\x7f\\x0d\nc\td\u00a0', ova._printable(
             'a\x1b[2Jb\x07\x9b\x00\x7f\r\nc\td\u00a0'))
 
+    def test_printable_escapes_backslashes(self):
+        # Otherwise text could pass for one of the escapes.
+        self.assertEqual('a\\\\x1b[2Jb \\\\u202e', ova._printable('a\\x1b[2Jb \\u202e'))
+        self.assertEqual('C:\\\\Windows\\\\System32', ova._printable('C:\\Windows\\System32'))
+
+    def test_printable_escapes_format_characters(self):
+        for character, expected in (('\u202e', '\\u202e'), ('\u202a', '\\u202a'), ('\u2066', '\\u2066'),
+                                    ('\u2069', '\\u2069'), ('\u200b', '\\u200b'), ('\ufeff', '\\ufeff'),
+                                    ('\U000e0001', '\\U000e0001')):
+            self.assertEqual('a%sb' % expected, ova._printable('a%sb' % character), repr(character))
+        # A visible character is left alone, and so is an ordinary space.
+        self.assertEqual('caf\u00e9 \u65e5\u672c', ova._printable('caf\u00e9 \u65e5\u672c'))
+
     def test_licence_escape_sequences_are_made_visible(self):
         result, _, _ = self._licence_import('Terms\x1b[2J and \x1b]0;evil\x07 more\nterms')
         self.assertEqual(1, result.exit_code, result.output)

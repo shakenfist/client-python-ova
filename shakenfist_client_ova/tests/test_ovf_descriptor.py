@@ -347,6 +347,18 @@ class XmlTestCase(DescriptorTestCase):
             data = b'<?xml version="1.0" encoding="%s"?><Envelope/>' % encoding
             self.assertRefused(ovf.MalformedDescriptorError, 'character encoding', data)
 
+    def test_a_codec_failure_is_an_unreadable_encoding(self):
+        for exception in (LookupError('unknown encoding: x'), UnicodeDecodeError('ascii', b'\xff', 0, 1, 'bad byte')):
+            with mock.patch('shakenfist_client_ova.ovf.descriptor.ElementTree.iterparse', side_effect=exception):
+                self.assertRefused(ovf.MalformedDescriptorError, 'character encoding', b'<Envelope/>')
+
+    def test_a_value_error_that_is_not_an_encoding_is_not_hidden(self):
+        with mock.patch('shakenfist_client_ova.ovf.descriptor.ElementTree.iterparse',
+                        side_effect=ValueError('something else')):
+            e = self.assertRaises(ValueError, ovf.parse_descriptor, b'<Envelope/>')
+        self.assertEqual('something else', str(e))
+        self.assertNotIsInstance(e, ovf.OVFError)
+
 
 class StrictnessTestCase(DescriptorTestCase):
     def test_unread_required_element(self):
@@ -504,6 +516,11 @@ class HardwareTestCase(DescriptorTestCase):
             'Envelope/VirtualSystem/VirtualHardwareSection/Item is a hardware item of resource type 20 with the '
             'subtype "vmware.nvdimm.controller"',
             descriptor(items=items))
+        self.assertRefused(
+            ovf.UnsupportedHardwareError,
+            'Envelope/VirtualSystem/VirtualHardwareSection/Item is a hardware item of resource type 20 with no '
+            'ResourceSubType, which',
+            descriptor(items=item(20, ('InstanceID', '3'))))
         parse(items=CPU + item(20, ('ResourceSubType', 'vmware.nvdimm.controller'), ('Unknown', 'x'),
                                attributes=' ovf:required="false"'))
 
@@ -945,10 +962,39 @@ class InstanceIdTestCase(DescriptorTestCase):
         self.assertEqual([ovf.Nic(resource_subtype='VmxNet3', connection='net')], hardware.nics)
         self.assertEqual([ovf.Controller(instance_id='3', bus='scsi')], hardware.controllers)
 
+    def test_a_second_cpu_or_memory_item_is_refused(self):
+        section = 'Envelope/VirtualSystem/VirtualHardwareSection'
+        for resource_type, noun, first in ((3, 'processor', 1), (4, 'memory', 2)):
+            self.assertRefused(
+                ovf.InvalidValueError,
+                '%s/Item[3] is a second %s item for the default configuration, after %s/Item[%d]'
+                % (section, noun, section, first),
+                descriptor(items=CPU + MEMORY + item(resource_type, ('VirtualQuantity', '8'))))
+
+    def test_a_cpu_item_of_another_configuration_is_not_a_second_cpu(self):
+        items = CPU + item(3, ('VirtualQuantity', '8'), attributes=' ovf:configuration="small"')
+        hardware = parse(envelope_sections=DEPLOYMENT_OPTIONS, items=items + MEMORY).virtual_system.hardware[0]
+        self.assertEqual(2, hardware.vcpus)
+
+    def test_a_cpu_item_sharing_an_instance_id_is_combined_not_a_second_cpu(self):
+        items = CPU + item(3, ('InstanceID', '1'), ('VirtualQuantity', '8'))
+        self.assertEqual(8, parse(items=items + MEMORY).virtual_system.hardware[0].vcpus)
+
     def test_combined_items_refuse_what_is_not_understood(self):
         items = CPU + item(3, ('InstanceID', '1'), ('Unknown', 'x'), ('VirtualQuantity', '4'))
         self.assertUnread(['Envelope/VirtualSystem/VirtualHardwareSection/Item[2]/rasd:Unknown'],
                           descriptor(items=items))
+
+    def test_the_combined_item_is_required_unless_every_item_says_otherwise(self):
+        not_required = ' ovf:required="false"'
+        for attributes, refused in (((not_required, ''), True), (('', not_required), True),
+                                    ((not_required, not_required), False), (('', ''), True)):
+            items = CPU + item(1, ('InstanceID', '9'), attributes=attributes[0]) + item(
+                1, ('InstanceID', '9'), attributes=attributes[1])
+            if refused:
+                self.assertRefused(ovf.UnsupportedHardwareError, 'resource type 1,', descriptor(items=items))
+            else:
+                parse(items=items)
 
     def test_range_markers(self):
         minimum = item(4, ('InstanceID', '2'), ('Reservation', '512'), attributes=' ovf:bound="min"')
