@@ -201,7 +201,10 @@ prints one line and exits 1:
   which the import cannot add to. Rename or delete it.
 * A metadata update that failed after the disk had landed. The line
   names the artifact the disk is in, so the metadata can be set by
-  hand.
+  hand. The import stops there, so the OVA's later disks are not
+  uploaded. Once the cause is fixed, run the import again: the disks
+  already uploaded go "into the existing artifact", which sets their
+  metadata, and the rest are uploaded as before.
 
 That is the intended behaviour: an OVA whose description is only
 partly understood would otherwise become an instance that is subtly

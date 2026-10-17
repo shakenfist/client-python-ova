@@ -33,6 +33,18 @@
 # build's business: it may be an SSH URL, or carry a credential of its
 # own, and either would otherwise decide how this script authenticates.
 #
+# THE TREE'S OWN CONFIGURATION. The disk sits on the runner, and the
+# script cannot vouch for what wrote to it. A repository's .git/config
+# can make git run a command (a hook path, a filter, a filesystem
+# monitor) or send a request somewhere else (a proxy, a URL rewrite),
+# and any command git runs while the credential is in its environment
+# can read it. So before git touches the tree, the script lists the
+# keys in that file and refuses the tree if any is outside the set a
+# clone of instar-testdata carries; see config_key_allowed below. Every
+# git command on the tree then runs with the runner's system and global
+# configuration left out, and with hooks, the filesystem monitor and
+# the LFS filter pinned to safe values, in case the check missed a way.
+#
 # The script ends by searching the tree's .git, the git configuration
 # and the usual credential stores for the token, and fails if it finds
 # it. It does that on every exit, failed or not, because a failed fetch
@@ -88,6 +100,120 @@ fail() {
     exit 1
 }
 
+# git-lfs's own filter commands, as `git lfs install` writes them. A
+# filter is a command git runs on every file it checks out, so these are
+# the only values the tree's configuration may give it, and the values
+# every git command here is given over whatever the file says.
+LFS_FILTER_PROCESS='git-lfs filter-process'
+LFS_FILTER_SMUDGE='git-lfs smudge -- %f'
+LFS_FILTER_CLEAN='git-lfs clean -- %f'
+LFS_FILTER_REQUIRED='true'
+
+# config_key_allowed KEY FILE
+#
+# Whether KEY may appear in FILE, the tree's repository configuration.
+# KEY is as `git config --name-only` prints it: the section and variable
+# names in lower case, a subsection as written. The allowed set is what
+# the fleet's disk build leaves (a depth-1 clone, `git lfs install
+# --local`, `git lfs pull`, and its own removal of the credential from
+# the remote URL and the LFS sections), and nothing else. Everything not
+# named here is refused, among it include.path and includeIf.*.path,
+# which would pull in a file this check never read, and every core,
+# http, url, credential, protocol and remote key not listed.
+config_key_allowed() {
+    local key=$1 file=$2 stock values value
+    case "${key}" in
+        # What git init and git clone write about the repository itself.
+        # Not core.hookspath, core.fsmonitor, core.sshcommand,
+        # core.gitproxy, core.askpass, core.pager, core.editor or
+        # core.worktree: each of those runs a command or moves the tree.
+        core.repositoryformatversion|core.filemode|core.bare|core.logallrefupdates)
+            return 0 ;;
+        core.symlinks|core.ignorecase|core.precomposeunicode)
+            return 0 ;;
+        core.sparsecheckout|core.sparsecheckoutcone)
+            return 0 ;;
+        # Where the clone came from, and how its branch follows it. Inert
+        # here: the fetch names its own URL and refspec, and git-lfs is
+        # given its endpoint.
+        remote.origin.url|remote.origin.fetch)
+            return 0 ;;
+        branch.*.remote|branch.*.merge)
+            return 0 ;;
+        # git-lfs's records: the repository format, and for an endpoint,
+        # how it authenticates and whether it checks locks before a push.
+        # Not an endpoint with a password in its URL, which is a
+        # credential the disk build should have removed.
+        lfs.repositoryformatversion)
+            return 0 ;;
+        lfs.*://*:*@*)
+            return 1 ;;
+        lfs.*.access|lfs.*.locksverify)
+            return 0 ;;
+        # git lfs install --local: allowed only as git-lfs's own commands.
+        filter.lfs.process) stock="${LFS_FILTER_PROCESS}" ;;
+        filter.lfs.smudge) stock="${LFS_FILTER_SMUDGE}" ;;
+        filter.lfs.clean) stock="${LFS_FILTER_CLEAN}" ;;
+        filter.lfs.required) stock="${LFS_FILTER_REQUIRED}" ;;
+        *)
+            return 1 ;;
+    esac
+
+    # A filter key: every value it is given must be the stock one. The
+    # values are compared, never printed.
+    values="$(git config --file "${file}" --get-all "${key}")" || return 1
+    while IFS= read -r value; do
+        if [ "${value}" != "${stock}" ]; then
+            return 1
+        fi
+    done <<< "${values}"
+}
+
+# Refuses the tree unless its repository configuration holds only keys
+# config_key_allowed accepts. Names the keys it refuses, with any
+# credential in a URL hidden, and never prints a value: the values are
+# where a credential would be.
+check_cache_config() {
+    local git_dir="${cache}/.git" file keys key rc names
+    local -a refused=()
+
+    # A linked worktree's git directory reads its configuration from the
+    # directory commondir names, which this check would not have read.
+    if [ -e "${git_dir}/commondir" ]; then
+        fail "${git_dir} has a commondir file, so its configuration is" \
+             "somewhere this script does not check. The testdata tree" \
+             "should be a plain clone."
+    fi
+
+    # config.worktree is read too, when extensions.worktreeConfig is set;
+    # that key is refused, but a file present is checked anyway.
+    for file in "${git_dir}/config" "${git_dir}/config.worktree"; do
+        if [ "${file}" != "${git_dir}/config" ] && [ ! -e "${file}" ]; then
+            continue
+        fi
+        rc=0
+        keys="$(git config --file "${file}" --list --name-only)" || rc=$?
+        if [ "${rc}" != 0 ]; then
+            fail "Could not read the repository configuration ${file}."
+        fi
+        while IFS= read -r key; do
+            if [ -n "${key}" ] && ! config_key_allowed "${key}" "${file}"; then
+                refused+=("${key}")
+            fi
+        done <<< "${keys}"
+    done
+
+    if [ "${#refused[@]}" != 0 ]; then
+        names="$(printf '%s\n' "${refused[@]}" | sort -u \
+            | sed -E 's#://[^/@]*@#://<userinfo>@#' | paste -sd ',' - | sed 's/,/, /g')"
+        fail "The repository configuration under ${git_dir} has keys a" \
+             "clone of instar-testdata does not carry: ${names}. Such a key" \
+             "can make git run a command or send a request elsewhere while" \
+             "it holds the credential, so the tree is refused. Values are" \
+             "not shown, because they can hold credentials."
+    fi
+}
+
 if ! command -v git >/dev/null 2>&1; then
     fail "git is not installed on this runner."
 fi
@@ -125,6 +251,10 @@ if [ ! -d "${CONTRACT_CACHE}/.git" ]; then
          "a test failure, and there is deliberately no fresh-clone fallback."
 fi
 
+# Before any git command runs in the tree, and before the credential is
+# prepared.
+check_cache_config
+
 # Out of the exported environment from here on, so that nothing this
 # script starts inherits the raw token. The header carries it encoded.
 token="${TESTDATA_TOKEN}"
@@ -142,8 +272,36 @@ if [ "${GITHUB_ACTIONS:-}" = 'true' ]; then
     echo "::add-mask::${auth_b64}"
 fi
 
-# git and git-lfs, with the credential and nothing else changed. The
-# settings, in order:
+# Settings every git command in the tree runs with, as key and value
+# pairs, on top of the tree's own configuration (checked above):
+#   core.hooksPath=/dev/null runs no hook, from .git/hooks or anywhere:
+#     `git lfs install` puts four there, and the reset, which moves the
+#     branch, would run the reference-transaction hook;
+#   core.fsmonitor=false runs no filesystem monitor;
+#   filter.lfs.* are git-lfs's own commands, whatever the file says;
+#   safe.directory names this tree alone. The runner's global
+#     configuration is left out (see cache_git), and with it any
+#     safe.directory the runner sets; without one, git refuses a tree
+#     another user owns, and a configuration read silently skips the
+#     tree's file. The fleet's disk belongs to the runner user, so this
+#     only keeps a change of owner from turning into a confusing error.
+HARDENING=(
+    core.hooksPath /dev/null
+    core.fsmonitor false
+    filter.lfs.process "${LFS_FILTER_PROCESS}"
+    filter.lfs.smudge "${LFS_FILTER_SMUDGE}"
+    filter.lfs.clean "${LFS_FILTER_CLEAN}"
+    filter.lfs.required "${LFS_FILTER_REQUIRED}"
+    safe.directory "${cache}"
+)
+
+# cache_git [--authenticated] ARGS...
+#
+# git in the tree, with HARDENING, and with the system and global
+# configuration left out (GIT_CONFIG_NOSYSTEM, GIT_CONFIG_GLOBAL): the
+# runner's /etc/gitconfig and ~/.gitconfig are nothing this script needs
+# or has checked. With --authenticated, the credential and nothing else
+# besides, in this order:
 #   credential.helper= empties the helper list, so that no helper the
 #     runner configures is asked for a credential, or told to store one;
 #   http.<host>.extraHeader is the credential;
@@ -151,18 +309,35 @@ fi
 #   lfs.<url>.access=basic is what git-lfs records in .git/config after
 #     its first 401 from an endpoint. Saying it up front means git-lfs has
 #     nothing to record, so even a failed pull writes nothing there.
+# The settings go in git's GIT_CONFIG_COUNT/KEY/VALUE variables, exported
+# in a subshell, so they reach git's environment and no command line.
+cache_git() {
+    local -a settings=("${HARDENING[@]}")
+    if [ "${1:-}" = '--authenticated' ]; then
+        shift
+        settings+=(
+            credential.helper ''
+            "http.${AUTH_SCOPE}.extraHeader" "Authorization: Basic ${auth_b64}"
+            lfs.url "${LFS_URL}"
+            "lfs.${LFS_URL}.access" basic
+        )
+    fi
+    (
+        local i count=$(( ${#settings[@]} / 2 ))
+        export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+        export GIT_CONFIG_COUNT="${count}"
+        for (( i = 0; i < count; i++ )); do
+            export "GIT_CONFIG_KEY_${i}=${settings[2 * i]}" \
+                   "GIT_CONFIG_VALUE_${i}=${settings[2 * i + 1]}"
+        done
+        exec git -C "${cache}" "$@"
+    )
+}
+
+# git and git-lfs with the credential: on exactly the two commands that
+# talk to GitLab.
 authed_git() {
-    GIT_TERMINAL_PROMPT=0 \
-    GIT_CONFIG_COUNT=4 \
-    GIT_CONFIG_KEY_0='credential.helper' \
-    GIT_CONFIG_VALUE_0='' \
-    GIT_CONFIG_KEY_1="http.${AUTH_SCOPE}.extraHeader" \
-    GIT_CONFIG_VALUE_1="Authorization: Basic ${auth_b64}" \
-    GIT_CONFIG_KEY_2='lfs.url' \
-    GIT_CONFIG_VALUE_2="${LFS_URL}" \
-    GIT_CONFIG_KEY_3="lfs.${LFS_URL}.access" \
-    GIT_CONFIG_VALUE_3='basic' \
-        git -C "${cache}" "$@"
+    cache_git --authenticated "$@"
 }
 
 # The token and its encoded form, one per line, as a grep pattern list.
@@ -225,10 +400,13 @@ check_no_credential() {
     done
 
     # Every configuration key that could carry it, at every scope git
-    # reads. Run as plain git, without authed_git's settings, so that
-    # it sees only what is written down. Exit 1 means no such keys.
+    # reads. Run as plain git, without cache_git's settings, so that it
+    # sees only what is written down -- but for safe.directory, without
+    # which git would skip the tree's own file, silently, were the tree
+    # another user's. Exit 1 means no such keys.
     rc=0
-    config_lines="$(git -C "${cache}" config --get-regexp \
+    config_lines="$(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory \
+        GIT_CONFIG_VALUE_0="${cache}" git -C "${cache}" config --get-regexp \
         '^(http\..*extraheader|credential\.|url\..*insteadof|remote\..*\.url)')" || rc=$?
     case "${rc}" in
         0)
@@ -267,7 +445,12 @@ authed_git fetch --quiet --depth 1 "${REPO_URL}" "${REPO_BRANCH}"
 # rather than having the smudge filter download each changed one --
 # across the whole tree, not only downloaded/ova/. The pull below
 # materialises exactly the part this repository needs.
-GIT_LFS_SKIP_SMUDGE=1 git -C "${cache}" reset --quiet --hard FETCH_HEAD
+GIT_LFS_SKIP_SMUDGE=1 cache_git reset --quiet --hard FETCH_HEAD
+
+# The reset leaves untracked files alone, and the test reads every .ova
+# under the corpus directory: remove anything there the commit does not
+# hold, ignored files and nested repositories included.
+cache_git clean -ffdxq -- "${CORPUS_SUBDIR}"
 
 echo "Pulling the Git LFS objects under ${CORPUS_SUBDIR}/"
 authed_git lfs pull --include "${CORPUS_SUBDIR}/**"

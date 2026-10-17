@@ -164,7 +164,10 @@ jobs:
   # can read a secret that was never in their environment. The fetch
   # script also leaves nothing on disk for them to find: the token goes
   # to git as a header, and the script fails if it can find the token
-  # under the testdata tree's .git afterwards.
+  # under the testdata tree's .git afterwards. That confinement assumes
+  # the runner and its testdata disk are not shared with less-trusted
+  # jobs; as a check on the disk, the script refuses a tree whose
+  # repository configuration carries keys a clone does not.
   #
   # The `instar` label is what promises the runner fleet's pre-built
   # testdata disk; the script updates that tree in place rather than
@@ -189,9 +192,11 @@ jobs:
       # later step needs the GITHUB_TOKEN. persist-credentials: false
       # because this job runs branch code on a runner that holds the
       # testdata credential for one step, so the GITHUB_TOKEN need not
-      # sit in .git/config either.
+      # sit in .git/config either. This job is the one holding a secret,
+      # so its one action is pinned to a commit rather than a movable
+      # tag; Renovate keeps the digest current.
       - name: Checkout the repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           persist-credentials: false

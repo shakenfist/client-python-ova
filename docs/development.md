@@ -248,9 +248,12 @@ the tier itself.
 In CI the `appliance-corpus` job runs only for branches of this
 repository, not forks, on runners with the `instar` label that carry
 the testdata disk. `tools/ci/fetch-appliance-corpus.sh` updates the
-tree there using a read-only token held as a repository secret. The
-script's own guard test, `tools/ci/test-fetch-appliance-corpus.sh`,
-runs in the lint job.
+tree there using a read-only token held as a repository secret. It
+refuses a tree whose repository configuration carries keys a clone of
+instar-testdata does not, such as a hook path or an include, and runs
+git there without the runner's system or global configuration and with
+hooks off. The script's offline test,
+`tools/ci/test-fetch-appliance-corpus.sh`, runs in the lint job.
 
 ### Adding a producer quirk
 

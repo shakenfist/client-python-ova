@@ -483,5 +483,28 @@ output is pushed:
   its scope and expiry are whatever the organisation secret's are. That
   was the operator's call. The script's handling of the credential does
   not depend on which token it is given.
-* **Still to come:** the first run of the `appliance-corpus` job on
-  this phase's pull request.
+* **The first `appliance-corpus` run passed on #18 at `2d1ec70`:**
+  [run 39076633861](https://github.com/shakenfist/client-python-ova/actions/runs/39076633861/job/117525028241).
+  * It took 3m41s, about three minutes of which were the update of the
+    fleet's cached tree.
+  * 16 appliances, and 17 tests passed with none skipped.
+  * The log carries no descriptor text, and no credential except
+    `actions/checkout`'s own GitHub token header, which GitHub masked.
+* **The first review round took two fix items and six consider items.**
+  * The corpus test's client mock is now configured explicitly, instead
+    of relying on two MagicMocks comparing unequal.
+  * `_api_error` no longer prints "None" for an empty body.
+  * Absent members are compared without regard to order.
+  * The fetch script refuses a cache whose repository config carries a
+    key outside an allow-list drawn from the fleet disk's build. Every
+    git command in the tree now runs with the system and global config
+    emptied, hooks and fsmonitor off, the git-lfs filter pinned, and
+    `safe.directory` set for exactly the cache.
+  * The corpus directory is cleaned after the reset.
+  * The job's checkout action is pinned to a commit.
+  * The credential checks have offline tests.
+  * `docs/usage.md` says that a metadata failure stops the import.
+
+  The allow-list refuses a developer checkout's `pull.rebase` and
+  `remote.origin.glab-resolved`. That is deliberate, because the script
+  runs only on the fleet disk.

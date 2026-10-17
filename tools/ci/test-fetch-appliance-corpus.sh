@@ -1,24 +1,28 @@
 #!/bin/bash
 
-# Tests for tools/ci/fetch-appliance-corpus.sh's input guards.
+# Tests for tools/ci/fetch-appliance-corpus.sh, offline.
 #
-# Each case runs the script with one required input missing or wrong,
-# and asserts that it exits non-zero, says why, and never prints the
-# token it was given. Nothing here needs the network, the real token or
-# the runner fleet's testdata disk: the guards all run before the script
-# touches git, and that is asserted too. The case that needs a tree at
-# the agreed path uses TESTDATA_CONTRACT_CACHE to move the agreed path
-# into a throwaway directory, never the real one.
+# The first cases run the script with one required input missing or
+# wrong, and assert that it exits non-zero, says why, and never prints
+# the token it was given. Those guards all run before the script touches
+# git, and that is asserted too.
 #
-# What this does not test is everything after the guards -- the fetch,
-# the LFS pull and the credential search -- because each of those needs
-# the private repository. The CI job that runs the script is their test.
+# The later cases put a tree at the agreed path and test what the
+# script does with it: that it refuses a tree whose repository
+# configuration carries a key a clone does not, before any git command
+# but the configuration reads; that it fails, without printing the
+# token, when the token turns up under .git after the authenticated
+# commands; and that it removes a git-lfs log that recorded the token.
+# There, `git` is a stub that passes configuration reads through to the
+# real git and stands in for the rest, so that nothing needs the
+# network, the real token or the private repository. What the stub
+# cannot show -- that the real fetch and LFS pull authenticate -- is the
+# CI job's test.
 #
 # Every case runs under `env -i`, so a TESTDATA_* variable in the
 # caller's environment cannot change what a case means, and with a PATH
-# of stubs: `git` and `git-lfs` here are scripts that record being run
-# and fail. A guard that let the script reach git would show up as a
-# record, not as a network call.
+# of stubs. Cases needing a tree use TESTDATA_CONTRACT_CACHE to move the
+# agreed path into a throwaway directory, never the real one.
 
 set -euo pipefail
 
@@ -146,6 +150,221 @@ if grep -nE '^[[:space:]]*set[[:space:]]+-[a-zA-Z]*x' "${script}" >/dev/null; th
 else
     echo "ok: the script does not turn on shell tracing"
 fi
+
+# The cases below need a tree at the agreed path, and a git that can
+# read configuration. They run the stub in path-run: it passes `git
+# config` through to the real git, and otherwise appends the
+# subcommand's name to run-calls and does what the file stub-mode says,
+# which is nothing, or planting the token somewhere the script must find
+# it. The real git is used to set the trees up too, with no system or
+# global configuration, so that the caller's cannot add to them.
+real_git=$(command -v git)
+mkdir -p "${scratch}/path-run"
+cat > "${scratch}/path-run/git" <<EOF
+#!/bin/sh
+dir=
+if [ "\$1" = -C ]; then
+    dir=\$2
+    shift 2
+fi
+if [ "\$1" = config ]; then
+    if [ -n "\${dir}" ]; then
+        exec "${real_git}" -C "\${dir}" "\$@"
+    fi
+    exec "${real_git}" "\$@"
+fi
+echo "\$1" >> "${scratch}/run-calls"
+case "\$1:\$(cat "${scratch}/stub-mode")" in
+    fetch:config)
+        printf '[remote "copy"]\\n\\turl = https://oauth2:%s@example.invalid/x.git\\n' \\
+            "${sentinel}" >> "\${dir}/.git/config" ;;
+    fetch:description)
+        printf '%s\\n' "${sentinel}" > "\${dir}/.git/description" ;;
+    lfs:lfs-log)
+        mkdir -p "\${dir}/.git/lfs/logs"
+        printf 'GIT_CONFIG_VALUE_1=%s\\n' "${sentinel}" > "\${dir}/.git/lfs/logs/x.log" ;;
+esac
+exit 0
+EOF
+printf '#!/bin/sh\nexit 0\n' > "${scratch}/path-run/git-lfs"
+chmod +x "${scratch}/path-run/git" "${scratch}/path-run/git-lfs"
+
+setup_git() {
+    env -i HOME="${scratch}" GIT_CONFIG_NOSYSTEM=1 "${real_git}" "$@"
+}
+
+# make_tree NAME: a repository at ${scratch}/NAME configured as the
+# fleet's disk build leaves it, with one appliance under the corpus
+# directory that is not an LFS pointer.
+make_tree() {
+    local tree="${scratch}/$1"
+    setup_git init --quiet "${tree}"
+    setup_git -C "${tree}" config remote.origin.url \
+        'https://gitlab.home.stillhq.com/private/instar-testdata.git'
+    setup_git -C "${tree}" config remote.origin.fetch '+refs/heads/main:refs/remotes/origin/main'
+    setup_git -C "${tree}" config branch.main.remote origin
+    setup_git -C "${tree}" config branch.main.merge refs/heads/main
+    setup_git -C "${tree}" config lfs.repositoryformatversion 0
+    setup_git -C "${tree}" config \
+        'lfs.https://gitlab.home.stillhq.com/private/instar-testdata.git/info/lfs.access' basic
+    setup_git -C "${tree}" config filter.lfs.process 'git-lfs filter-process'
+    setup_git -C "${tree}" config filter.lfs.smudge 'git-lfs smudge -- %f'
+    setup_git -C "${tree}" config filter.lfs.clean 'git-lfs clean -- %f'
+    setup_git -C "${tree}" config filter.lfs.required true
+    mkdir -p "${tree}/downloaded/ova"
+    printf 'an appliance\n' > "${tree}/downloaded/ova/a.ova"
+    printf '{"kind": "whole"}\n' > "${tree}/downloaded/ova/a.provenance.json"
+}
+
+# run_tree NAME MODE: runs the script on the tree NAME with the run stub
+# in MODE, setting output and status.
+run_tree() {
+    local tree="${scratch}/$1"
+    printf '%s\n' "$2" > "${scratch}/stub-mode"
+    rm -f "${scratch}/run-calls"
+    status=0
+    output=$(env -i HOME="${scratch}" PATH="${scratch}/path-run:/usr/bin:/bin" \
+        TESTDATA_TOKEN="${sentinel}" TESTDATA_CONTRACT_CACHE="${tree}" TESTDATA_CACHE="${tree}" \
+        "${BASH}" "${script}" 2>&1) || status=$?
+}
+
+# The header carries the token base64-encoded, so that form must not be
+# printed either.
+encoded=$(printf 'oauth2:%s' "${sentinel}" | base64 -w0)
+
+# report NAME PROBLEM...: ok when no problem was given.
+report() {
+    local name=$1
+    shift
+    if [ "$#" = 0 ]; then
+        echo "ok: ${name}"
+    else
+        echo "FAIL: ${name}: $(IFS=';'; echo "$*")"
+        output=${output//${sentinel}/<token>}
+        echo "  output was: ${output//${encoded}/<encoded token>}"
+        failures=$((failures + 1))
+    fi
+}
+
+# expect_refused_config NAME KEY-PRINTED KEY VALUE [KEY VALUE...]
+#
+# A fleet-like tree with the given keys added must be refused before
+# anything but a configuration read, naming KEY-PRINTED, and without
+# printing the sentinel, which each case puts in a value or a name.
+expect_refused_config() {
+    local name=$1 printed=$2 tree
+    shift 2
+    tree="config-$(printf '%s' "${name}" | tr -c 'a-z0-9' '-')"
+    make_tree "${tree}"
+    while [ "$#" -gt 0 ]; do
+        setup_git -C "${scratch}/${tree}" config --add "$1" "$2"
+        shift 2
+    done
+    run_tree "${tree}" none
+
+    local problems=()
+    if [ "${status}" = 0 ]; then
+        problems+=("exited 0")
+    fi
+    if [[ "${output}" != *"keys a clone of instar-testdata does not carry"* ]]; then
+        problems+=("did not refuse the configuration")
+    fi
+    if [[ "${output}" != *"${printed}"* ]]; then
+        problems+=("did not name ${printed}")
+    fi
+    if [[ "${output}" == *"${sentinel}"* || "${output}" == *"${encoded}"* ]]; then
+        problems+=("printed a value or the token")
+    fi
+    if [ -e "${scratch}/run-calls" ]; then
+        problems+=("ran git $(paste -sd ' ' "${scratch}/run-calls") before refusing")
+    fi
+    report "${name}" "${problems[@]}"
+}
+
+expect_refused_config 'a hooks path in the configuration' \
+    'core.hookspath' core.hooksPath "/tmp/${sentinel}"
+expect_refused_config 'an include in the configuration' \
+    'include.path' include.path "/tmp/${sentinel}"
+expect_refused_config 'a conditional include in the configuration' \
+    'includeif.gitdir:/.path' 'includeIf.gitdir:/.path' "/tmp/${sentinel}"
+expect_refused_config 'two keys refused at once' \
+    'core.hookspath, include.path' include.path "/tmp/${sentinel}" core.hooksPath "/tmp/${sentinel}"
+expect_refused_config 'an LFS filter that is not git-lfs' \
+    'filter.lfs.smudge' filter.lfs.smudge "${sentinel} -- %f"
+expect_refused_config 'an LFS filter given a second value' \
+    'filter.lfs.process' filter.lfs.process "${sentinel}"
+expect_refused_config 'an HTTP setting in the configuration' \
+    'http.proxy' http.proxy "http://${sentinel}.invalid/"
+expect_refused_config 'an LFS endpoint with a password in its URL' \
+    'lfs.https://<userinfo>@gitlab.home.stillhq.com/x.git/info/lfs.access' \
+    "lfs.https://oauth2:${sentinel}@gitlab.home.stillhq.com/x.git/info/lfs.access" basic
+
+# A configuration in config.worktree is checked as well.
+make_tree config-worktree
+printf '[core]\n\tfsmonitor = /tmp/%s\n' "${sentinel}" > "${scratch}/config-worktree/.git/config.worktree"
+run_tree config-worktree none
+problems=()
+if [ "${status}" = 0 ] || [[ "${output}" != *'core.fsmonitor'* ]]; then
+    problems+=("did not refuse core.fsmonitor in config.worktree")
+fi
+if [[ "${output}" == *"${sentinel}"* ]]; then
+    problems+=("printed a value")
+fi
+if [ -e "${scratch}/run-calls" ]; then
+    problems+=("ran git before refusing")
+fi
+report 'a key in config.worktree' "${problems[@]}"
+
+# expect_credential_found NAME MODE: the stub plants the token in .git
+# during the authenticated commands; the script must fail, say so, and
+# not print it.
+expect_credential_found() {
+    local name=$1 mode=$2 tree="found-$2"
+    make_tree "${tree}"
+    run_tree "${tree}" "${mode}"
+    local problems=()
+    if [ "${status}" = 0 ]; then
+        problems+=("exited 0")
+    fi
+    if [[ "${output}" != *'The credential was found'* ]]; then
+        problems+=("did not report the credential")
+    fi
+    if [[ "${output}" == *"${sentinel}"* || "${output}" == *"${encoded}"* ]]; then
+        problems+=("printed the token")
+    fi
+    if ! grep -qx fetch "${scratch}/run-calls" 2>/dev/null; then
+        problems+=("never reached the fetch")
+    fi
+    report "${name}" "${problems[@]}"
+}
+
+expect_credential_found 'the token written to .git/config' config
+expect_credential_found 'the token written to .git/description' description
+
+# A git-lfs log holding the token is removed with a warning, and the run
+# otherwise succeeds: nothing else recorded it.
+make_tree lfs-log
+run_tree lfs-log lfs-log
+problems=()
+if [ "${status}" != 0 ]; then
+    problems+=("exited ${status}")
+fi
+if [ -e "${scratch}/lfs-log/.git/lfs/logs/x.log" ]; then
+    problems+=("left the log in place")
+fi
+if [[ "${output}" != *'Removed 1 git-lfs error log(s)'* ]]; then
+    problems+=("did not warn about the log")
+fi
+if [[ "${output}" == *"${sentinel}"* || "${output}" == *"${encoded}"* ]]; then
+    problems+=("printed the token")
+fi
+if [[ "${output}" != *'Appliance corpus ready: 1 appliances.'* ]]; then
+    problems+=("did not finish")
+fi
+if [ "$(paste -sd ' ' "${scratch}/run-calls" 2>/dev/null)" != 'fetch reset clean lfs' ]; then
+    problems+=("ran '$(paste -sd ' ' "${scratch}/run-calls" 2>/dev/null)', not 'fetch reset clean lfs'")
+fi
+report 'a git-lfs log holding the token' "${problems[@]}"
 
 if [ "${failures}" != 0 ]; then
     echo "${failures} case(s) failed" >&2

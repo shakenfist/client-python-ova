@@ -11,7 +11,8 @@ Each appliance is one test, named after it, which expects:
 * for an appliance named in expected.json, the open to fail with the outcome name given there;
 * for a whole appliance, the open to succeed, every disk with a manifest entry to match its digest, and the import
   command, with the client mocked, to exit 0 having uploaded each disk once as "<system id>-<disk id>";
-* for a descriptor-only appliance, the open to fail with MissingMemberError, naming exactly its absent_members.
+* for a descriptor-only appliance, the open to fail with MissingMemberError, naming exactly its absent_members. The
+  order of the names is not part of that: it is the order the corpus happens to list them in.
 
 The corpus is private. Assertion messages carry appliance names, artifact names and outcome names only, never an
 exception's message or the command's output, either of which can quote the descriptor.
@@ -26,6 +27,7 @@ import re
 from unittest import mock
 
 from click.testing import CliRunner
+from shakenfist_client import apiclient
 import testtools
 
 import shakenfist_client_ova as ova
@@ -44,6 +46,9 @@ LFS_POINTER_PREFIX = b'version https://git-lfs.github.com/spec/'
 
 # The upload stand-in reads a disk in pieces of this size.
 READ_SIZE = 1024 * 1024
+
+# The namespace the mocked client is authenticated to.
+NAMESPACE = 'appliance-corpus'
 
 
 class CorpusUnavailable(Exception):
@@ -173,7 +178,7 @@ class ApplianceCorpusTestCase(testtools.TestCase):
             absent = provenance.get('absent_members')
             if not isinstance(absent, list) or not absent:
                 self.fail('%s: its provenance gives no list of absent_members' % name)
-            self.check_descriptor_only(name, path, tuple(absent))
+            self.check_descriptor_only(name, path, absent)
         else:
             self.fail('%s: its provenance kind is neither "whole" nor "descriptor-only"' % name)
 
@@ -195,7 +200,8 @@ class ApplianceCorpusTestCase(testtools.TestCase):
             outcome = ovf.outcome_name(e)
         if missing is None:
             self.fail('%s: gives %s, but should give MissingMemberError' % (name, outcome))
-        self.assertEqual(absent, missing, '%s: the members MissingMemberError names, and its absent_members' % name)
+        self.assertEqual(sorted(absent), sorted(missing),
+                         '%s: the members MissingMemberError names, and its absent_members' % name)
 
     def check_whole(self, name, path):
         package, outcome = _attempt(ovf.open_package, path)
@@ -205,6 +211,7 @@ class ApplianceCorpusTestCase(testtools.TestCase):
             system_id = package.envelope.virtual_system.id
             uploads = [('%s-%s' % (system_id, upload.disk.disk_id), package.member_size(upload.member))
                        for upload in package.uploads]
+            members = [upload.member for upload in package.uploads]
             for number, upload in enumerate(package.uploads, 1):
                 entry = package.manifest_entry(upload.member)
                 if entry is None:
@@ -215,16 +222,24 @@ class ApplianceCorpusTestCase(testtools.TestCase):
                 if outcome is not None:
                     self.fail('%s: checking disk %d against the manifest gives %s' % (name, number, outcome))
 
-        self.assertEqual(uploads, self.run_import(name, path), '%s: what the import uploads' % name)
+        self.assertEqual(uploads, self.run_import(name, path, members), '%s: what the import uploads' % name)
 
-    def run_import(self, name, path):
+    def run_import(self, name, path, members):
         """Run ova import on the OVA at path with the client mocked, returning each upload's (name, bytes read).
 
-        Every licence is accepted, and the server cannot search for a blob by
-        hash, so that each disk is read through the upload. The command's
-        output is never shown, because it quotes the descriptor.
+        Every licence is accepted, the server has no artifact of any name, and
+        it cannot search for a blob by hash, so that each disk is read through
+        the upload into a new artifact. Each artifact must then be given the
+        OVA's real path and its disk's member, of members, as metadata. The
+        command's output is never shown, because it quotes the descriptor, and
+        neither are the metadata values, of which a member name comes from the
+        archive: they are compared, and only whether each matched is reported.
         """
         uploads = []
+
+        def not_found(artifact_ref):
+            raise apiclient.ResourceNotFoundException('API request failed', 'GET', '/artifacts/' + artifact_ref, 404,
+                                                      '{"error": "artifact not found", "status": 404}')
 
         def upload(client, artifact_name, f, size, *args, **kwargs):
             length = 0
@@ -240,7 +255,12 @@ class ApplianceCorpusTestCase(testtools.TestCase):
             client_class = stack.enter_context(mock.patch('shakenfist_client_ova.apiclient.Client'))
             util = stack.enter_context(mock.patch('shakenfist_client_ova.util'))
             stack.enter_context(mock.patch('shakenfist_client_ova.tqdm', _Progress))
-            client_class.return_value.check_capability.return_value = False
+            client = client_class.return_value
+            client.namespace = NAMESPACE
+            client.check_capability.return_value = False
+            client.get_artifact.side_effect = not_found
+            client.blob_artifact.side_effect = lambda name, blob_uuid: {'uuid': 'blob-' + name}
+            client.set_artifact_metadata_item.return_value = None
             util.upload_artifact_with_progress_file_like_object.side_effect = upload
             result = CliRunner().invoke(ova.ova, ['import', path, '--accept-eula'], obj={})
 
@@ -249,6 +269,15 @@ class ApplianceCorpusTestCase(testtools.TestCase):
             if result.exception is not None and not isinstance(result.exception, SystemExit):
                 raised = ', raising %s' % ovf.outcome_name(result.exception)
             self.fail('%s: the import exits %d%s' % (name, result.exit_code, raised))
+
+        client.blob_artifact.assert_not_called()
+        expected = []
+        for (artifact_name, _), member in zip(uploads, members):
+            uuid = 'uploaded-' + artifact_name
+            expected.extend([(uuid, 'ova_file', os.path.realpath(path)), (uuid, 'ova_member', member)])
+        matched = [(call[0][:2], call[0] in expected) for call in client.set_artifact_metadata_item.call_args_list]
+        self.assertEqual([(item[:2], True) for item in expected], matched,
+                         '%s: the metadata the import sets on each artifact' % name)
         return uploads
 
 

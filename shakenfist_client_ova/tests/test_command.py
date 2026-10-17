@@ -850,6 +850,60 @@ class UntrustedTextTestCase(CommandTestCase):
         self.assertIn('    Ignored, as nothing references it: bad\\udcff.txt\n', result.output)
 
 
+class ApiErrorTestCase(CommandTestCase):
+    """How a refusal from the server is put on one line."""
+
+    def _error(self, text, message='API request failed', status_code=500):
+        return ova._api_error(apiclient.InternalServerError(message, 'PUT', '/artifacts/x/metadata/y', status_code,
+                                                            text))
+
+    def test_the_error_a_json_body_gives(self):
+        self.assertEqual('the server answered 500: disk on fire',
+                         self._error('{"error": "disk\\n  on fire", "status": 500}'))
+
+    def test_a_body_that_is_not_json(self):
+        self.assertEqual('the server answered 500: Internal Server Error', self._error('Internal\n Server Error'))
+
+    def test_no_body(self):
+        self.assertEqual('the server answered 500: API request failed', self._error(None))
+
+    def test_an_empty_body(self):
+        self.assertEqual('the server answered 500: API request failed', self._error(''))
+
+    def test_a_blank_body(self):
+        self.assertEqual('the server answered 500: API request failed', self._error(' \n\t '))
+
+    def test_a_json_body_without_an_error(self):
+        self.assertEqual('the server answered 500: {"status": 500}', self._error('{"status": 500}'))
+
+    def test_a_json_body_whose_error_is_not_text(self):
+        self.assertEqual('the server answered 500: {"error": null}', self._error('{"error": null}'))
+        self.assertEqual('the server answered 500: {"error": ["a"]}', self._error('{"error": ["a"]}'))
+
+    def test_json_that_is_not_an_object(self):
+        self.assertEqual('the server answered 500: "a string"', self._error('"a string"'))
+        self.assertEqual('the server answered 500: [1, 2]', self._error('[1, 2]'))
+
+    def test_neither_a_body_nor_a_message(self):
+        self.assertEqual('the server answered 500: no reason given', self._error(None, message=None))
+        self.assertEqual('the server answered 500: no reason given', self._error('', message=''))
+
+    def test_no_status_code(self):
+        self.assertEqual('the server answered None: API request failed', self._error(None, status_code=None))
+
+    def test_a_metadata_failure_without_a_body_is_one_line(self):
+        def configure(client):
+            client.set_artifact_metadata_item.side_effect = apiclient.InternalServerError(
+                'API request failed', 'PUT', '/artifacts/uploaded-example-vm-vmdisk1/metadata/ova_file', 500, None)
+
+        result, _, _ = self._import(SMALL, disks=DISKS, configure=configure)
+        self.assertEqual(1, result.exit_code, result.output)
+        self.assertNotIn('Traceback', result.output)
+        self.assertEqual('The disk disk1.vmdk is in the artifact uploaded-example-vm-vmdisk1, but the artifact\'s '
+                         'metadata was not set: the server answered 500: API request failed',
+                         self._lines(result.output)[-1])
+
+
 # What each OVFError subclass is raised by: a function writing, at the path it
 # is given, an OVA that open_package() refuses with exactly that error.
 def _described(descriptor):

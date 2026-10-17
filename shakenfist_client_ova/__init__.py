@@ -213,13 +213,33 @@ def _verify(package, blob_search):
     return digests
 
 
+def _one_line(value):
+    """value with its whitespace collapsed to single spaces, or '' when it is not text."""
+    if isinstance(value, bytes):
+        value = value.decode('utf-8', 'replace')
+    if not isinstance(value, str):
+        return ''
+    return ' '.join(value.split())
+
+
 def _api_error(e):
-    """What the server said when it refused a request, on one line."""
+    """What the server said when it refused a request, on one line.
+
+    That is the error a JSON body gives, the body itself when it gives none,
+    or the client's own message when the body is empty, absent or not text.
+    """
     try:
-        reason = json.loads(e.text)['error']
-    except (TypeError, ValueError, KeyError):
-        reason = e.text
-    return 'the server answered %d: %s' % (e.status_code, ' '.join(str(reason).split()) or e.message)
+        body = json.loads(e.text)
+    except (TypeError, ValueError, RecursionError):
+        body = None
+    reason = ''
+    if isinstance(body, dict):
+        reason = _one_line(body.get('error'))
+    if not reason:
+        reason = _one_line(e.text)
+    if not reason:
+        reason = _one_line(e.message) or 'no reason given'
+    return 'the server answered %s: %s' % (e.status_code, reason)
 
 
 def _existing_artifacts(client, names):
