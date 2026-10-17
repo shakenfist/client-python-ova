@@ -113,6 +113,9 @@ DISK2 = b'disk2'
 DISKS = [('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
 FILE1 = 'ovf:href="disk1.vmdk" ovf:size="5"'
 
+# The caller's namespace, which the mocked client is authenticated to.
+NAMESPACE = 'mine'
+
 # The largest member _referenced() writes, so that a test never writes a real disk's size.
 LARGEST_MEMBER = 16 * 1024 * 1024
 
@@ -158,9 +161,19 @@ def _members(descriptor, disks=None, algorithm='SHA256', manifest_name='x.mf', c
     return members + list(disks) + list(extra)
 
 
+def _raise(error):
+    raise error
+
+
 def _archive(members, **kwargs):
     """A function writing an OVA of members at the path it is given, with synthetic.build()'s options."""
     return lambda path: synthetic.build(path, members, **kwargs)
+
+
+def _not_found(artifact_ref):
+    """The client's lookup of an artifact that does not exist."""
+    raise apiclient.ResourceNotFoundException('API request failed', 'GET', '/artifacts/' + artifact_ref, 404,
+                                              '{"error": "artifact not found", "status": 404}')
 
 
 class CommandTestCase(testtools.TestCase):
@@ -180,15 +193,17 @@ class CommandTestCase(testtools.TestCase):
                 synthetic.build(path, archive)
             return self._invoke(path, args, **kwargs)
 
-    def _invoke(self, path, args=(), blob_search=False, blob=None, upload=None, progress=True):
+    def _invoke(self, path, args=(), blob_search=False, blob=None, upload=None, progress=True, configure=None):
         """Run ova import on the OVA at path, with the client and the upload helper mocked.
 
         The server has blob-search-by-hash if blob_search is set, and finds
-        blob for every SHA-512. upload replaces the upload helper, which by
-        default reads the disk to its end. With progress, tqdm is replaced by
-        a recorder, so that no bar is drawn, and each bar is in self.bars.
-        Every member the archive opens for reading is named in self.reads,
-        every upload is in self.uploads, and path is self.path.
+        blob for every SHA-512. It has no artifact of any name, unless
+        configure, which is given the client before the import, says
+        otherwise. upload replaces the upload helper, which by default reads
+        the disk to its end. With progress, tqdm is replaced by a recorder,
+        so that no bar is drawn, and each bar is in self.bars. Every member
+        the archive opens for reading is named in self.reads, every upload is
+        in self.uploads, and path is self.path.
         """
         self.path = path
         self.reads = []
@@ -226,10 +241,15 @@ class CommandTestCase(testtools.TestCase):
             if progress:
                 stack.enter_context(mock.patch('shakenfist_client_ova.tqdm', Progress))
             client = client_class.return_value
+            client.namespace = NAMESPACE
             client.check_capability.return_value = blob_search
             client.get_blob_by_sha512.return_value = blob
-            client.blob_artifact.side_effect = lambda name, blob_uuid, source_url: {'uuid': 'blob-' + name}
+            client.get_artifact.side_effect = _not_found
+            # No source URL may be passed, by keyword or otherwise.
+            client.blob_artifact.side_effect = lambda name, blob_uuid: {'uuid': 'blob-' + name}
             util.upload_artifact_with_progress_file_like_object.side_effect = upload or self._upload
+            if configure is not None:
+                configure(client)
             result = CliRunner().invoke(ova.ova, ['import', path] + list(args), obj={})
         return result, client, util
 
@@ -383,10 +403,10 @@ class ArchiveSummaryTestCase(CommandTestCase):
         self.assertEqual(
             ['Uploading disk images...',
              '',
-             'disk1.vmdk with size 5 Bytes, as the artifact example-vm-vmdisk1',
+             'disk1.vmdk with size 5 Bytes, as the artifact example-vm-vmdisk1, a new artifact',
              'Disk artifact is uploaded-example-vm-vmdisk1',
              '',
-             'disk2.vmdk with size 5 Bytes, as the artifact example-vm-vmdisk2',
+             'disk2.vmdk with size 5 Bytes, as the artifact example-vm-vmdisk2, a new artifact',
              'Disk artifact is uploaded-example-vm-vmdisk2',
              ''],
             result.output.split('\n')[-8:])
@@ -512,39 +532,140 @@ class VerificationTestCase(CommandTestCase):
         self.assertEqual(0, result.exit_code, result.output)
         self.assertEqual(2, result.output.count('Searching for a pre-existing blob with this hash...\n'
                                                 'Disk is already present in the cluster\n'), result.output)
-        url = 'ova://%s/' % os.path.realpath(self.path)
+        # The server gives the artifact its source URL, so none is passed.
         self.assertEqual(
-            [mock.call('example-vm-vmdisk1', 'blob-uuid', source_url=url + 'disk1.vmdk'),
-             mock.call('example-vm-vmdisk2', 'blob-uuid', source_url=url + 'disk2.vmdk')],
+            [mock.call('example-vm-vmdisk1', 'blob-uuid'),
+             mock.call('example-vm-vmdisk2', 'blob-uuid')],
             client.blob_artifact.call_args_list)
         self.assertIn('Disk artifact is blob-example-vm-vmdisk2\n', result.output)
         util.upload_artifact_with_progress_file_like_object.assert_not_called()
-
-    def test_artifact_names_and_absolute_source_urls(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = synthetic.build(os.path.join(tmpdir, 'x.ova'), _members(SMALL, disks=DISKS))
-            relative = os.path.relpath(path)
-            self.assertFalse(os.path.isabs(relative))
-            result, client, util = self._invoke(relative)
-        self.assertEqual(0, result.exit_code, result.output)
         self.assertEqual(
-            [('example-vm-vmdisk1', DISK1, 5, 'ova://%s/disk1.vmdk' % path),
-             ('example-vm-vmdisk2', DISK2, 5, 'ova://%s/disk2.vmdk' % path)],
-            self.uploads)
-        self.assertEqual([mock.call(client, 'example-vm-vmdisk1', mock.ANY, 5, 'ova://%s/disk1.vmdk' % path),
-                          mock.call(client, 'example-vm-vmdisk2', mock.ANY, 5, 'ova://%s/disk2.vmdk' % path)],
-                         util.upload_artifact_with_progress_file_like_object.call_args_list)
+            [mock.call('blob-example-vm-vmdisk1', 'ova_file', os.path.realpath(self.path)),
+             mock.call('blob-example-vm-vmdisk1', 'ova_member', 'disk1.vmdk'),
+             mock.call('blob-example-vm-vmdisk2', 'ova_file', os.path.realpath(self.path)),
+             mock.call('blob-example-vm-vmdisk2', 'ova_member', 'disk2.vmdk')],
+            client.set_artifact_metadata_item.call_args_list)
 
-    def test_source_url_names_the_real_path_through_a_symlinked_directory(self):
+    def test_artifact_names_and_no_source_url(self):
+        result, client, util = self._import(SMALL, disks=DISKS)
+        self.assertEqual(0, result.exit_code, result.output)
+        # The helper takes a source URL, and None leaves it to the server.
+        self.assertEqual(
+            [('example-vm-vmdisk1', DISK1, 5, None),
+             ('example-vm-vmdisk2', DISK2, 5, None)],
+            self.uploads)
+        self.assertEqual([mock.call(client, 'example-vm-vmdisk1', mock.ANY, 5, None),
+                          mock.call(client, 'example-vm-vmdisk2', mock.ANY, 5, None)],
+                         util.upload_artifact_with_progress_file_like_object.call_args_list)
+        client.blob_artifact.assert_not_called()
+
+    def test_metadata_names_the_real_path_and_the_member(self):
+        # The OVA is named by a relative path through a symlinked directory.
         with tempfile.TemporaryDirectory() as tmpdir:
             real = os.path.realpath(tmpdir)
             os.mkdir(os.path.join(real, 'real'))
             path = synthetic.build(os.path.join(real, 'real', 'x.ova'), _members(SMALL, disks=DISKS))
             os.symlink(os.path.join(real, 'real'), os.path.join(real, 'link'))
-            result, client, util = self._invoke(os.path.join(real, 'link', 'x.ova'))
+            relative = os.path.relpath(os.path.join(real, 'link', 'x.ova'))
+            self.assertFalse(os.path.isabs(relative))
+            result, client, util = self._invoke(relative)
         self.assertEqual(0, result.exit_code, result.output)
-        self.assertEqual(['ova://%s/disk1.vmdk' % path, 'ova://%s/disk2.vmdk' % path],
-                         [upload[3] for upload in self.uploads])
+        self.assertEqual(
+            [mock.call('uploaded-example-vm-vmdisk1', 'ova_file', path),
+             mock.call('uploaded-example-vm-vmdisk1', 'ova_member', 'disk1.vmdk'),
+             mock.call('uploaded-example-vm-vmdisk2', 'ova_file', path),
+             mock.call('uploaded-example-vm-vmdisk2', 'ova_member', 'disk2.vmdk')],
+            client.set_artifact_metadata_item.call_args_list)
+
+    def test_an_existing_artifact_is_uploaded_into(self):
+        def configure(client):
+            client.get_artifact.side_effect = lambda name: (
+                {'uuid': 'existing-uuid', 'namespace': NAMESPACE, 'source_url': 'sf://upload/%s/%s' % (NAMESPACE, name)}
+                if name.endswith('vmdisk1') else _not_found(name))
+
+        result, client, util = self._import(SMALL, disks=DISKS, configure=configure)
+        self.assertEqual(0, result.exit_code, result.output)
+        self.assertEqual([mock.call('example-vm-vmdisk1'), mock.call('example-vm-vmdisk2')],
+                         client.get_artifact.call_args_list)
+        self.assertIn('\ndisk1.vmdk with size 5 Bytes, as the artifact example-vm-vmdisk1, into the existing '
+                      'artifact existing-uuid\n', result.output)
+        self.assertIn('\ndisk2.vmdk with size 5 Bytes, as the artifact example-vm-vmdisk2, a new artifact\n',
+                      result.output)
+        self.assertEqual(['example-vm-vmdisk1', 'example-vm-vmdisk2'], [upload[0] for upload in self.uploads])
+
+    def test_an_artifact_of_another_namespace_is_not_added_to(self):
+        # A name is looked up across everything the caller can see, but an
+        # upload only adds to an artifact in the caller's own namespace.
+        def configure(client):
+            client.get_artifact.side_effect = lambda name: {
+                'uuid': 'shared-uuid', 'namespace': 'system', 'source_url': 'sf://upload/system/%s' % name}
+
+        result, client, util = self._import(SMALL, disks=DISKS, configure=configure)
+        self.assertEqual(0, result.exit_code, result.output)
+        self.assertEqual(2, result.output.count(', a new artifact\n'), result.output)
+        self.assertNotIn('shared-uuid', result.output)
+
+    def test_an_artifact_not_made_by_an_upload_is_refused_before_any_read(self):
+        # An upload would make a second artifact of the name, rather than go into this one.
+        def configure(client):
+            client.get_artifact.side_effect = lambda name: (
+                _not_found(name) if name.endswith('vmdisk1') else
+                {'uuid': 'cached-uuid', 'namespace': NAMESPACE, 'source_url': 'https://example.com/disk2.qcow2'})
+
+        result, client, util = self._import(SMALL, disks=DISKS, blob_search=True, configure=configure)
+        self.assertEqual(1, result.exit_code, result.output)
+        self.assertNotIn('Traceback', result.output)
+        self.assertEqual('An artifact named example-vm-vmdisk2 already exists in the namespace mine, but was not '
+                         'created by an upload, so the import cannot add to it: rename or delete the artifact '
+                         'cached-uuid first', self._lines(result.output)[-1])
+        self.assertNotIn('Checking disk images', result.output)
+        self.assertEqual([], self.bars)
+        self.assertNoDiskRead()
+        self.assertNoArtifacts(client, util)
+        client.set_artifact_metadata_item.assert_not_called()
+
+    def test_an_upload_artifact_of_another_name_is_refused(self):
+        # The source URL must be the one the server gives an upload under this name, in this namespace.
+        def configure(client):
+            client.get_artifact.side_effect = lambda name: {
+                'uuid': 'other-uuid', 'namespace': NAMESPACE, 'source_url': 'sf://upload/%s/other' % NAMESPACE}
+
+        result, client, util = self._import(SMALL, disks=DISKS, configure=configure)
+        self.assertEqual(1, result.exit_code, result.output)
+        self.assertIn('rename or delete the artifact other-uuid first', self._lines(result.output)[-1])
+        self.assertNoArtifacts(client, util)
+
+    def test_a_failed_lookup_is_one_line_before_any_read(self):
+        def configure(client):
+            client.get_artifact.side_effect = lambda name: (
+                _not_found(name) if name.endswith('vmdisk1') else _raise(apiclient.UnauthorizedException(
+                    'API request failed', 'GET', '/artifacts/' + name, 403, '{"error": "not\\nauthorized"}')))
+
+        result, client, util = self._import(SMALL, disks=DISKS, blob_search=True, configure=configure)
+        self.assertEqual(1, result.exit_code, result.output)
+        self.assertNotIn('Traceback', result.output)
+        self.assertEqual('Could not look up the artifact example-vm-vmdisk2: the server answered 403: not authorized',
+                         self._lines(result.output)[-1])
+        self.assertNotIn('Checking disk images', result.output)
+        self.assertNoDiskRead()
+        self.assertNoArtifacts(client, util)
+        client.set_artifact_metadata_item.assert_not_called()
+
+    def test_a_failed_metadata_update_is_one_line(self):
+        def configure(client):
+            client.set_artifact_metadata_item.side_effect = apiclient.InternalServerError(
+                'API request failed', 'PUT', '/artifacts/uploaded-example-vm-vmdisk1/metadata/ova_member', 500, '')
+
+        result, client, util = self._import(SMALL, disks=DISKS, configure=configure)
+        self.assertEqual(1, result.exit_code, result.output)
+        self.assertNotIn('Traceback', result.output)
+        self.assertEqual(
+            ['Disk artifact is uploaded-example-vm-vmdisk1',
+             'The disk disk1.vmdk is in the artifact uploaded-example-vm-vmdisk1, but the artifact\'s metadata was '
+             'not set: the server answered 500: API request failed'],
+            self._lines(result.output)[-2:])
+        # The first disk's upload landed, and the import stopped there.
+        self.assertEqual(['example-vm-vmdisk1'], [upload[0] for upload in self.uploads])
 
     def test_a_directory_is_refused_by_click_before_the_archive_is_opened(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -617,7 +738,7 @@ class VerificationTestCase(CommandTestCase):
         self.assertEqual(1, len(failures))
         self.assertEqual(disk2, b''.join(received))
         client.truncate_upload.assert_called_once_with('upload-uuid', len(received[0]))
-        self.assertEqual(mock.call('example-vm-vmdisk2', 'upload-uuid', source_url=mock.ANY, shared=False,
+        self.assertEqual(mock.call('example-vm-vmdisk2', 'upload-uuid', source_url=None, shared=False,
                                    namespace=None), client.upload_artifact.call_args)
 
     def test_progress_is_drawn_by_tqdm(self):

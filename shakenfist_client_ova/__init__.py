@@ -1,5 +1,6 @@
 import click
 import humanize
+import json
 import math
 import os
 from shakenfist_client import apiclient, util
@@ -212,16 +213,69 @@ def _verify(package, blob_search):
     return digests
 
 
-def _upload(client, package, path, names, digests, blob_search):
-    """Upload each disk, or reuse the blob already holding it, as one artifact per disk."""
+def _api_error(e):
+    """What the server said when it refused a request, on one line."""
+    try:
+        reason = json.loads(e.text)['error']
+    except (TypeError, ValueError, KeyError):
+        reason = e.text
+    return 'the server answered %d: %s' % (e.status_code, ' '.join(str(reason).split()) or e.message)
+
+
+def _existing_artifacts(client, names):
+    """For each artifact name, the existing artifact an upload under it goes into, or None for a new one.
+
+    An artifact is identified by its name in the caller's namespace. A name is
+    looked up across every artifact the caller can see, which includes shared
+    artifacts and those of namespaces that trust the caller, but the caller's
+    own namespace is searched first. So an artifact found anywhere else is not
+    the one an upload goes into, and the upload makes a new artifact instead.
+
+    The server finds the artifact an upload goes into by the source URL it
+    gives uploads, made from the namespace and the name. An artifact of the
+    caller's with the name but another source URL, such as one cached from a
+    URL, would not be found, and the upload would make a second artifact of
+    that name, which the name would then no longer look up. So that is refused.
+    """
+    existing = []
+    for name in names:
+        try:
+            artifact = client.get_artifact(name)
+        except apiclient.ResourceNotFoundException:
+            artifact = None
+        except apiclient.APIException as e:
+            print()
+            _refuse('Could not look up the artifact %s: %s' % (name, _api_error(e)))
+        if artifact is not None and artifact['namespace'] != client.namespace:
+            artifact = None
+        if artifact is not None and artifact['source_url'] != 'sf://upload/%s/%s' % (client.namespace, name):
+            print()
+            _refuse('An artifact named %s already exists in the namespace %s, but was not created by an upload, '
+                    'so the import cannot add to it: rename or delete the artifact %s first'
+                    % (name, client.namespace, artifact['uuid']))
+        existing.append(artifact)
+    return existing
+
+
+def _upload(client, package, path, names, existing, digests, blob_search):
+    """Upload each disk, or reuse the blob already holding it, as one artifact per disk.
+
+    The server gives each artifact its source URL. Where the disk came from is
+    recorded in the artifact's metadata instead, as ova_file, the OVA's real
+    path, and ova_member, the disk's member name.
+    """
     print()
     print('Uploading disk images...')
 
-    for upload, name, computed in zip(package.uploads, names, digests):
+    for upload, name, artifact, computed in zip(package.uploads, names, existing, digests):
         size = package.member_size(upload.member)
         print()
-        print(_printable('%s with size %s, as the artifact %s' % (upload.member, humanize.naturalsize(size), name)))
-        source_url = 'ova://%s/%s' % (path, upload.member)
+        if artifact is None:
+            destination = 'a new artifact'
+        else:
+            destination = 'into the existing artifact %s' % artifact['uuid']
+        print(_printable('%s with size %s, as the artifact %s, %s'
+                         % (upload.member, humanize.naturalsize(size), name, destination)))
 
         blob = None
         if blob_search:
@@ -230,11 +284,19 @@ def _upload(client, package, path, names, digests, blob_search):
 
         if blob:
             print('Disk is already present in the cluster')
-            artifact = client.blob_artifact(name, blob['uuid'], source_url=source_url)
+            artifact = client.blob_artifact(name, blob['uuid'])
         else:
             with package.open_member(upload.member) as f:
-                artifact = util.upload_artifact_with_progress_file_like_object(client, name, f, size, source_url)
+                artifact = util.upload_artifact_with_progress_file_like_object(client, name, f, size, None)
         print('Disk artifact is %s' % artifact['uuid'])
+
+        try:
+            client.set_artifact_metadata_item(artifact['uuid'], 'ova_file', path)
+            client.set_artifact_metadata_item(artifact['uuid'], 'ova_member', upload.member)
+        except apiclient.APIException as e:
+            print()
+            _refuse('The disk %s is in the artifact %s, but the artifact\'s metadata was not set: %s'
+                    % (upload.member, artifact['uuid'], _api_error(e)))
 
 
 def _import_package(client, package, path, accept_eula):
@@ -281,11 +343,12 @@ def _import_package(client, package, path, accept_eula):
 
     names = _artifact_names(package, name)
     blob_search = client.check_capability('blob-search-by-hash')
+    existing = _existing_artifacts(client, names)
     try:
         # Every disk is checked before any is uploaded, so that a corrupt
         # second disk does not leave the first behind as an artifact.
         digests = _verify(package, blob_search)
-        _upload(client, package, path, names, digests, blob_search)
+        _upload(client, package, path, names, existing, digests, blob_search)
     except ovf.OVFError as e:
         print()
         _refuse(e)
