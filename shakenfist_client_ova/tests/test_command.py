@@ -300,6 +300,15 @@ RAISERS = {
     ovf.BrokenReferenceError: _synthetic('ovf:fileRef="file1"', 'ovf:fileRef="nowhere"'),
 }
 
+# The errors that checking the archive against its descriptor raises. Nothing
+# raises them until the package reader is written, which gives each a raiser
+# in RAISERS and empties this set.
+ARCHIVE_ERRORS = {
+    ovf.NotAnArchiveError, ovf.PackageLayoutError, ovf.FileReferenceError, ovf.ChunkedFileError,
+    ovf.MissingMemberError, ovf.MemberTypeError, ovf.FileSizeError, ovf.CompressedFileError,
+    ovf.UnlistedFileError, ovf.DigestMismatchError, ovf.DeltaDiskError,
+}
+
 
 class ErrorsTestCase(CommandTestCase):
     def _error_lines(self, output):
@@ -323,7 +332,8 @@ class ErrorsTestCase(CommandTestCase):
             for subclass in pending.pop().__subclasses__():
                 subclasses.add(subclass)
                 pending.append(subclass)
-        self.assertEqual(set(RAISERS), subclasses)
+        self.assertEqual(set(), set(RAISERS) & ARCHIVE_ERRORS)
+        self.assertEqual(set(RAISERS) | ARCHIVE_ERRORS, subclasses)
 
     def test_every_error_raises_its_error(self):
         for error, raiser in RAISERS.items():

@@ -7,8 +7,10 @@ model.py. tests/test_ovf_boundary.py enforces this.
 """
 
 from .errors import (
-    BrokenReferenceError, EntityDeclarationError, InvalidValueError, MalformedDescriptorError, ManifestError,
-    MissingContentError, OVFError, outcome_name, UnknownAllocationUnitError, UnparsedContentError,
+    BrokenReferenceError, ChunkedFileError, CompressedFileError, DeltaDiskError, DigestMismatchError,
+    EntityDeclarationError, FileReferenceError, FileSizeError, InvalidValueError, MalformedDescriptorError,
+    ManifestError, MemberTypeError, MissingContentError, MissingMemberError, NotAnArchiveError, OVFError,
+    outcome_name, PackageLayoutError, UnknownAllocationUnitError, UnlistedFileError, UnparsedContentError,
     UnsupportedEnvelopeError, UnsupportedHardwareError, UnsupportedProducerError, VirtualSystemCollectionError)
 from .model import (
     Controller, DeploymentOption, Disk, DiskDrive, Envelope, Eula, File, Manifest, ManifestEntry, Network, Nic,
@@ -19,8 +21,10 @@ from .manifest import parse_manifest
 
 __all__ = [
     # errors.py
-    'BrokenReferenceError', 'EntityDeclarationError', 'InvalidValueError', 'MalformedDescriptorError',
-    'ManifestError', 'MissingContentError', 'OVFError', 'outcome_name', 'UnknownAllocationUnitError',
+    'BrokenReferenceError', 'ChunkedFileError', 'CompressedFileError', 'DeltaDiskError', 'DigestMismatchError',
+    'EntityDeclarationError', 'FileReferenceError', 'FileSizeError', 'InvalidValueError', 'MalformedDescriptorError',
+    'ManifestError', 'MemberTypeError', 'MissingContentError', 'MissingMemberError', 'NotAnArchiveError',
+    'OVFError', 'outcome_name', 'PackageLayoutError', 'UnknownAllocationUnitError', 'UnlistedFileError',
     'UnparsedContentError', 'UnsupportedEnvelopeError', 'UnsupportedHardwareError', 'UnsupportedProducerError',
     'VirtualSystemCollectionError',
     # model.py

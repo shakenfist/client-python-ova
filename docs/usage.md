@@ -14,10 +14,13 @@ with `--namespace <name>`.
 1. **Lists the archive.** An OVA is a tar file. Its members are sorted
    into the OVF descriptor (`.ovf`), disk images (`.vmdk`), manifests
    (`.mf`) and anything else, and the four lists are printed.
-2. **Reads the manifest.** Each `SHA1(...) = ...` or
-   `SHA256(...) = ...` line is parsed and the hash recorded against
-   its file. A manifest line that does not parse stops the import.
-   The hashes are not yet checked against the disk images.
+2. **Reads the manifest.** Each `SHA1(...) = ...`, `SHA256(...) = ...`
+   or `SHA512(...) = ...` line is parsed and the hash recorded against
+   its file. The import stops on a line that does not parse, an
+   algorithm other than those three, a digest that is not hexadecimal
+   of its algorithm's length, or a second line for one file. CRLF line
+   endings are accepted. The hashes are not yet checked against the
+   disk images.
 3. **Parses the OVF descriptor.** The descriptor is read for: the
    envelope's OVF version; its files; its disks and their capacities
    (DSP0004 units, with `${property}` capacities resolved) and the
