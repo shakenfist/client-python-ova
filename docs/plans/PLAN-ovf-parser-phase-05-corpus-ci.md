@@ -418,4 +418,61 @@ output is pushed:
 
 ## Execution notes
 
-_To be filled in as the phase runs._
+* **The steps ran in sequence, not in parallel.** 5a and 5c both run
+  `pre-commit` and `tox` in the same worktree, so running them together
+  would have had each tripping over the other's half-finished work. The
+  order was 5a, 5c, 5b, 5d.
+* **5a passed 17 of 17 against the local corpus.** That is 16
+  appliances and the corpus check, run by the management session, and
+  every outcome matches phase 4's table. The sub-agent also added an
+  offline unit test of the guard, `tests/test_appliance_guard.py`, which
+  runs in `py3`. It was kept, so that CI checks the guard even without a
+  corpus.
+* **The review sent 5c back for two defects.**
+  * Suppose the caller's namespace already held an artifact with the
+    name but a source URL no upload gives, such as one made by
+    `artifact cache`. The server would then have made a second artifact
+    with the same name, and the name would stop looking up. This is now
+    refused before any disk is read.
+  * "Adding a version" was false for an unchanged disk, because the
+    server skips a version whose sha512 matches the latest. The line
+    now says "into the existing artifact".
+
+  The lookup also treats an artifact found only in another namespace
+  (shared, or trusting the caller) as new, because an upload never adds
+  to it.
+* **5b found two git-lfs behaviours the plan did not anticipate.**
+  * When git-lfs fails, it writes its environment, header included,
+    into `.git/lfs/logs/`. That happens whichever way the header is
+    passed: `-c` travels as `GIT_CONFIG_PARAMETERS`.
+  * After a 401, git-lfs records `lfs.<url>.access` in `.git/config`.
+
+  The script presets that access mode, so nothing is written. Its final
+  check, which also runs from an `EXIT` trap, removes any log that
+  captured the header and fails closed if the token or its base64 form
+  remains anywhere under `.git`. The credential is passed through
+  `GIT_CONFIG_*` environment variables rather than `-c`, because a
+  process's environment is readable only by its owner, while its
+  command line is readable by anyone on the host. The review added
+  `persist-credentials: false` to the job's checkout.
+* **Live check after 5c, 2026-10-18.** The operator approved it, and it
+  ran against the cluster `~/.shakenfist` points at. `vyos-1.2.1`,
+  imported from `dc625df`, got:
+  * the source URL `sf://upload/system/VyOS-vmdisk1`;
+  * both metadata keys.
+
+  A second import said "into the existing artifact" and reused the
+  blob. That left one artifact with one version. The artifact was
+  deleted afterwards.
+* **Definition of done, before CI.**
+  * `py3` passes 495 tests and collects none of the appliance tier.
+  * The wheel carries no test package.
+  * `GITLAB_TESTDATA_TOKEN` appears once in `ci.yml`, before the job's
+    `pip` lines.
+  * The credential grep is empty, and the fetch script's guard test
+    passes.
+  * No `ova://` remains.
+  * `descriptor-corpus` passes 4 of 4.
+* **Still to come:** the token's expiry date, from the operator (step
+  5e), and the first run of the `appliance-corpus` job on this phase's
+  pull request.
