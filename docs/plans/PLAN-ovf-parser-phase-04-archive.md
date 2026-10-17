@@ -582,4 +582,66 @@ aligns with this plan. Two gates:
 
 ## Execution notes
 
-Not started.
+Phase 4 ran on 2026-10-17, after a back brief in which the operator
+approved decisions 3, 6 and 7 as written. `tox -epy3` went from 304
+tests to 474, and the descriptor corpus ledger did not change. Where it
+departed from the text above:
+
+* **`ovf/model.py` changed by one comment.** `Manifest.entries` said it
+  kept "every line, duplicates included", which stopped being true when
+  repeated names were refused. So the Definition of done's diff of
+  `model.py` prints that one comment line, and nothing else.
+* **OVF 1.1 is stricter about sizes than risk 1 says.** DSP0243 1.1
+  section 7.1 says `ovf:size` "shall match" the file's size, and only
+  2.x weakens it to "should". The size refusal therefore follows 1.1
+  exactly.
+* **A truncated archive is refused when it is listed.** tarfile seeks
+  past each member's data as it lists the archive, so a short archive
+  fails in `getmembers()`, before any member is read. A short read
+  while hashing can happen only if the file changes after it is
+  opened. The tests cover both, the second by shrinking the file after
+  opening it.
+* **Decisions the steps took that the plan left open:**
+  * A descriptor, manifest or certificate that is not a regular file
+    is a `PackageLayoutError`, because it is a layout check made before
+    anything is read. `MemberTypeError` is kept for `File`s.
+  * Manifest entry names are not stripped of `./`. An entry must name
+    the member as normalised, and no surveyed manifest uses `./`.
+  * Digests are kept as written in the model and compared without
+    regard to case.
+  * `unreferenced_members` lists every member nothing references
+    except directories, including links and devices, so that the
+    summary shows everything ignored.
+  * `Package` gained `member_size()`, and `open_member()` returns a
+    wrapper that turns a tar or OS error during the upload's reads and
+    seeks into `NotAnArchiveError`. Without it, an OVA changing during
+    the import would have escaped as a traceback from the upload
+    helper.
+  * `_printable()` escapes a lone surrogate, which a member name that
+    is not UTF-8 holds, instead of failing to print it.
+  * A blob is looked up only when the server has
+    `blob-search-by-hash`, even when a SHA512 manifest already gives the
+    digest.
+  * The source URL is `ova://` followed by the absolute path, so it has
+    three slashes, such as `ova:///home/me/appliance.ova/disk1.vmdk`.
+* **Mutation checks.** Step 4b ran 40 mutations of `package.py`, and
+  step 4c ran 8 of the command and the member wrapper, including
+  checking each disk just before its upload rather than all of them
+  first. The tests caught every one.
+* **`instar-testdata`, at `cf67642bbb`.** Run after 4b with
+  `open_package()` and the digest checks, and after 4c with the command
+  itself and the client mocked. Every outcome matched:
+
+  | Appliance | Kind | Outcome |
+  |-----------|------|---------|
+  | `archiveteam-warrior-4.1` | whole | verified (SHA256) and imported |
+  | `photon-3.0-hw11` | whole | verified (SHA1) and imported, `.cert` notice |
+  | `photon-5.0-aarch64-uefi-hw14` | whole | verified (SHA256) and imported, `.cert` notice |
+  | `talos-1.14.3` | whole | verified (SHA256) and imported |
+  | `vyos-1.2.1` | whole | verified (SHA1) and imported, `.cert` notice |
+  | `oracle-linux-9.8-olvm` | whole | `UnsupportedProducerError` |
+  | `tails-202607` | descriptor-only | `UnsupportedEnvelopeError` |
+  | the other nine | descriptor-only | `MissingMemberError`, naming exactly the provenance file's absent members |
+
+* **Step 4e has not run.** The live import of the Ubuntu cloud image
+  needs an operator and a cluster, so open question 1 is still open.
