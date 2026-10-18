@@ -522,7 +522,7 @@ attribute tables; the evidence is in the phase 1 plan's survey finding
 | 3. ElementTree and the specification | [PLAN-ovf-parser-phase-03-elementtree.md](PLAN-ovf-parser-phase-03-elementtree.md) | Complete | b1f8894 |
 | 4. Archive correctness | [PLAN-ovf-parser-phase-04-archive.md](PLAN-ovf-parser-phase-04-archive.md) | Complete | a8f44bf |
 | 5. Corpus CI tier | [PLAN-ovf-parser-phase-05-corpus-ci.md](PLAN-ovf-parser-phase-05-corpus-ci.md) | Complete | 248ecd3 |
-| 6. Push audit | [PLAN-ovf-parser-phase-06-push-audit.md](PLAN-ovf-parser-phase-06-push-audit.md) | In progress | |
+| 6. Push audit | [PLAN-ovf-parser-phase-06-push-audit.md](PLAN-ovf-parser-phase-06-push-audit.md) | Complete | c37b530 |
 
 Phase plans are written when each phase starts, from this plan and
 from what the previous phase learned, rather than all now.
@@ -914,8 +914,8 @@ above instead. Its verdicts and declines are in the phase plan's
   * three are names of freely downloadable appliances.
 
   The phase plan's execution notes list them.
-* There are nine findings, all to be fixed in one follow-up pull
-  request:
+* There were nine findings, all fixed in one follow-up pull request,
+  which also closed this plan:
   * the trimmed-against-original model check that decision 6 promised
     was never built;
   * the prose list omits the deployment option text;

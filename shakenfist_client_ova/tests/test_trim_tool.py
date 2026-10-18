@@ -188,6 +188,54 @@ class TrimTestCase(testtools.TestCase):
         self.assertEqual(self.trimmed, tool.trim(self.original, SOURCE))
 
 
+DEPLOYMENT_OPTIONS = '\n'.join([
+    DECLARATION,
+    '<Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1">',
+    '  <DeploymentOptionSection>',
+    '    <Info>The list of deployment options</Info>',
+    '    <Configuration ovf:id="small" ovf:default="true">',
+    '      <Label>Secret small label</Label>',
+    '      <Description>Secret small description</Description>',
+    '    </Configuration>',
+    '    <Configuration ovf:id="large">',
+    '      <Label>Secret large label</Label>',
+    '      <Description/>',
+    '    </Configuration>',
+    '  </DeploymentOptionSection>',
+    '  <VirtualSystem ovf:id="vm">',
+    '    <Info>A virtual machine</Info>',
+    '  </VirtualSystem>',
+    '</Envelope>',
+    ''])
+
+
+class DeploymentOptionTestCase(testtools.TestCase):
+    def setUp(self):
+        super(DeploymentOptionTestCase, self).setUp()
+        self.original = DEPLOYMENT_OPTIONS.encode('utf-8')
+        self.trimmed = tool.trim(self.original, SOURCE)
+
+    def test_label_and_description_trimmed(self):
+        self.assertNotIn(b'Secret', self.trimmed)
+        self.assertEqual(2, self.trimmed.count(b'<Label>TRIMMED</Label>'))
+        self.assertEqual(1, self.trimmed.count(b'<Description>TRIMMED</Description>'))
+
+    def test_info_ids_and_empty_description_kept(self):
+        self.assertIn(b'<Info>The list of deployment options</Info>', self.trimmed)
+        self.assertIn(b'<Configuration ovf:id="small" ovf:default="true">', self.trimmed)
+        self.assertIn(b'<Configuration ovf:id="large">', self.trimmed)
+        self.assertIn(b'<Description/>', self.trimmed)
+
+    def test_check_passes(self):
+        descriptor = tool.check(self.original, self.trimmed)
+        self.assertEqual(3, [span.kind for span in descriptor.spans].count('prose'))
+
+    def test_check_fails_when_label_untrimmed(self):
+        untrimmed = self.trimmed.replace(b'<Label>TRIMMED</Label>', b'<Label>Secret small label</Label>', 1)
+        e = self.assertRaises(tool.CheckError, tool.check, self.original, untrimmed)
+        self.assertIn('Label', str(e))
+
+
 class CheckFailureTestCase(testtools.TestCase):
     def setUp(self):
         super(CheckFailureTestCase, self).setUp()

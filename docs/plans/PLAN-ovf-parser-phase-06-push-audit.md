@@ -546,7 +546,25 @@ rather than counted:
     Assistant OS disk name. Both appliances can be downloaded freely,
     and `instar-testdata`'s `sources.json` marks both
     `redistributable: true`.
-* **This phase does not complete the plan.** There are findings, so
-  phase 6 stays `In progress`. The follow-up pull request records this
-  phase's merge commit, and sets the row and the index row to
-  `Complete`.
+* **This phase did not complete the plan by itself.** There were
+  findings, so phase 6 stayed `In progress` when #21 merged as
+  `c37b530`. One follow-up pull request then fixed all nine, in six
+  commits, each implemented by a sub-agent and reviewed in the
+  management session. The review corrected two details: one claim in
+  the usage docs, about which `ManifestError` messages give a line
+  number, and one code comment:
+  * findings 2 and 7 (opus, medium), in two commits;
+  * findings 1 and 3 (opus, high), in one;
+  * findings 4 to 6, 8 and 9 (sonnet, medium), in three.
+
+  Some of the fixes went further than the record:
+  * Finding 2 moved `prose.scrub()` from a VirtualSystem to the
+    Envelope, because deployment options belong to the Envelope.
+  * Finding 1's check also refuses a fixture with no appliance.
+  * Finding 3's sweep found more output to reduce to counts: mock's
+    and testtools' mismatch rendering of call arguments, and the corpus
+    path in the guard's messages.
+  * A mutation script outside the tree checked the corpus tier 16 ways.
+
+  The same pull request records this phase's merge commit, and sets
+  the row and the index row to `Complete`.

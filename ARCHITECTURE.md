@@ -31,14 +31,17 @@ works in stages, and the first rule broken is the refusal reported.
    unchunked, and listed in the manifest; no disk may be a delta disk.
 3. **Describe.** The command prints the archive summary and the VM
    description, handles the licence, and refuses an artifact name
-   Shaken Fist would refuse.
+   Shaken Fist would refuse. It then looks up every artifact name
+   (`_existing_artifacts()`) before any disk is read, and refuses a
+   same-named artifact of the caller's that no upload made.
 4. **Verify and upload.** Two passes run over the disks. The first,
    `_verify()`, reads every disk once, computing its manifest digest
    and, when the server supports `blob-search-by-hash`, its SHA-512 in
    the same read. It stops on a mismatch before any disk is uploaded
    or looked up. Without a manifest it reads a disk only when blob
    search is available. The second, `_upload()`, uploads each disk, or
-   reuses an existing blob found by its SHA-512, as one artifact.
+   reuses an existing blob found by its SHA-512, as one artifact,
+   then sets its `ova_file` and `ova_member` metadata.
 
 The manifest detects corruption and accidental mismatch, not
 tampering; see `docs/usage.md`. The hardware description is not yet
@@ -94,8 +97,8 @@ logic. `ovf/cim.py` lists, for each CIM class, the standard properties
 the parser uses, the ones it deliberately leaves unused and the few it
 refuses because they change what the guest sees. `ovf/quirks.py`
 names each producer deviation from the schema that the parser
-accepts, with the evidence for it; read it for the list, which is
-kept only there so that it cannot drift. What is not yet read is
+accepts, with the evidence for it; it is the authority, and
+`docs/usage.md` summarises it for users. What is not yet read is
 tracked as Future work in [the OVF parser
 plan](docs/plans/PLAN-ovf-parser.md).
 

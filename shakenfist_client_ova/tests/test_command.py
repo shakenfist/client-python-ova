@@ -1,5 +1,4 @@
 import contextlib
-import hashlib
 import itertools
 import os
 import tarfile
@@ -30,7 +29,7 @@ class SummaryTestCase(testtools.TestCase):
     def test_envelope_summary_of_a_vendor_descriptor(self):
         envelope = ovf.parse_descriptor(_fixture('vendor/wazuh-4.9.1.ovf'))
         self.assertEqual(
-            ['    Version: 1',
+            ['    Version: not stated (1.x, from the envelope namespace)',
              '    System id: Wazuh v4.9.1 OVA',
              '    Operating system: id 101, type otherLinux64Guest, Linux - Amazon Linux 2',
              '    Product: TRIMMED, version 4.9.1',
@@ -43,7 +42,7 @@ class SummaryTestCase(testtools.TestCase):
              '    Controller 4: ide',
              '    NIC: E1000 on VM Network',
              '    Disk drive: Hard Disk 1 at address 0 on controller 4'],
-            _envelope_summary(envelope, 1, envelope.virtual_system.id))
+            _envelope_summary(envelope))
 
     def test_envelope_summary_with_two_controllers(self):
         envelope = ovf.parse_descriptor(_fixture('handwritten/two-controllers.ovf'))
@@ -63,11 +62,23 @@ class SummaryTestCase(testtools.TestCase):
              '    NIC: E1000 on VM Network',
              '    Disk drive: Hard disk 1 at address 0 on controller 3',
              '    Disk drive: Hard disk 2 at address 0 on controller 6'],
-            _envelope_summary(envelope, envelope.version, envelope.virtual_system.id))
+            _envelope_summary(envelope))
+
+    def test_envelope_summary_states_the_version_given(self):
+        envelope = ovf.parse_descriptor(_fixture('handwritten/ovf2-envelope.ovf'))
+        self.assertEqual('2.0', envelope.version)
+        self.assertEqual('    Version: 2.0', _envelope_summary(envelope)[0])
+
+    def test_envelope_summary_infers_a_2_x_version_from_the_namespace(self):
+        data = _fixture('handwritten/ovf2-envelope.ovf')
+        self.assertEqual(1, data.count(b' ovf:version="2.0"'))
+        envelope = ovf.parse_descriptor(data.replace(b' ovf:version="2.0"', b''))
+        self.assertIsNone(envelope.version)
+        self.assertEqual('    Version: not stated (2.x, from the envelope namespace)', _envelope_summary(envelope)[0])
 
     def test_envelope_summary_names_the_product_but_not_its_prose(self):
         envelope = ovf.parse_descriptor(_fixture('handwritten/product-and-eula.ovf'))
-        lines = _envelope_summary(envelope, envelope.version, envelope.virtual_system.id)
+        lines = _envelope_summary(envelope)
         self.assertEqual(
             ['    Operating system: id 36, Linux',
              '    Product: Example Appliance, version 1.0'],
@@ -83,16 +94,9 @@ class SummaryTestCase(testtools.TestCase):
             [line for line in lines if line.startswith('    Disk drive:')])
 
 
-def _replace(data, old, new):
-    """Bytes with every occurrence of the text old replaced by new, which must occur."""
-    text = data.decode()
-    assert old in text, old
-    return text.replace(old, new).encode()
-
-
 def _text(descriptor_name, old, new):
     """A hand-written descriptor, as bytes, with every occurrence of one string replaced."""
-    return _replace(_fixture(descriptor_name), old, new)
+    return synthetic.replace(_fixture(descriptor_name), old, new)
 
 
 PRODUCT_AND_EULA = 'handwritten/product-and-eula.ovf'
@@ -107,27 +111,17 @@ NO_MANIFEST = 'Warning: the OVA has no manifest, so the disks cannot be checked 
 
 # The two-disk descriptor with its files cut to five bytes, so that its disks
 # are small and can differ from each other.
-SMALL = _text(TWO_CONTROLLERS, 'ovf:size="1048576"', 'ovf:size="5"')
-DISK1 = b'disk1'
-DISK2 = b'disk2'
+SMALL = synthetic.SMALL_TWO_CONTROLLERS
+DISK1 = synthetic.DISK1
+DISK2 = synthetic.DISK2
 DISKS = [('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
-FILE1 = 'ovf:href="disk1.vmdk" ovf:size="5"'
+FILE1 = synthetic.FILE1
 
 # The caller's namespace, which the mocked client is authenticated to.
 NAMESPACE = 'mine'
 
 # The largest member _referenced() writes, so that a test never writes a real disk's size.
 LARGEST_MEMBER = 16 * 1024 * 1024
-
-
-def _digest(algorithm, data):
-    return hashlib.new(algorithm.lower(), data).hexdigest()
-
-
-def _manifest(members, algorithm='SHA256'):
-    """A manifest giving each member, a (name, data) pair or a synthetic.Member, its digest in the algorithm."""
-    pairs = [(member.name, member.data) if isinstance(member, synthetic.Member) else member for member in members]
-    return ''.join('%s(%s)= %s\n' % (algorithm, name, _digest(algorithm, data)) for name, data in pairs).encode()
 
 
 def _referenced(descriptor):
@@ -155,7 +149,7 @@ def _members(descriptor, disks=None, algorithm='SHA256', manifest_name='x.mf', c
         disks = _referenced(descriptor)
     members = [('x.ovf', descriptor)]
     if algorithm is not None:
-        members.append((manifest_name, _manifest(members + list(disks), algorithm)))
+        members.append((manifest_name, synthetic.manifest(members + list(disks), algorithm)))
     if certificate:
         members.append(('x.cert', b'An invented certificate, which nothing checks.\n'))
     return members + list(disks) + list(extra)
@@ -418,11 +412,11 @@ class ArchiveSummaryTestCase(CommandTestCase):
         self.assertEqual(1, result.output.count('    vCPUs: 1'), result.output)
 
     def test_what_the_import_leaves_alone(self):
-        descriptor = _replace(SMALL, '</References>',
-                              '  <File ovf:id="file3" ovf:href="tools.iso"/>\n  </References>')
-        descriptor = _replace(descriptor, '</DiskSection>',
-                              '  <Disk ovf:diskId="vmdisk3" ovf:capacity="1" '
-                              'ovf:capacityAllocationUnits="byte * 2^30"/>\n  </DiskSection>')
+        descriptor = synthetic.replace(SMALL, '</References>',
+                                       '  <File ovf:id="file3" ovf:href="tools.iso"/>\n  </References>')
+        descriptor = synthetic.replace(descriptor, '</DiskSection>',
+                                       '  <Disk ovf:diskId="vmdisk3" ovf:capacity="1" '
+                                       'ovf:capacityAllocationUnits="byte * 2^30"/>\n  </DiskSection>')
         disks = DISKS + [('tools.iso', b'an iso')]
         result, client, util = self._import(descriptor, disks=disks, extra=[
             ('README.txt', b'Read me.'), synthetic.directory('docs')])
@@ -452,7 +446,7 @@ class ArchiveSummaryTestCase(CommandTestCase):
         self.assertIn(NO_MANIFEST, result.output)
         self.assertIn('Checking disk images...\n', result.output)
         self.assertNotIn('matches the manifest', result.output)
-        self.assertEqual([mock.call(_digest('sha512', DISK1)), mock.call(_digest('sha512', DISK2))],
+        self.assertEqual([mock.call(synthetic.digest('sha512', DISK1)), mock.call(synthetic.digest('sha512', DISK2))],
                          client.get_blob_by_sha512.call_args_list)
 
     def test_manifest_named_differently(self):
@@ -476,7 +470,7 @@ class ArchiveSummaryTestCase(CommandTestCase):
 
 class VerificationTestCase(CommandTestCase):
     def test_digest_mismatch_on_the_second_disk_uploads_nothing(self):
-        manifest = _manifest([('x.ovf', SMALL), ('disk1.vmdk', DISK1), ('disk2.vmdk', b'disk3')])
+        manifest = synthetic.manifest([('x.ovf', SMALL), ('disk1.vmdk', DISK1), ('disk2.vmdk', b'disk3')])
         result, client, util = self._run([('x.ovf', SMALL), ('x.mf', manifest)] + DISKS, blob_search=True)
         self.assertEqual(1, result.exit_code, result.output)
         self.assertNotIn('Traceback', result.output)
@@ -485,7 +479,7 @@ class VerificationTestCase(CommandTestCase):
             ['Checking disk images...',
              '    disk1.vmdk: its SHA256 digest matches the manifest',
              'The SHA256 digest of "disk2.vmdk" is %s, but the manifest "x.mf" gives %s'
-             % (_digest('sha256', DISK2), _digest('sha256', b'disk3'))],
+             % (synthetic.digest('sha256', DISK2), synthetic.digest('sha256', b'disk3'))],
             self._lines(result.output)[-3:])
         self.assertNoArtifacts(client, util)
 
@@ -495,7 +489,7 @@ class VerificationTestCase(CommandTestCase):
         # Each disk is read once, for both its manifest digest and the SHA-512
         # to look its blob up by, and the blob is reused, so it is not read again.
         self.assertEqual(['x.mf', 'x.ovf', 'disk1.vmdk', 'disk2.vmdk'], self.reads)
-        self.assertEqual([mock.call(_digest('sha512', DISK1)), mock.call(_digest('sha512', DISK2))],
+        self.assertEqual([mock.call(synthetic.digest('sha512', DISK1)), mock.call(synthetic.digest('sha512', DISK2))],
                          client.get_blob_by_sha512.call_args_list)
         self.assertIn('    disk2.vmdk: its SHA256 digest matches the manifest\n', result.output)
         self.assertEqual(
@@ -508,7 +502,7 @@ class VerificationTestCase(CommandTestCase):
         result, client, util = self._import(SMALL, disks=DISKS, algorithm='SHA512', blob_search=True)
         self.assertEqual(0, result.exit_code, result.output)
         self.assertIn('    disk1.vmdk: its SHA512 digest matches the manifest\n', result.output)
-        self.assertEqual([mock.call(_digest('sha512', DISK1)), mock.call(_digest('sha512', DISK2))],
+        self.assertEqual([mock.call(synthetic.digest('sha512', DISK1)), mock.call(synthetic.digest('sha512', DISK2))],
                          client.get_blob_by_sha512.call_args_list)
 
     def test_a_disk_with_no_blob_is_read_again_to_upload_it(self):
@@ -701,7 +695,8 @@ class VerificationTestCase(CommandTestCase):
         open_package.assert_not_called()
 
     def test_slash_in_an_artifact_name_is_refused_before_any_read(self):
-        descriptor = _replace(SMALL, '<VirtualSystem ovf:id="example-vm">', '<VirtualSystem ovf:id="example/vm">')
+        descriptor = synthetic.replace(
+            SMALL, '<VirtualSystem ovf:id="example-vm">', '<VirtualSystem ovf:id="example/vm">')
         result, client, util = self._import(descriptor, disks=DISKS, blob_search=True)
         self.assertEqual(1, result.exit_code, result.output)
         self.assertNotIn('Traceback', result.output)
@@ -716,7 +711,7 @@ class VerificationTestCase(CommandTestCase):
         # The OVA loses its end after it has been checked, part way through
         # the second disk's upload.
         disk2 = b'0123456789' * 300000
-        descriptor = _replace(SMALL, 'ovf:href="disk2.vmdk" ovf:size="5"', 'ovf:href="disk2.vmdk"')
+        descriptor = synthetic.replace(SMALL, 'ovf:href="disk2.vmdk" ovf:size="5"', 'ovf:href="disk2.vmdk"')
 
         def shrinking_upload(client, name, f, size, source_url):
             if name.endswith('vmdisk2'):
@@ -735,7 +730,7 @@ class VerificationTestCase(CommandTestCase):
         # shakenfist_client's own helper, which seeks the disk back to the
         # last chunk the server has when a chunk fails.
         disk2 = bytes(range(256)) * 64
-        descriptor = _replace(SMALL, 'ovf:href="disk2.vmdk" ovf:size="5"', 'ovf:href="disk2.vmdk"')
+        descriptor = synthetic.replace(SMALL, 'ovf:href="disk2.vmdk" ovf:size="5"', 'ovf:href="disk2.vmdk"')
         received = []
         failures = []
 
@@ -855,7 +850,7 @@ class UntrustedTextTestCase(CommandTestCase):
     def test_member_names_are_made_visible(self):
         # XML refuses ESC in an href, but not a C1 control; a member nothing
         # references can be named anything.
-        descriptor = _replace(SMALL, 'ovf:href="disk1.vmdk"', 'ovf:href="evil&#x9b;2J.vmdk"')
+        descriptor = synthetic.replace(SMALL, 'ovf:href="disk1.vmdk"', 'ovf:href="evil&#x9b;2J.vmdk"')
         result, _, _ = self._import(descriptor, disks=[('evil\x9b2J.vmdk', DISK1), ('disk2.vmdk', DISK2)],
                                     extra=[('evil\x1b[2J.txt', b'x')])
         self.assertEqual(0, result.exit_code, result.output)
@@ -961,18 +956,18 @@ RAISERS = {
     ovf.BrokenReferenceError: _synthetic('ovf:fileRef="file1"', 'ovf:fileRef="nowhere"'),
     ovf.NotAnArchiveError: _small(compressed=True),
     ovf.PackageLayoutError: _archive(_members(SMALL, disks=DISKS) + [('y.ovf', SMALL)]),
-    ovf.FileReferenceError: _small(_replace(SMALL, FILE1, 'ovf:href="/disk1.vmdk" ovf:size="5"')),
-    ovf.ChunkedFileError: _small(_replace(SMALL, FILE1, FILE1 + ' ovf:chunkSize="2"')),
+    ovf.FileReferenceError: _small(synthetic.replace(SMALL, FILE1, 'ovf:href="/disk1.vmdk" ovf:size="5"')),
+    ovf.ChunkedFileError: _small(synthetic.replace(SMALL, FILE1, FILE1 + ' ovf:chunkSize="2"')),
     ovf.MissingMemberError: _small(disks=DISKS[:1]),
     ovf.MemberTypeError: _small(disks=DISKS[:1] + [synthetic.symlink('disk2.vmdk', 'disk1.vmdk')]),
     ovf.FileSizeError: _small(disks=[('disk1.vmdk', b'disk'), ('disk2.vmdk', DISK2)]),
-    ovf.CompressedFileError: _small(_replace(SMALL, FILE1, FILE1 + ' ovf:compression="gzip"')),
+    ovf.CompressedFileError: _small(synthetic.replace(SMALL, FILE1, FILE1 + ' ovf:compression="gzip"')),
     ovf.UnlistedFileError: _archive(
-        [('x.ovf', SMALL), ('x.mf', _manifest([('x.ovf', SMALL), ('disk1.vmdk', DISK1)]))] + DISKS),
+        [('x.ovf', SMALL), ('x.mf', synthetic.manifest([('x.ovf', SMALL), ('disk1.vmdk', DISK1)]))] + DISKS),
     ovf.DigestMismatchError: _archive(
-        [('x.ovf', SMALL), ('x.mf', _manifest([('x.ovf', SMALL + b'\n')] + DISKS))] + DISKS),
-    ovf.DeltaDiskError: _small(_replace(SMALL, '<Disk ovf:diskId="vmdisk2"',
-                                        '<Disk ovf:diskId="vmdisk2" ovf:parentRef="vmdisk1"')),
+        [('x.ovf', SMALL), ('x.mf', synthetic.manifest([('x.ovf', SMALL + b'\n')] + DISKS))] + DISKS),
+    ovf.DeltaDiskError: _small(synthetic.replace(SMALL, '<Disk ovf:diskId="vmdisk2"',
+                                                 '<Disk ovf:diskId="vmdisk2" ovf:parentRef="vmdisk1"')),
 }
 
 

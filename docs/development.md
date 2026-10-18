@@ -98,10 +98,12 @@ comments and whitespace are the original's. `--check` proves that
 nothing else changed.
 
 `--check` needs the original, which only `instar-testdata` holds, so
-CI instead runs a unit test over the committed files alone: each must
-carry the provenance comment, every prose span must be exactly
+the unit tier instead runs a test over the committed files alone: each
+must carry the provenance comment, every prose span must be exactly
 `TRIMMED`, and every emptied element must be empty and keep only its
-allowed attributes. The fixtures are marked `-text` in
+allowed attributes. The appliance corpus tier, below, has the
+originals, and checks that each fixture still parses as its original
+does. The fixtures are marked `-text` in
 `.gitattributes` so that git never rewrites their line endings, and
 any whitespace hook added later must exclude them.
 
@@ -230,6 +232,16 @@ mocked) uploading each disk once; a descriptor-only one must fail with
 appliances named in `expected.json` are the exceptions, each with the
 outcome it must produce.
 
+A second test per appliance checks its trimmed fixture against the
+original. It parses the descriptor that `open_package()` reads from
+the `.ova` and the fixture in `tests/fixtures/ovf/vendor/`, replaces
+the prose in each model with `prose.scrub()`, and requires the two
+`to_json()` serialisations to be equal. A descriptor the parser
+refuses, as it does Oracle Linux's and Tails', must instead be refused
+with the same outcome name as its fixture. So every appliance needs a
+fixture, and every fixture an appliance: either missing fails the
+tier.
+
 `APPLIANCE_CORPUS` names the `downloaded/ova` directory. To run it
 against a local checkout:
 
@@ -241,7 +253,9 @@ APPLIANCE_CORPUS=<checkout>/downloaded/ova tox -eappliance-corpus
 It fails, never skips, if the variable is unset or the corpus is
 missing, still Git LFS pointers, or lacks a provenance file. The corpus
 is private, so assertion messages carry appliance, artifact and outcome
-names only, never descriptor or manifest text. The offline unit tier
+names and counts only, never descriptor or manifest text or a member's
+name. Where two models differ, a message says that they differ, not
+how. The offline unit tier
 has a guard test (`tests/test_appliance_guard.py`, in `tox -epy3`) for
 the tier itself.
 

@@ -32,7 +32,9 @@ directory the test owns:
 
 from dataclasses import dataclass
 import gzip
+import hashlib
 import io
+import os
 import tarfile
 
 
@@ -132,3 +134,36 @@ def build(path, members, compressed=False, truncated=False):
         else:
             f.write(data)
     return path
+
+
+def replace(data, old, new):
+    """Bytes with every occurrence of the text old replaced by new, which must occur."""
+    text = data.decode()
+    assert old in text, old
+    return text.replace(old, new).encode()
+
+
+def digest(algorithm, data):
+    """The hexadecimal digest of data in the algorithm, which is named in any case."""
+    return hashlib.new(algorithm.lower(), data).hexdigest()
+
+
+def manifest(members, algorithm='SHA256'):
+    """A manifest giving each member its digest in the algorithm, which is written as given.
+
+    members are (name, data) pairs or Members, whose data is empty unless they
+    are regular files.
+    """
+    pairs = [(member.name, member.data) if isinstance(member, Member) else member for member in members]
+    return ''.join('%s(%s)= %s\n' % (algorithm, name, digest(algorithm, data)) for name, data in pairs).encode()
+
+
+# The hand-written two-controllers descriptor with its files' ovf:size cut to five bytes, so that its disks are
+# small and can differ from each other, and the disks and File attributes that go with it.
+HANDWRITTEN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures', 'ovf', 'handwritten')
+with open(os.path.join(HANDWRITTEN, 'two-controllers.ovf'), 'rb') as _f:
+    TWO_CONTROLLERS = _f.read()
+SMALL_TWO_CONTROLLERS = replace(TWO_CONTROLLERS, 'ovf:size="1048576"', 'ovf:size="5"')
+DISK1 = b'disk1'
+DISK2 = b'disk2'
+FILE1 = 'ovf:href="disk1.vmdk" ovf:size="5"'

@@ -1,11 +1,13 @@
 import dataclasses
 import json
+import os
 import typing
 
 import testtools
 
 from shakenfist_client_ova import ovf
 from shakenfist_client_ova.ovf import prose
+from shakenfist_client_ova.tests import golden
 
 
 def _envelope():
@@ -115,8 +117,8 @@ class OutcomeNameTestCase(testtools.TestCase):
         self.assertEqual('MalformedDescriptorError', ovf.outcome_name(e))
 
 
-def _populated_virtual_system():
-    """A VirtualSystem with every string field filled, prose or not."""
+def _populated_envelope():
+    """An Envelope with every string field filled, prose or not."""
     def prop(n):
         return ovf.Property(
             key='key%d' % n, type='string', user_configurable=True, password=False, value='value',
@@ -128,19 +130,29 @@ def _populated_virtual_system():
             version='1.0', full_version='full_version%d' % n, product_url='product_url%d' % n,
             vendor_url='vendor_url%d' % n, app_url='app_url%d' % n, properties=[prop(1), prop(2)])
 
-    return ovf.VirtualSystem(
-        id='vm', name='name', description='description',
-        hardware=[ovf.VirtualHardware(vcpus=1, system_type='vmx-13')],
-        products=[product(1), product(2)],
-        eulas=[ovf.Eula(license='license1'), ovf.Eula(license='license2')],
-        operating_system=ovf.OperatingSystem(id=94, version='22.04', os_type='ubuntu64Guest',
-                                             description='Ubuntu'))
+    def option(n):
+        return ovf.DeploymentOption(
+            id='option%d' % n, default=n == 1, label='option_label%d' % n, description='option_description%d' % n)
+
+    return ovf.Envelope(
+        namespace='http://schemas.dmtf.org/ovf/envelope/1',
+        version='1.0',
+        networks=[ovf.Network(name='network', description='network description')],
+        deployment_options=[option(1), option(2)],
+        virtual_system=ovf.VirtualSystem(
+            id='vm', name='name', description='description',
+            hardware=[ovf.VirtualHardware(vcpus=1, system_type='vmx-13')],
+            products=[product(1), product(2)],
+            eulas=[ovf.Eula(license='license1'), ovf.Eula(license='license2')],
+            operating_system=ovf.OperatingSystem(id=94, version='22.04', os_type='ubuntu64Guest',
+                                                 description='Ubuntu')))
 
 
 class ScrubTestCase(testtools.TestCase):
     def test_every_prose_field_replaced(self):
-        system = _populated_virtual_system()
-        prose.scrub(system)
+        envelope = _populated_envelope()
+        prose.scrub(envelope)
+        system = envelope.virtual_system
         trimmed = prose.PLACEHOLDER
         self.assertEqual(trimmed, system.description)
         self.assertEqual([trimmed, trimmed], [e.license for e in system.eulas])
@@ -150,9 +162,20 @@ class ScrubTestCase(testtools.TestCase):
             for p in product.properties:
                 self.assertEqual((trimmed, trimmed, trimmed), (p.category, p.label, p.description))
 
+    def test_deployment_option_text_replaced(self):
+        envelope = _populated_envelope()
+        prose.scrub(envelope)
+        self.assertEqual([(prose.PLACEHOLDER, prose.PLACEHOLDER)] * 2,
+                         [(o.label, o.description) for o in envelope.deployment_options])
+        self.assertEqual([('option1', True), ('option2', False)],
+                         [(o.id, o.default) for o in envelope.deployment_options])
+
     def test_other_fields_untouched(self):
-        system = _populated_virtual_system()
-        prose.scrub(system)
+        envelope = _populated_envelope()
+        prose.scrub(envelope)
+        system = envelope.virtual_system
+        self.assertEqual(('http://schemas.dmtf.org/ovf/envelope/1', '1.0'), (envelope.namespace, envelope.version))
+        self.assertEqual('network description', envelope.networks[0].description)
         self.assertEqual(('vm', 'name'), (system.id, system.name))
         self.assertEqual('vmx-13', system.hardware[0].system_type)
         self.assertEqual('Ubuntu', system.operating_system.description)
@@ -163,23 +186,39 @@ class ScrubTestCase(testtools.TestCase):
             self.assertEqual(['key1', 'key2'], [p.key for p in product.properties])
 
     def test_none_and_empty_left_alone(self):
-        system = ovf.VirtualSystem(
-            description='',
-            products=[ovf.Product(vendor='', properties=[
-                ovf.Property(key='k', type='string', user_configurable=False, password=False, label='')])],
-            eulas=[ovf.Eula(license='')])
-        before = ovf.to_json(system)
-        prose.scrub(system)
-        self.assertEqual(before, ovf.to_json(system))
-        self.assertIsNone(system.products[0].product)
-        self.assertEqual('', system.products[0].vendor)
+        envelope = ovf.Envelope(
+            namespace='http://schemas.dmtf.org/ovf/envelope/1',
+            deployment_options=[ovf.DeploymentOption(id='a', default=True, label='')],
+            virtual_system=ovf.VirtualSystem(
+                description='',
+                products=[ovf.Product(vendor='', properties=[
+                    ovf.Property(key='k', type='string', user_configurable=False, password=False, label='')])],
+                eulas=[ovf.Eula(license='')]))
+        before = ovf.to_json(envelope)
+        prose.scrub(envelope)
+        self.assertEqual(before, ovf.to_json(envelope))
+        self.assertIsNone(envelope.virtual_system.products[0].product)
+        self.assertEqual('', envelope.virtual_system.products[0].vendor)
+        self.assertIsNone(envelope.deployment_options[0].description)
 
     def test_scrubbed_model_has_no_prose(self):
-        system = _populated_virtual_system()
-        prose.scrub(system)
-        text = ovf.to_json(system)
-        for prefix in ('description1', 'label1', 'category1', 'product1', 'vendor1', 'license1', 'app_url1'):
+        envelope = _populated_envelope()
+        prose.scrub(envelope)
+        text = ovf.to_json(envelope)
+        for prefix in ('description1', 'label1', 'category1', 'product1', 'vendor1', 'license1', 'app_url1',
+                       'option_label1', 'option_description1'):
             self.assertNotIn(prefix, text)
+
+    def test_parsed_deployment_option_text_scrubbed(self):
+        # The model path and the parser agree: a descriptor's Configuration
+        # Label and Description reach the model, and scrub replaces them.
+        with open(os.path.join(golden.FIXTURE_ROOT, 'handwritten', 'ovftool-style.ovf'), 'rb') as f:
+            envelope = ovf.parse_descriptor(f.read())
+        self.assertEqual([('Small', 'One CPU and 1024MB of memory'), ('Large', 'Four CPUs and 4096MB of memory')],
+                         [(o.label, o.description) for o in envelope.deployment_options])
+        prose.scrub(envelope)
+        self.assertEqual([(prose.PLACEHOLDER, prose.PLACEHOLDER)] * 2,
+                         [(o.label, o.description) for o in envelope.deployment_options])
 
 
 def _unwrap_optional(tp):
@@ -192,8 +231,8 @@ def _unwrap_optional(tp):
 
 class ProseElementsTestCase(testtools.TestCase):
     def _resolve(self, path):
-        """Walk a PROSE_ELEMENTS model path from VirtualSystem, returning the leaf's type."""
-        tp = ovf.VirtualSystem
+        """Walk a PROSE_ELEMENTS model path from Envelope, returning the leaf's type."""
+        tp = ovf.Envelope
         for segment in path.split('.'):
             self.assertTrue(dataclasses.is_dataclass(tp), '%s: %s is not a dataclass' % (path, tp))
             name = segment[:-2] if segment.endswith('[]') else segment
@@ -216,15 +255,17 @@ class ProseElementsTestCase(testtools.TestCase):
             self.assertIs(str, self._resolve(path), path)
 
     def test_resolver_catches_a_typo(self):
-        self.assertRaises(AssertionError, self._resolve, 'products[].vendr')
-        self.assertRaises(AssertionError, self._resolve, 'products.vendor')
-        self.assertRaises(AssertionError, self._resolve, 'eula[].license')
+        self.assertRaises(AssertionError, self._resolve, 'virtual_system.products[].vendr')
+        self.assertRaises(AssertionError, self._resolve, 'virtual_system.products.vendor')
+        self.assertRaises(AssertionError, self._resolve, 'virtual_system.eula[].license')
+        self.assertRaises(AssertionError, self._resolve, 'products[].vendor')
+        self.assertRaises(AssertionError, self._resolve, 'deployment_options.label')
 
     def test_element_paths(self):
         # The trim tool matches on these, so they must keep their shape.
         for element, _ in prose.PROSE_ELEMENTS:
             self.assertRegex(element, r'^[A-Za-z]+(/[A-Za-z]+)+$')
-        self.assertEqual(15, len(prose.PROSE_ELEMENTS))
+        self.assertEqual(17, len(prose.PROSE_ELEMENTS))
 
     def test_placeholder(self):
         self.assertEqual('TRIMMED', prose.PLACEHOLDER)

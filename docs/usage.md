@@ -55,10 +55,13 @@ with `--namespace <name>`.
    uncompressed, not chunked, and listed in the manifest if there is
    one; no disk may be a delta disk.
 5. **Prints "VM description:"** once, before any disk is read, with
-   what the descriptor says. If the descriptor carries a licence, the
-   command prints it and stops unless you pass `--accept-eula`. If it
-   has user-configurable properties with no value, the command warns
-   once that Shaken Fist cannot deliver an OVF environment yet.
+   what the descriptor says. A descriptor without `ovf:version` is
+   shown as "not stated", with the major version its envelope
+   namespace implies, such as `1.x`. If the descriptor carries a
+   licence, the command prints it and stops unless you pass
+   `--accept-eula`. If it has user-configurable properties with no
+   value, the command warns once that Shaken Fist cannot deliver an OVF
+   environment yet.
 6. **Verifies the disks in one pass.** With a manifest, every disk is
    read once and its digest, in the manifest's algorithm, compared
    with the manifest's, and "Checking disk images..." is printed
@@ -188,6 +191,11 @@ is one that ends early. Each of these also prints one line and exits
   `CompressedFileError`.
 * A manifest with no entry for the descriptor or for a file's member:
   `UnlistedFileError`.
+* A manifest that cannot be read: a line that does not parse, an
+  algorithm other than SHA1, SHA256 or SHA512, a digest of the wrong
+  length or not hexadecimal, a second line for one file, or a manifest
+  that is not UTF-8: `ManifestError`. Apart from an encoding failure,
+  the message gives the line number.
 * A descriptor or disk whose digest differs from the manifest's:
   `DigestMismatchError`.
 * A delta disk (`ovf:parentRef`), which holds only the changes from

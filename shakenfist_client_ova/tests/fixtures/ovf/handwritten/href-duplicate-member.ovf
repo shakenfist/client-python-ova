@@ -4,8 +4,8 @@
 
   Case: two References Files whose hrefs name the same archive member,
   each backing its own disk. The archive-level form, one member
-  stored twice, is a synthetic OVA, to be built when archives are
-  checked, and can be built around this file too.
+  stored twice, is a synthetic OVA built in test_ovf_package.py
+  (LayoutTestCase.test_two_members_with_one_name).
 
   Tests: a References href is refused when it is an absolute URL,
   contains "../", names a missing member, or names a duplicated member.
