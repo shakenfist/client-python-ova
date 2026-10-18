@@ -43,14 +43,11 @@ import xml.sax.xmlreader
 
 from defusedxml import expatreader
 
-from shakenfist_client_ova.ovf import prose
+from shakenfist_client_ova.ovf import namespaces, prose
 from shakenfist_client_ova.ovf.prose import PROSE_ELEMENTS
 
 
-OVF_09_NAMESPACE = 'http://www.vmware.com/schema/ovf/1/envelope'
-OVF_1_NAMESPACE = 'http://schemas.dmtf.org/ovf/envelope/1'
-OVF_2_NAMESPACE = 'http://schemas.dmtf.org/ovf/envelope/2'
-ENVELOPE_NAMESPACES = (OVF_09_NAMESPACE, OVF_1_NAMESPACE, OVF_2_NAMESPACE)
+ENVELOPE_NAMESPACES = (namespaces.OVF_0_9, namespaces.OVF_1, namespaces.OVF_2)
 
 XML_NAMESPACE = 'http://www.w3.org/XML/1998/namespace'
 XSI_NAMESPACE = 'http://www.w3.org/2001/XMLSchema-instance'

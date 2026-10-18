@@ -7,7 +7,6 @@ small; the one test of the descriptor as it is uses disks of its full size.
 """
 
 import errno
-import hashlib
 import io
 import os
 import tarfile
@@ -33,24 +32,17 @@ def _fixture(name):
         return f.read()
 
 
-def _replace(data, old, new):
-    """Bytes with every occurrence of the text old replaced by new, which must occur."""
-    text = data.decode()
-    assert old in text, old
-    return text.replace(old, new).encode()
-
-
-TWO_CONTROLLERS = _fixture('two-controllers.ovf')
-DESCRIPTOR = _replace(TWO_CONTROLLERS, 'ovf:size="1048576"', 'ovf:size="5"')
-DISK1 = b'disk1'
-DISK2 = b'disk2'
-FILE1 = 'ovf:href="disk1.vmdk" ovf:size="5"'
+TWO_CONTROLLERS = synthetic.TWO_CONTROLLERS
+DESCRIPTOR = synthetic.SMALL_TWO_CONTROLLERS
+DISK1 = synthetic.DISK1
+DISK2 = synthetic.DISK2
+FILE1 = synthetic.FILE1
 FILE2 = 'ovf:href="disk2.vmdk" ovf:size="5"'
 
 
 def _file1(attributes, descriptor=DESCRIPTOR):
     """The descriptor with the first File's ovf:href and ovf:size replaced by attributes."""
-    return _replace(descriptor, FILE1, attributes)
+    return synthetic.replace(descriptor, FILE1, attributes)
 
 
 def _href(href):
@@ -59,21 +51,7 @@ def _href(href):
 
 def _add_file(attributes, descriptor=DESCRIPTOR):
     """The descriptor with a third File, file3, that no Disk names."""
-    return _replace(descriptor, FILE2 + '/>', FILE2 + '/>\n    <File ovf:id="file3" %s/>' % attributes)
-
-
-def _digest(algorithm, data):
-    return hashlib.new(algorithm.lower(), data).hexdigest()
-
-
-def _manifest(members, algorithm='SHA256'):
-    """A manifest giving each member its digest in the algorithm, which is written as given.
-
-    members are (name, data) pairs or synthetic.Members, whose data is empty
-    unless they are regular files.
-    """
-    pairs = [(member.name, member.data) if isinstance(member, synthetic.Member) else member for member in members]
-    return ''.join('%s(%s)= %s\n' % (algorithm, name, _digest(algorithm, data)) for name, data in pairs).encode()
+    return synthetic.replace(descriptor, FILE2 + '/>', FILE2 + '/>\n    <File ovf:id="file3" %s/>' % attributes)
 
 
 def _members(descriptor=DESCRIPTOR, disks=None, algorithm='SHA256'):
@@ -85,7 +63,7 @@ def _members(descriptor=DESCRIPTOR, disks=None, algorithm='SHA256'):
         disks = [('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
     members = [('x.ovf', descriptor)]
     if algorithm is not None:
-        members.append(('x.mf', _manifest(members + disks, algorithm)))
+        members.append(('x.mf', synthetic.manifest(members + disks, algorithm)))
     return members + disks
 
 
@@ -125,7 +103,7 @@ class PassingTestCase(PackageTestCase):
         # descriptor, the manifest, then the disks, at their full size.
         disk1 = b'1' * MIB
         disk2 = b'2' * MIB
-        manifest = _manifest([('x.ovf', TWO_CONTROLLERS), ('disk1.vmdk', disk1), ('disk2.vmdk', disk2)])
+        manifest = synthetic.manifest([('x.ovf', TWO_CONTROLLERS), ('disk1.vmdk', disk1), ('disk2.vmdk', disk2)])
         package = self._open([('x.ovf', TWO_CONTROLLERS), ('x.mf', manifest), ('disk1.vmdk', disk1),
                               ('disk2.vmdk', disk2)])
 
@@ -148,13 +126,15 @@ class PassingTestCase(PackageTestCase):
         self.assertEqual([], package.unreferenced_members)
         self.assertEqual([], package.unreferenced_entries)
         self.assertFalse(package.manifest_name_differs)
-        self.assertEqual(ovf.ManifestEntry(name='disk2.vmdk', algorithm='sha256', digest=_digest('sha256', disk2)),
+        self.assertEqual(ovf.ManifestEntry(name='disk2.vmdk', algorithm='sha256',
+                                           digest=synthetic.digest('sha256', disk2)),
                          package.manifest_entry('disk2.vmdk'))
         self.assertIsNone(package.manifest_entry('absent.vmdk'))
 
         for upload, data in zip(package.uploads, (disk1, disk2)):
             digests = package.digests(upload.member, ['sha256', 'sha512'])
-            self.assertEqual({'sha256': _digest('sha256', data), 'sha512': _digest('sha512', data)}, digests)
+            self.assertEqual(
+                {'sha256': synthetic.digest('sha256', data), 'sha512': synthetic.digest('sha512', data)}, digests)
             package.check_digest(upload.member, digests)
             with package.open_member(upload.member) as f:
                 self.assertTrue(f.seekable())
@@ -171,7 +151,7 @@ class PassingTestCase(PackageTestCase):
         self.assertIsNone(package.manifest_entry('disk1.vmdk'))
         self.assertEqual(['disk1.vmdk', 'disk2.vmdk'], [upload.member for upload in package.uploads])
         digests = package.digests('disk1.vmdk', ['sha512'])
-        self.assertEqual({'sha512': _digest('sha512', DISK1)}, digests)
+        self.assertEqual({'sha512': synthetic.digest('sha512', DISK1)}, digests)
         self.assertRaises(ValueError, package.check_digest, 'disk1.vmdk', digests)
 
     def test_each_algorithm_in_either_case(self):
@@ -183,18 +163,18 @@ class PassingTestCase(PackageTestCase):
 
     def test_upper_case_digests_match(self):
         members = [('x.ovf', DESCRIPTOR), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
-        manifest = _manifest(members).decode()
+        manifest = synthetic.manifest(members).decode()
         for _, data in members:
-            digest = _digest('sha256', data)
+            digest = synthetic.digest('sha256', data)
             manifest = manifest.replace(digest, digest.upper())
         package = self._open(members + [('x.mf', manifest.encode())])
-        self.assertEqual(_digest('sha256', DISK1).upper(), package.manifest_entry('disk1.vmdk').digest)
+        self.assertEqual(synthetic.digest('sha256', DISK1).upper(), package.manifest_entry('disk1.vmdk').digest)
         package.check_digest('disk1.vmdk', package.digests('disk1.vmdk', ['sha256']))
 
     def test_manifest_stored_last(self):
         # VirtualBox's order: the manifest after the disks.
         members = [('x.ovf', DESCRIPTOR), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
-        package = self._open(members + [('x.mf', _manifest(members))])
+        package = self._open(members + [('x.mf', synthetic.manifest(members))])
         self.assertEqual('x.mf', package.manifest_member)
         self.assertEqual(['disk1.vmdk', 'disk2.vmdk'], [upload.member for upload in package.uploads])
 
@@ -206,7 +186,7 @@ class PassingTestCase(PackageTestCase):
 
     def test_members_with_a_dot_slash(self):
         members = [('x.ovf', DESCRIPTOR), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
-        manifest = _manifest(members)
+        manifest = synthetic.manifest(members)
         package = self._open([synthetic.directory('./')] + [('./' + name, data) for name, data in members]
                              + [('./x.mf', manifest)])
         self.assertEqual('x.ovf', package.descriptor_member)
@@ -245,8 +225,8 @@ class PassingTestCase(PackageTestCase):
         self.assertEqual([], package.unreferenced_members)
 
     def test_disk_with_no_file(self):
-        descriptor = _replace(DESCRIPTOR, '</DiskSection>', '<Disk ovf:diskId="vmdisk3" ovf:capacity="1" '
-                              'ovf:capacityAllocationUnits="byte * 2^30"/></DiskSection>')
+        descriptor = synthetic.replace(DESCRIPTOR, '</DiskSection>', '<Disk ovf:diskId="vmdisk3" ovf:capacity="1" '
+                                       'ovf:capacityAllocationUnits="byte * 2^30"/></DiskSection>')
         package = self._open(_members(descriptor=descriptor))
         self.assertEqual(['vmdisk3'], [disk.disk_id for disk in package.blank_disks])
         self.assertEqual(['vmdisk1', 'vmdisk2'], [upload.disk.disk_id for upload in package.uploads])
@@ -272,14 +252,14 @@ class PassingTestCase(PackageTestCase):
 
     def test_manifest_in_a_subdirectory_is_not_the_manifest(self):
         members = _members(algorithm=None)
-        package = self._open(members + [('sub/x.mf', _manifest(members))])
+        package = self._open(members + [('sub/x.mf', synthetic.manifest(members))])
         self.assertIsNone(package.manifest_member)
         self.assertEqual(['sub/x.mf'], package.unreferenced_members)
 
     def test_unreferenced_entries(self):
         members = [('x.ovf', DESCRIPTOR), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
         extra = [('README.txt', b'read me'), ('x.cert', b'cert'), ('absent.vmdk', b'')]
-        manifest = _manifest(extra[:1] + members + extra[1:])
+        manifest = synthetic.manifest(extra[:1] + members + extra[1:])
         package = self._open(members + [('x.mf', manifest), ('README.txt', b'read me'), ('x.cert', b'cert')])
         self.assertEqual(['README.txt', 'x.cert', 'absent.vmdk'],
                          [entry.name for entry in package.unreferenced_entries])
@@ -287,7 +267,7 @@ class PassingTestCase(PackageTestCase):
 
     def test_manifest_named_differently(self):
         members = [('x.ovf', DESCRIPTOR), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
-        package = self._open(members + [('other.mf', _manifest(members))])
+        package = self._open(members + [('other.mf', synthetic.manifest(members))])
         self.assertEqual('other.mf', package.manifest_member)
         self.assertTrue(package.manifest_name_differs)
 
@@ -468,28 +448,28 @@ class DescriptorDigestTestCase(PackageTestCase):
         return [('x.ovf', descriptor), ('x.mf', manifest), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
 
     def test_descriptor_digest_differs(self):
-        manifest = _manifest([('x.ovf', b'another descriptor'), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)])
+        manifest = synthetic.manifest([('x.ovf', b'another descriptor'), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)])
         e = self._refused(ovf.DigestMismatchError, self._manifest_members(DESCRIPTOR, manifest))
         self.assertEqual('The SHA256 digest of "x.ovf" is %s, but the manifest "x.mf" gives %s' % (
-            _digest('sha256', DESCRIPTOR), _digest('sha256', b'another descriptor')), str(e))
+            synthetic.digest('sha256', DESCRIPTOR), synthetic.digest('sha256', b'another descriptor')), str(e))
 
     def test_descriptor_is_checked_before_it_is_parsed(self):
-        manifest = _manifest([('x.ovf', b'<well-formed/>'), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)])
+        manifest = synthetic.manifest([('x.ovf', b'<well-formed/>'), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)])
         self._refused(ovf.DigestMismatchError, self._manifest_members(b'<not well-formed', manifest))
 
     def test_matching_malformed_descriptor_is_parsed(self):
         descriptor = b'<not well-formed'
-        manifest = _manifest([('x.ovf', descriptor), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)])
+        manifest = synthetic.manifest([('x.ovf', descriptor), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)])
         self._refused(ovf.MalformedDescriptorError, self._manifest_members(descriptor, manifest))
 
     def test_manifest_without_the_descriptor(self):
-        manifest = _manifest([('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)])
+        manifest = synthetic.manifest([('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)])
         e = self._refused(ovf.UnlistedFileError, self._manifest_members(b'<not well-formed', manifest))
         self.assertEqual('The manifest "x.mf" has no entry for the descriptor "x.ovf"', str(e))
 
     def test_manifest_listing_one_file_twice(self):
-        manifest = _manifest([('x.ovf', DESCRIPTOR), ('disk1.vmdk', DISK1), ('disk1.vmdk', DISK1),
-                              ('disk2.vmdk', DISK2)])
+        manifest = synthetic.manifest([('x.ovf', DESCRIPTOR), ('disk1.vmdk', DISK1), ('disk1.vmdk', DISK1),
+                                       ('disk2.vmdk', DISK2)])
         e = self._refused(ovf.ManifestError, self._manifest_members(DESCRIPTOR, manifest))
         self.assertIn('repeats "disk1.vmdk"', str(e))
 
@@ -601,24 +581,24 @@ class ReferenceTestCase(PackageTestCase):
 
     def test_manifest_without_a_file(self):
         members = [('x.ovf', DESCRIPTOR), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
-        e = self._refused(ovf.UnlistedFileError, members + [('x.mf', _manifest(members[:2]))])
+        e = self._refused(ovf.UnlistedFileError, members + [('x.mf', synthetic.manifest(members[:2]))])
         self.assertEqual('The manifest "x.mf" has no entry for "disk2.vmdk", the member of the File "file2"', str(e))
 
     def test_manifest_without_a_file_no_disk_uses(self):
         descriptor = _add_file('ovf:href="tools.iso"')
         members = [('x.ovf', descriptor), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
-        e = self._refused(ovf.UnlistedFileError, members + [('tools.iso', b''), ('x.mf', _manifest(members))])
+        e = self._refused(ovf.UnlistedFileError, members + [('tools.iso', b''), ('x.mf', synthetic.manifest(members))])
         self.assertIn('no entry for "tools.iso", the member of the File "file3"', str(e))
 
     def test_manifest_entry_names_the_member_less_its_dot_slash(self):
         members = [('x.ovf', DESCRIPTOR), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
-        manifest = _manifest([('x.ovf', DESCRIPTOR), ('./disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)])
+        manifest = synthetic.manifest([('x.ovf', DESCRIPTOR), ('./disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)])
         e = self._refused(ovf.UnlistedFileError, members + [('x.mf', manifest)])
         self.assertIn('no entry for "disk1.vmdk"', str(e))
 
     def test_delta_disk(self):
-        descriptor = _replace(DESCRIPTOR, '<Disk ovf:diskId="vmdisk2" ovf:fileRef="file2"',
-                              '<Disk ovf:diskId="vmdisk2" ovf:fileRef="file2" ovf:parentRef="vmdisk1"')
+        descriptor = synthetic.replace(DESCRIPTOR, '<Disk ovf:diskId="vmdisk2" ovf:fileRef="file2"',
+                                       '<Disk ovf:diskId="vmdisk2" ovf:fileRef="file2" ovf:parentRef="vmdisk1"')
         e = self._refused(ovf.DeltaDiskError, _members(descriptor=descriptor))
         self.assertEqual('The Disk "vmdisk2" is a delta disk of the Disk "vmdisk1" (ovf:parentRef): it holds only the '
                          'changes from its parent, and alone would not boot', str(e))
@@ -631,7 +611,7 @@ class ReferenceTestCase(PackageTestCase):
         e = self.assertRaises(ovf.DigestMismatchError, package.check_digest, 'disk2.vmdk',
                               package.digests('disk2.vmdk', ['sha256', 'sha512']))
         self.assertEqual('The SHA256 digest of "disk2.vmdk" is %s, but the manifest "x.mf" gives %s' % (
-            _digest('sha256', b'DISK2'), _digest('sha256', DISK2)), str(e))
+            synthetic.digest('sha256', b'DISK2'), synthetic.digest('sha256', DISK2)), str(e))
 
     def test_check_digest_needs_the_manifest_algorithm(self):
         package = self._open(_members())
@@ -643,13 +623,13 @@ class OrderTestCase(PackageTestCase):
     """Each step of the reference checks runs over every File before the next starts."""
 
     def test_href_comes_before_the_member_of_an_earlier_file(self):
-        descriptor = _replace(_href('absent.vmdk'), FILE2, 'ovf:href="http://example.com/disk2.vmdk"')
+        descriptor = synthetic.replace(_href('absent.vmdk'), FILE2, 'ovf:href="http://example.com/disk2.vmdk"')
         self._refused(ovf.FileReferenceError, _members(descriptor=descriptor, disks=[]))
 
     def test_chunking_comes_before_the_member(self):
         self._refused(ovf.ChunkedFileError, _members(descriptor=_file1(FILE1 + ' ovf:chunkSize="2"'), disks=[
             ('disk2.vmdk', DISK2)]))
-        descriptor = _replace(_href('absent.vmdk'), FILE2, FILE2 + ' ovf:chunkSize="2"')
+        descriptor = synthetic.replace(_href('absent.vmdk'), FILE2, FILE2 + ' ovf:chunkSize="2"')
         self._refused(ovf.ChunkedFileError, _members(descriptor=descriptor, disks=[]))
 
     def test_every_member_is_looked_for_before_any_type(self):
@@ -674,19 +654,19 @@ class OrderTestCase(PackageTestCase):
         self.assertEqual(('disk1.vmdk',), e.members)
 
     def test_compression_comes_before_the_manifest_entry_of_an_earlier_file(self):
-        descriptor = _replace(DESCRIPTOR, FILE2, FILE2 + ' ovf:compression="gzip"')
+        descriptor = synthetic.replace(DESCRIPTOR, FILE2, FILE2 + ' ovf:compression="gzip"')
         members = [('x.ovf', descriptor), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
-        self._refused(ovf.CompressedFileError, members + [('x.mf', _manifest(members[:1] + members[2:]))])
+        self._refused(ovf.CompressedFileError, members + [('x.mf', synthetic.manifest(members[:1] + members[2:]))])
 
     def test_manifest_entry_comes_before_a_delta_disk(self):
-        descriptor = _replace(DESCRIPTOR, '<Disk ovf:diskId="vmdisk1" ovf:fileRef="file1"',
-                              '<Disk ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:parentRef="vmdisk2"')
+        descriptor = synthetic.replace(DESCRIPTOR, '<Disk ovf:diskId="vmdisk1" ovf:fileRef="file1"',
+                                       '<Disk ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:parentRef="vmdisk2"')
         members = [('x.ovf', descriptor), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)]
-        self._refused(ovf.UnlistedFileError, members + [('x.mf', _manifest(members[:2]))])
+        self._refused(ovf.UnlistedFileError, members + [('x.mf', synthetic.manifest(members[:2]))])
 
     def test_descriptor_digest_comes_before_the_references(self):
         descriptor = _href('http://example.com/disk1.vmdk')
-        manifest = _manifest([('x.ovf', DESCRIPTOR), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)])
+        manifest = synthetic.manifest([('x.ovf', DESCRIPTOR), ('disk1.vmdk', DISK1), ('disk2.vmdk', DISK2)])
         self._refused(ovf.DigestMismatchError, [('x.ovf', descriptor), ('x.mf', manifest), ('disk2.vmdk', DISK2)])
 
 
@@ -763,13 +743,14 @@ class DigestsTestCase(PackageTestCase):
         lengths = []
         digests = package.digests('disk1.vmdk', ['sha1', 'sha512'], lengths.append)
         self.assertEqual([MIB, MIB, MIB // 2], lengths)
-        self.assertEqual({'sha1': _digest('sha1', disk), 'sha512': _digest('sha512', disk)}, digests)
+        self.assertEqual({'sha1': synthetic.digest('sha1', disk), 'sha512': synthetic.digest('sha512', disk)}, digests)
 
     def test_empty_member(self):
         package = self._open(_members(descriptor=_file1('ovf:href="disk1.vmdk" ovf:size="0"'), disks=[
             ('disk1.vmdk', b''), ('disk2.vmdk', DISK2)]))
         lengths = []
-        self.assertEqual({'sha256': _digest('sha256', b'')}, package.digests('disk1.vmdk', ['sha256'], lengths.append))
+        self.assertEqual({'sha256': synthetic.digest('sha256', b'')},
+                         package.digests('disk1.vmdk', ['sha256'], lengths.append))
         self.assertEqual([], lengths)
 
     def test_no_algorithms(self):
