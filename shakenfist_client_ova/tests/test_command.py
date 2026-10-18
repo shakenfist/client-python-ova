@@ -30,7 +30,7 @@ class SummaryTestCase(testtools.TestCase):
     def test_envelope_summary_of_a_vendor_descriptor(self):
         envelope = ovf.parse_descriptor(_fixture('vendor/wazuh-4.9.1.ovf'))
         self.assertEqual(
-            ['    Version: 1',
+            ['    Version: not stated (1.x, from the envelope namespace)',
              '    System id: Wazuh v4.9.1 OVA',
              '    Operating system: id 101, type otherLinux64Guest, Linux - Amazon Linux 2',
              '    Product: TRIMMED, version 4.9.1',
@@ -43,7 +43,7 @@ class SummaryTestCase(testtools.TestCase):
              '    Controller 4: ide',
              '    NIC: E1000 on VM Network',
              '    Disk drive: Hard Disk 1 at address 0 on controller 4'],
-            _envelope_summary(envelope, 1, envelope.virtual_system.id))
+            _envelope_summary(envelope))
 
     def test_envelope_summary_with_two_controllers(self):
         envelope = ovf.parse_descriptor(_fixture('handwritten/two-controllers.ovf'))
@@ -63,11 +63,23 @@ class SummaryTestCase(testtools.TestCase):
              '    NIC: E1000 on VM Network',
              '    Disk drive: Hard disk 1 at address 0 on controller 3',
              '    Disk drive: Hard disk 2 at address 0 on controller 6'],
-            _envelope_summary(envelope, envelope.version, envelope.virtual_system.id))
+            _envelope_summary(envelope))
+
+    def test_envelope_summary_states_the_version_given(self):
+        envelope = ovf.parse_descriptor(_fixture('handwritten/ovf2-envelope.ovf'))
+        self.assertEqual('2.0', envelope.version)
+        self.assertEqual('    Version: 2.0', _envelope_summary(envelope)[0])
+
+    def test_envelope_summary_infers_a_2_x_version_from_the_namespace(self):
+        data = _fixture('handwritten/ovf2-envelope.ovf')
+        self.assertEqual(1, data.count(b' ovf:version="2.0"'))
+        envelope = ovf.parse_descriptor(data.replace(b' ovf:version="2.0"', b''))
+        self.assertIsNone(envelope.version)
+        self.assertEqual('    Version: not stated (2.x, from the envelope namespace)', _envelope_summary(envelope)[0])
 
     def test_envelope_summary_names_the_product_but_not_its_prose(self):
         envelope = ovf.parse_descriptor(_fixture('handwritten/product-and-eula.ovf'))
-        lines = _envelope_summary(envelope, envelope.version, envelope.virtual_system.id)
+        lines = _envelope_summary(envelope)
         self.assertEqual(
             ['    Operating system: id 36, Linux',
              '    Product: Example Appliance, version 1.0'],

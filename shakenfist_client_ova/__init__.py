@@ -9,6 +9,7 @@ from tqdm import tqdm
 import unicodedata
 
 from shakenfist_client_ova import ovf
+from shakenfist_client_ova.ovf import namespaces
 
 
 @click.group(help='OVA commands (via the shakenfist-client-ova plugin)')
@@ -102,11 +103,26 @@ def _unset_properties(envelope):
             if prop.user_configurable and not prop.value]
 
 
-def _envelope_summary(envelope, version, name):
+# The OVF version each envelope namespace the parser reads stands for. The
+# namespace names only the major version, so a minor one is never inferred.
+_NAMESPACE_VERSIONS = {
+    namespaces.OVF_1: '1.x',
+    namespaces.OVF_2: '2.x',
+}
+
+
+def _version_summary(envelope):
+    """The OVF version as the descriptor states it, or else as its envelope namespace implies it."""
+    if envelope.version is not None:
+        return envelope.version
+    return 'not stated (%s, from the envelope namespace)' % _NAMESPACE_VERSIONS[envelope.namespace]
+
+
+def _envelope_summary(envelope):
     """The lines describing a parsed descriptor, printed after the parse."""
     lines = [
-        '    Version: %s' % version,
-        '    System id: %s' % name,
+        '    Version: %s' % _version_summary(envelope),
+        '    System id: %s' % envelope.virtual_system.id,
     ]
     if envelope.virtual_system.operating_system is not None:
         lines.append(_operating_system_summary(envelope.virtual_system.operating_system))
@@ -335,13 +351,10 @@ def _import_package(client, package, path, accept_eula):
     print()
 
     envelope = package.envelope
-    version = envelope.version
-    if version is None:
-        version = 1
     name = envelope.virtual_system.id
 
     print('VM description:')
-    for line in _envelope_summary(envelope, version, name):
+    for line in _envelope_summary(envelope):
         print(_printable(line))
 
     eulas = envelope.virtual_system.eulas
