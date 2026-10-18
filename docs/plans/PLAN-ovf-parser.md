@@ -901,13 +901,17 @@ phase plan's [Audit results](PLAN-ovf-parser-phase-06-push-audit.md#audit-result
 
 * All five checklist items, the four questions above and the survey's
   two held, except item 5, which does not apply to the plan's diff.
-* No private content was found anywhere public.
+* No private content was found anywhere public. The probe set matched
+  five strings already in this plan. They are envelope identifiers the
+  operator ruled publishable, as the phase plan's execution notes
+  say.
 * There are nine findings, all to be fixed in one follow-up pull
   request:
   * the trimmed-against-original model check that decision 6 promised
     was never built;
   * the prose list omits the deployment option text;
-  * the corpus test's output rule is narrower than what it prints;
+  * the corpus test can print member names, which its output rule
+    does not allow;
   * six documentation, duplication and stale-reference fixes.
 * Four smaller items were declined in writing there.
 * Two problems in older code were filed as #19 and #20.

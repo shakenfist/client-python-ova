@@ -80,7 +80,7 @@ planning commit.
   shakenfist/shakenfist#4558 and #4559, and
   shakenfist/client-python#430, are upstream bugs found in passing
   during phase 5. They were filed, but no phase record links them
-  (corrected by the audit).
+  (corrected by the audit; phase 5's execution notes now link them).
 
 ### 2. The recorded landings take the forms the checklist allows
 
@@ -415,9 +415,16 @@ decision 6.
    docstring, `docs/development.md` and `AGENTS.md`, allows appliance,
    artifact and outcome names. But a mismatch of absent members prints
    the member names, and three calls outside `_attempt` can raise an
-   error naming a member. Member names are envelope data, already
-   published in the trimmed fixtures. Fix: widen the rule to include
-   them, in all three places.
+   error naming a member. Fix: keep the rule, and change the test.
+   * The absent-members check reports how many members are missing or
+     unexpected, not their names.
+   * The three calls go through `_attempt`.
+
+   Widening the rule was weighed and rejected. Every appliance in the
+   corpus today has a trimmed fixture, so its member names are already
+   public. But an appliance added later would have its member names
+   reach a public CI log before anyone reviewed them, and a file name
+   can carry a username or a build path.
 4. **`ARCHITECTURE.md` misses phase 5's round trip to the server.** Its
    pipeline omits the lookup of every artifact name before the disks
    are read, the refusal of an artifact no upload made, and the
@@ -485,13 +492,26 @@ rather than counted:
   once this phase merges.
 * **6a, 6b and 6c ran in parallel, and 6d after them.** None raised a
   stop under decision 2.
-* **6d raised eight candidates, 6b one and 6c two notes.**
-  * 6c's two notes and 6d's remark on the rule's three homes became
-    finding 3.
-  * 6d's `Disk.interface` and two of its duplication items were
-    declined.
-  * 6d's stale plan text was declined under the rule that plans are
-    history.
+* **Where each finding and decline came from.** 6a raised no
+  candidate, 6b one, 6c two notes and 6d eight:
+
+  | Raised by | Became |
+  |-----------|--------|
+  | 6b, the prose list | Finding 2 |
+  | 6c, its two notes on the corpus test's output | Finding 3 |
+  | 6d 1, the missing trimmed-against-original check | Finding 1 |
+  | 6d 2, `ARCHITECTURE.md`'s pipeline | Finding 4 |
+  | 6d 3, the quirk list's two homes | Finding 5 |
+  | 6d 4, `Disk.interface` | Declined |
+  | 6d 5, `ManifestError` unnamed | Finding 6 |
+  | 6d 6, "Version: 1" | Finding 7 |
+  | 6d 7, duplicated helpers | Finding 8; `_not_found` and the classify tool's URIs declined |
+  | 6d 8, stale cross-references | Finding 9; the plan text declined |
+
+  6d also noted that the output rule lives in three places, which
+  finding 3 records. In review, the reviewer pointed out that widening
+  the rule would not cover appliances added later. Finding 3 now keeps
+  the rule and changes the test instead.
 
   Every finding kept was reproduced against the tree before it was
   recorded.
