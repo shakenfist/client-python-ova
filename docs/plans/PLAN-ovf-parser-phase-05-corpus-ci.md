@@ -524,3 +524,14 @@ are UTC.
   * it deletes every LFS log before authenticating, and exits through
     its credential check on INT and TERM;
   * a whole appliance must check at least one disk's digest.
+* **Upstream bugs found in passing were filed, not fixed here.**
+  * shakenfist/shakenfist#4557: refuse a disk base that cannot be
+    fetched.
+  * shakenfist/shakenfist#4558: deleting a blob leaves some of its
+    references behind.
+  * shakenfist/shakenfist#4559: `relationship_value`'s length is
+    checked on read but not on write.
+  * shakenfist/client-python#430: `artifact_type` is never sent.
+* **#18 merged as `248ecd3` on 2026-10-18, without a third review
+  round.** The second round's only fix item was wrong, and its other
+  items were taken, so nothing was left for a third round to check.
