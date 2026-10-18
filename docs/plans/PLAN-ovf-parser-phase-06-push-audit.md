@@ -76,8 +76,11 @@ planning commit.
   * no `ova://` remains in the package or in `docs/usage.md`.
 * The phase's worktree and branch were removed after the merge.
 * What the phase declined or found outside its scope is recorded in
-  its execution notes, or in shakenfist/shakenfist#4557, #4558, #4559
-  and shakenfist/client-python#430.
+  its execution notes. #4557 is linked from phase 4's notes.
+  shakenfist/shakenfist#4558 and #4559, and
+  shakenfist/client-python#430, are upstream bugs found in passing
+  during phase 5. They were filed, but no phase record links them
+  (corrected by the audit).
 
 ### 2. The recorded landings take the forms the checklist allows
 
@@ -98,8 +101,10 @@ accumulated diff is 136 files, 25602 insertions and 634 deletions.
 Phase 1 also landed `18a5ea5421..cf67642bbb` directly on
 `instar-testdata`'s `main`. Its execution notes record that the range
 passed the path and README-table audit before it was pushed. No later
-phase committed to `instar-testdata`, whose `main` still ends at
-`cf67642bbb`.
+phase committed to `instar-testdata`. Its remote `main` has moved on
+since `cf67642bbb`, but only by commits from instar's nightly fuzzer,
+which are not plan work (corrected by the audit; the survey read only
+the local branch).
 
 ### 3. There is no `PUSH-AUDIT.md`
 
@@ -130,9 +135,11 @@ settles the question with `ast` instead.
 
 `release.yml` builds an sdist and a wheel on a `v*` tag, checks them
 with `twine check`, and publishes to PyPI. It runs no tests.
-`pyproject.toml` keeps the three test packages out of the wheel. No
-`MANIFEST.in` or sdist exclusion exists, and `setuptools_scm` puts
-every tracked file into the sdist. So the sdist presumably carries:
+`pyproject.toml` keeps the three test packages out of the wheel.
+`MANIFEST.in`, which predates the plan, prunes only `specifications/`
+and `docs/plans/` from the sdist (the survey said it did not exist;
+corrected by the audit), and `setuptools_scm` adds every other tracked
+file. So the sdist presumably carries:
 
 * the trimmed vendor fixtures;
 * the curated corpus lists;
@@ -334,6 +341,172 @@ aligns with it. Two points need the operator's answer before 6a runs:
 * if there are findings, whether this session may open the follow-up
   pull request once phase 6 merges, or should offer it and wait.
 
+## Audit results
+
+Read against `248ecd3`. The commands are the ones the steps ran, and
+they can be re-run against that commit. Before recording, the
+management session re-ran at least one command per row:
+
+* the merges' parents and the first-parent list;
+* the `develop` runs' actors;
+* the `ovf/` import walk;
+* the prose check;
+* the `NOTICE` checksums;
+* the consumer grep;
+* the log probe match, which again found 0 hits, and every unmasked
+  credential-header line was a `git config --name-only` or
+  `--unset-all` command, carrying no value.
+
+It also reproduced every finding below against the tree. Steps 6a to
+6c raised no stop under decision 2.
+
+### The shared block's checklist
+
+| Item | Verdict | How it was checked |
+|------|---------|--------------------|
+| 1. Recorded landings | Holds | `git rev-list --parents -n1 <m> \| wc -w` prints 3 for each of the five merges. `git log --first-parent --oneline db7bdaa^1..248ecd3` lists them and Renovate's #15 and #17 only. The `instar-testdata` range is cited from phase 1's execution notes. |
+| 2. Unattended work reports failure | Holds | `git diff --name-status <m>^1 <m> -- .github tools tox.ini pyproject.toml` per merge: no cron, timer or schedule was added. The new jobs run on a push to `develop`, which a merge starts, and GitHub reports a failed run to its actor. On all ten recent `develop` runs, that actor is the operator (`gh api 'repos/shakenfist/client-python-ova/actions/workflows/ci.yml/runs?branch=develop&event=push'`). |
+| 3. No secret or private hostname | Holds | gitleaks 8.16.0, from its container, over each `<m>^1..<m>` and over all of history: no leaks. A planted key, as a positive control, was found. A grep of each merge's added lines for token shapes (`glpat-`, `ghp_`, `github_pat_`, `Authorization:`, and the base64 of `oauth2:` at each alignment) found only the placeholders in the fetch script. |
+| 4. Removed names have no consumer | Holds | An AST diff of `__init__.py`'s names per merge gives the removed names: phase 2's parser helpers and constants, the `dpath` and `xmltodict` dependencies, and the `ova://` source URL. `git -C <repo> grep` for each, across the 34 non-worktree repositories under `src/shakenfist/`, finds no consumer outside this repository. |
+| 5. A broken change fails closed | Does not apply to the plan's diff | The plan did not touch `release.yml`. The release workflow publishes untested, and its `release` environment does not exist. Both predate the plan, and are filed as #19 under decision 4. |
+
+### The master plan's questions
+
+| Question | Verdict | How it was checked |
+|----------|---------|--------------------|
+| 1. Vendor prose left in trimmed fixtures | Holds | All 16 vendor fixtures read in full. A `python3 -I` script loading `ovf/prose.py`'s list found 130 prose elements and none untrimmed. A grep for paths, e-mail addresses and URLs found only schema namespaces and provenance comments. Finding 2 is a gap in the list itself. |
+| 2. Upstream text copied; curated expectations; Glance `NOTICE` | Holds | govmomi `79bc9d75` and COT `0811b963` were fetched by the fetch script's method. Every upstream line of 30 characters or more was matched against every tracked file. The 29 matches are schema boilerplate, the longest a six-line namespace block. `curated.expected.json` carries `TRIMMED` 93 times and no upstream prose. `sha256sum -c` over the `NOTICE`'s table passes for all five Glance files, and `git ls-tree` lists exactly those five and the `NOTICE`. |
+| 3. Private hostname somewhere new | Holds | It appears only in `tools/ci/fetch-appliance-corpus.sh` (2) and `tools/ci/test-fetch-appliance-corpus.sh` (4), both added by phase 5. It is already in the public shakenfist/instar (`.github/workflows/coverage-fuzz.yml`). |
+| 4. `ovf/` imports only the standard library and `defusedxml` | Holds | A `python3 -I` script walks every `ast.Import` and `ast.ImportFrom`, including those inside functions, and checks them against `sys.stdlib_module_names` (Python 3.13.5). It found no other module. |
+
+### The survey's added questions
+
+| Question | Verdict | How it was checked |
+|----------|---------|--------------------|
+| What a release publishes | Holds | `python -m build` in a detached worktree at `248ecd3`, with real git metadata as `release.yml` has. The sdist is every tracked file except the two pruned directories, so it is a subset of the public repository. The wheel holds only the package's modules and its licence. No untrimmed appliance content is in either. |
+| Private corpus content in public CI logs | Holds | Every `appliance-corpus` job's log was read: four runs, every job in them. 591 probes were drawn from the private descriptors' prose and identifying fields, by a script that printed only counts. They gave no hit in any log. Every line carrying a credential value is masked. This was a probe set, not an exhaustive read (risk 4). |
+
+### Findings
+
+Each is a defect the plan's diff introduced, under decision 4. All nine
+are to be fixed in one follow-up pull request against `develop`, under
+decision 6.
+
+1. **The trimmed fixtures are never checked against their originals.**
+   Master plan decision 6 says the appliance tier asserts that the
+   parser's model of each original descriptor equals its model of the
+   trimmed fixture, apart from the placeholder. Phase 1 deferred this
+   to phase 5, and phase 5's plan never mentions it.
+   `shakenfist_client_ova/appliance_tests/test_appliance_corpus.py`
+   never reads `tests/fixtures/ovf/vendor/`, and no decline was
+   written. Fix: compare, per appliance, the scrubbed model, or the
+   outcome name for a refused appliance, of the descriptor member and
+   its vendor fixture.
+2. **The prose list omits the deployment option text.**
+   `shakenfist_client_ova/ovf/prose.py`'s `PROSE_ELEMENTS` lacks
+   `DeploymentOptionSection/Configuration/Label` and `Description`.
+   These are localisable, user-facing text like `Property/Label`, and
+   the model reads them. Today they hold only generic sizing text, so
+   nothing leaked, but a future fixture with marketing text there
+   would pass `--check` untrimmed. Fix: add both, then re-trim and
+   regenerate what changes.
+3. **The rule for what the corpus test prints is narrower than what it
+   prints.** The rule, stated in `test_appliance_corpus.py`'s
+   docstring, `docs/development.md` and `AGENTS.md`, allows appliance,
+   artifact and outcome names. But a mismatch of absent members prints
+   the member names, and three calls outside `_attempt` can raise an
+   error naming a member. Member names are envelope data, already
+   published in the trimmed fixtures. Fix: widen the rule to include
+   them, in all three places.
+4. **`ARCHITECTURE.md` misses phase 5's round trip to the server.** Its
+   pipeline omits the lookup of every artifact name before the disks
+   are read, the refusal of an artifact no upload made, and the
+   `ova_file` and `ova_member` metadata.
+5. **`ARCHITECTURE.md` says the quirk list lives only in
+   `ovf/quirks.py`.** `docs/usage.md` lists all six quirks too. They
+   agree today. Fix: keep the list for users, and correct the claim.
+6. **`docs/usage.md` never names `ManifestError`.** It is the only
+   refusal not named, although `ARCHITECTURE.md` says usage explains
+   each one.
+7. **The summary prints "Version: 1" when the descriptor states
+   none.** Before the plan the command said it was assuming version 1.
+   Phase 2 dropped the qualifier, and phase 3 began accepting OVF 2
+   envelopes. Fix: derive the version from the envelope's namespace
+   when none is stated.
+8. **Phase 4 duplicated the synthetic archive helpers.** `_replace`,
+   `_digest`, `_manifest` and the two-controller descriptor are defined
+   identically in `tests/test_command.py` and
+   `tests/test_ovf_package.py`. `tools/trim-ovf-descriptor.py` also
+   repeats the envelope namespace URIs from `ovf/namespaces.py`,
+   although it already imports `ovf.prose`. Fix: move the helpers into
+   `tests/synthetic.py`, and have the trim tool import the namespaces.
+9. **Four stale cross-references.**
+   * `tools/classify-ovf-corpus.py`'s docstring points to shape
+     counts in `docs/development.md` that are not there.
+   * `tools/fetch-descriptor-corpus.sh` says to change a pin "here and
+     in the plan", which contradicts the pins' single home.
+   * `href-duplicate-member.ovf` says an archive case is still to be
+     built, but phase 4 built it.
+   * `ovf/model.py` says "as today" of a long-gone parser.
+
+### Declined
+
+* **`Disk.interface`, a field nothing fills.** Its comment in
+  `ovf/model.py` says so, and that it is kept for the oVirt reader in
+  Future work. Removing it would rewrite 27 fixture expected files
+  and 25 curated entries, only for that reader to add it back.
+* **Sharing `_not_found` between `tests/test_command.py` and the
+  appliance tier.** The tiers are separate packages, and the appliance
+  tier is deliberately kept out of the unit tier's collection. A
+  shared helper would import across that line for four lines of code.
+* **The namespace URIs in `tools/classify-ovf-corpus.py`.** The tool
+  imports nothing from the package, so that it can survey a corpus
+  without the package installed. A copied constant is the price of
+  that.
+* **Plan text that describes the parser as it was.** Plans record what
+  was decided at the time. `docs/plans/` is history, and is not
+  corrected for later phases.
+
+### Filed under decision 4
+
+Problems in code that predates the plan, raised by the audit and filed
+rather than counted:
+
+* #19: the release workflow publishes untested, and its `release`
+  environment does not exist, so the first tag is ungated.
+* #20: four of the import command's server calls let an API error
+  escape as a traceback, and `ctx.obj['namespace']` is never read.
+
 ## Execution notes
 
-None yet.
+* **Back brief, 2026-10-18.** The operator agreed that a hit in a
+  public place could be described in the session's terminal, and that
+  the management session may open the follow-up pull request itself
+  once this phase merges.
+* **6a, 6b and 6c ran in parallel, and 6d after them.** None raised a
+  stop under decision 2.
+* **6d raised eight candidates, 6b one and 6c two notes.**
+  * 6c's two notes and 6d's remark on the rule's three homes became
+    finding 3.
+  * 6d's `Disk.interface` and two of its duplication items were
+    declined.
+  * 6d's stale plan text was declined under the rule that plans are
+    history.
+
+  Every finding kept was reproduced against the tree before it was
+  recorded.
+* **The survey had three facts wrong**, now corrected at their source
+  above:
+  * `instar-testdata`'s remote `main` has moved on;
+  * `MANIFEST.in` exists;
+  * phase 5's records do not link the upstream issues.
+* **The probe set over this phase's own changes found nothing new.**
+  It was run over every file the phase changes, and gave 0 hits in the
+  text the phase added. The master plan already held five hits at
+  `248ecd3`, all of them envelope identifiers the operator ruled
+  publishable: two appliances' VirtualSystem ids, one product and
+  vendor name, and one disk name.
+* **This phase does not complete the plan.** There are findings, so
+  phase 6 stays `In progress`. The follow-up pull request records this
+  phase's merge commit, and sets the row and the index row to
+  `Complete`.

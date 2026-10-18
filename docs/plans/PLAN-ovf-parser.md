@@ -896,6 +896,22 @@ The plan's first-parent range on `develop`, `db7bdaa^1..248ecd3`, also
 holds two Renovate merges, #15 and #17. They are not plan work, and
 are not audited as such.
 
+The audit ran on 2026-10-18 against `248ecd3`. Its verdicts are in the
+phase plan's [Audit results](PLAN-ovf-parser-phase-06-push-audit.md#audit-results).
+
+* All five checklist items, the four questions above and the survey's
+  two held, except item 5, which does not apply to the plan's diff.
+* No private content was found anywhere public.
+* There are nine findings, all to be fixed in one follow-up pull
+  request:
+  * the trimmed-against-original model check that decision 6 promised
+    was never built;
+  * the prose list omits the deployment option text;
+  * the corpus test's output rule is narrower than what it prints;
+  * six documentation, duplication and stale-reference fixes.
+* Four smaller items were declined in writing there.
+* Two problems in older code were filed as #19 and #20.
+
 <!-- shared-block: plan-push-audit-phase v4 -->
 Push audit phase (shared block; do not edit -- the canonical
 copy lives in shakenfist/development at
