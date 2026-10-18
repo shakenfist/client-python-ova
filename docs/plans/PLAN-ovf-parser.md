@@ -896,15 +896,24 @@ The plan's first-parent range on `develop`, `db7bdaa^1..248ecd3`, also
 holds two Renovate merges, #15 and #17. They are not plan work, and
 are not audited as such.
 
-The audit ran on 2026-10-18 against `248ecd3`. Its verdicts are in the
-phase plan's [Audit results](PLAN-ovf-parser-phase-06-push-audit.md#audit-results).
+The audit ran on 2026-10-18 against `248ecd3`. There is no
+`PUSH-AUDIT.md`, so it applied the checklist and the six questions
+above instead. Its verdicts and declines are in the phase plan's
+[Audit results](PLAN-ovf-parser-phase-06-push-audit.md#audit-results).
 
-* All five checklist items, the four questions above and the survey's
-  two held, except item 5, which does not apply to the plan's diff.
+* The checklist items and the six questions held, with three
+  exceptions:
+  * Question 1, on vendor prose, holds today but raised finding 2.
+  * The question on public CI logs holds today but raised finding 3.
+  * Item 5 does not hold. The release workflow publishes untested.
+    That code predates the plan, so it is filed as #19.
 * No private content was found anywhere public. The probe set matched
-  five strings already in this plan. They are envelope identifiers the
-  operator ruled publishable, as the phase plan's execution notes
-  say.
+  five strings already in this plan:
+  * two are CyberOps VirtualSystem ids, envelope data that phase 1's
+    open question 1 rules publishable;
+  * three are names of freely downloadable appliances.
+
+  The phase plan's execution notes list them.
 * There are nine findings, all to be fixed in one follow-up pull
   request:
   * the trimmed-against-original model check that decision 6 promised
@@ -913,7 +922,7 @@ phase plan's [Audit results](PLAN-ovf-parser-phase-06-push-audit.md#audit-result
   * the corpus test can print member names, which its output rule
     does not allow;
   * six documentation, duplication and stale-reference fixes.
-* Four smaller items were declined in writing there.
+* Four smaller items were declined in writing, in *Audit results*.
 * Two problems in older code were filed as #19 and #20.
 
 <!-- shared-block: plan-push-audit-phase v4 -->

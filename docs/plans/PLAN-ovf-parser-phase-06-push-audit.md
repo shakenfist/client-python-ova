@@ -225,9 +225,13 @@ for every consumer.
 
 5. **Every verdict carries the command that produced it.** The
    verdict "holds" says nothing that "not checked" does not. Each item
-   in the record has one of three verdicts, each with what checks it:
+   in the record has one of four verdicts, each with what checks it:
    * **holds**, with the command or commands that show it;
-   * **finding N**, with its decision;
+   * **finding N**, with its decision, or **holds today; finding N**
+     where nothing is wrong now but the plan's code would let it go
+     wrong;
+   * **does not hold, in code that predates the plan**, with the issue
+     filed under decision 4;
    * **does not apply**, with the reason.
 
    The commands are written so that a later reader can re-run them
@@ -238,8 +242,11 @@ for every consumer.
      opened after this phase merges. That pull request records phase
      6's `Merged` cell and, once every finding is resolved, sets the
      row and the plan's index row to `Complete`.
-   * A decline is a paragraph in the master plan's phase 6 section
-     saying why, which is where the shared block puts it.
+   * A decline is a paragraph in this plan's *Audit results*, saying
+     why, and the master plan's summary links to it. The shared block
+     asks only that a decline be "in the plan, where the next reader
+     will find it". Keeping it beside the verdicts follows decision
+     7's reasoning that two copies would drift.
    * If the audit finds nothing, this phase sets its own row and the
      index row to `Complete` in its own pull request, and records no
      `Merged` cell.
@@ -300,14 +307,17 @@ for every consumer.
   * the master plan's four questions;
   * survey findings 4 and 6's two added questions.
 
-  Each verdict is "holds", "finding N" or "does not apply", and each
-  carries at least one command or a reason.
+  Each verdict is one of decision 5's four, and each carries at least
+  one command or a reason.
 * 6c's probe set, run over every file this phase changes, finds no
-  hit.
+  hit in the text this phase adds. Any hit already present at
+  `248ecd3` is listed in the execution notes, with the reason it may
+  stay public.
 * Every finding has one of:
   * a decision under decision 6;
   * an issue link;
-  * a decline paragraph in the master plan.
+  * a decline paragraph in *Audit results*, linked from the master
+    plan's summary.
 * The master plan's phase 6 section has one summary paragraph that
   links to *Audit results*, and states no verdict that differs from
   it.
@@ -343,6 +353,10 @@ aligns with it. Two points need the operator's answer before 6a runs:
 
 ## Audit results
 
+This repository has no `PUSH-AUDIT.md`. In its place, the audit
+applied the shared block's five-item checklist, the master plan's four
+questions and the survey's two.
+
 Read against `248ecd3`. The commands are the ones the steps ran, and
 they can be re-run against that commit. Before recording, the
 management session re-ran at least one command per row:
@@ -365,16 +379,16 @@ It also reproduced every finding below against the tree. Steps 6a to
 | Item | Verdict | How it was checked |
 |------|---------|--------------------|
 | 1. Recorded landings | Holds | `git rev-list --parents -n1 <m> \| wc -w` prints 3 for each of the five merges. `git log --first-parent --oneline db7bdaa^1..248ecd3` lists them and Renovate's #15 and #17 only. The `instar-testdata` range is cited from phase 1's execution notes. |
-| 2. Unattended work reports failure | Holds | `git diff --name-status <m>^1 <m> -- .github tools tox.ini pyproject.toml` per merge: no cron, timer or schedule was added. The new jobs run on a push to `develop`, which a merge starts, and GitHub reports a failed run to its actor. On all ten recent `develop` runs, that actor is the operator (`gh api 'repos/shakenfist/client-python-ova/actions/workflows/ci.yml/runs?branch=develop&event=push'`). |
+| 2. Unattended work reports failure | Holds | `git diff --name-status <m>^1 <m> -- .github tools tox.ini pyproject.toml` per merge: no cron, timer or schedule was added. The new jobs run on a push to `develop`, which a merge starts, and GitHub reports a failed run to its actor. On all ten recent `develop` runs, that actor is the operator (`gh api 'repos/shakenfist/client-python-ova/actions/workflows/ci.yml/runs?branch=develop&event=push'`). `renovate.json` sets `"automerge": false`, so every push to `develop` has a person as its actor. An expired `GITLAB_TESTDATA_TOKEN` shows only as a failed `appliance-corpus` job, on the next pull request or merge after it expires. |
 | 3. No secret or private hostname | Holds | gitleaks 8.16.0, from its container, over each `<m>^1..<m>` and over all of history: no leaks. A planted key, as a positive control, was found. A grep of each merge's added lines for token shapes (`glpat-`, `ghp_`, `github_pat_`, `Authorization:`, and the base64 of `oauth2:` at each alignment) found only the placeholders in the fetch script. |
 | 4. Removed names have no consumer | Holds | An AST diff of `__init__.py`'s names per merge gives the removed names: phase 2's parser helpers and constants, the `dpath` and `xmltodict` dependencies, and the `ova://` source URL. `git -C <repo> grep` for each, across the 34 non-worktree repositories under `src/shakenfist/`, finds no consumer outside this repository. |
-| 5. A broken change fails closed | Does not apply to the plan's diff | The plan did not touch `release.yml`. The release workflow publishes untested, and its `release` environment does not exist. Both predate the plan, and are filed as #19 under decision 4. |
+| 5. A broken change fails closed | Does not hold, in code that predates the plan | `release.yml` runs no tests, so a tag on a broken `develop` would publish the plan's parser untested; nothing fails closed. Its `release` environment does not exist either. The plan did not touch `release.yml`, so under decision 4 this is filed as #19 rather than counted as a finding. |
 
 ### The master plan's questions
 
 | Question | Verdict | How it was checked |
 |----------|---------|--------------------|
-| 1. Vendor prose left in trimmed fixtures | Holds | All 16 vendor fixtures read in full. A `python3 -I` script loading `ovf/prose.py`'s list found 130 prose elements and none untrimmed. A grep for paths, e-mail addresses and URLs found only schema namespaces and provenance comments. Finding 2 is a gap in the list itself. |
+| 1. Vendor prose left in trimmed fixtures | Holds today; finding 2 | All 16 vendor fixtures read in full. A `python3 -I` script loading `ovf/prose.py`'s list found 130 prose elements and none untrimmed. A grep for paths, e-mail addresses and URLs found only schema namespaces and provenance comments. Finding 2 is a gap in the list itself. |
 | 2. Upstream text copied; curated expectations; Glance `NOTICE` | Holds | govmomi `79bc9d75` and COT `0811b963` were fetched by the fetch script's method. Every upstream line of 30 characters or more was matched against every tracked file. The 29 matches are schema boilerplate, the longest a six-line namespace block. `curated.expected.json` carries `TRIMMED` 93 times and no upstream prose. `sha256sum -c` over the `NOTICE`'s table passes for all five Glance files, and `git ls-tree` lists exactly those five and the `NOTICE`. |
 | 3. Private hostname somewhere new | Holds | It appears only in `tools/ci/fetch-appliance-corpus.sh` (2) and `tools/ci/test-fetch-appliance-corpus.sh` (4), both added by phase 5. It is already in the public shakenfist/instar (`.github/workflows/coverage-fuzz.yml`). |
 | 4. `ovf/` imports only the standard library and `defusedxml` | Holds | A `python3 -I` script walks every `ast.Import` and `ast.ImportFrom`, including those inside functions, and checks them against `sys.stdlib_module_names` (Python 3.13.5). It found no other module. |
@@ -384,7 +398,7 @@ It also reproduced every finding below against the tree. Steps 6a to
 | Question | Verdict | How it was checked |
 |----------|---------|--------------------|
 | What a release publishes | Holds | `python -m build` in a detached worktree at `248ecd3`, with real git metadata as `release.yml` has. The sdist is every tracked file except the two pruned directories, so it is a subset of the public repository. The wheel holds only the package's modules and its licence. No untrimmed appliance content is in either. |
-| Private corpus content in public CI logs | Holds | Every `appliance-corpus` job's log was read: four runs, every job in them. 591 probes were drawn from the private descriptors' prose and identifying fields, by a script that printed only counts. They gave no hit in any log. Every line carrying a credential value is masked. This was a probe set, not an exhaustive read (risk 4). |
+| Private corpus content in public CI logs | Holds today; finding 3 | Every `appliance-corpus` job's log was read: four runs, every job in them. 591 probes were drawn from the private descriptors' prose and identifying fields, by a script that printed only counts. They gave no hit in any log. Every line carrying a credential value is masked. This was a probe set, not an exhaustive read (risk 4). |
 
 ### Findings
 
@@ -523,9 +537,15 @@ rather than counted:
 * **The probe set over this phase's own changes found nothing new.**
   It was run over every file the phase changes, and gave 0 hits in the
   text the phase added. The master plan already held five hits at
-  `248ecd3`, all of them envelope identifiers the operator ruled
-  publishable: two appliances' VirtualSystem ids, one product and
-  vendor name, and one disk name.
+  `248ecd3`:
+  * The two CyberOps appliances' VirtualSystem ids. They are envelope
+    data, which phase 1's open question 1 rules publishable: "a
+    descriptor with its prose removed is the envelope, not the
+    courseware".
+  * Archive Team Warrior's product and vendor name, and a Home
+    Assistant OS disk name. Both appliances can be downloaded freely,
+    and `instar-testdata`'s `sources.json` marks both
+    `redistributable: true`.
 * **This phase does not complete the plan.** There are findings, so
   phase 6 stays `In progress`. The follow-up pull request records this
   phase's merge commit, and sets the row and the index row to
