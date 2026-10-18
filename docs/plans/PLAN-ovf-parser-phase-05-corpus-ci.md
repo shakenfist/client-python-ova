@@ -524,3 +524,6 @@ are UTC.
   * it deletes every LFS log before authenticating, and exits through
     its credential check on INT and TERM;
   * a whole appliance must check at least one disk's digest.
+* **#18 merged as `248ecd3` on 2026-10-18, without a third review
+  round.** The second round's only fix item was wrong, and its other
+  items were taken, so nothing was left for a third round to check.

@@ -521,7 +521,7 @@ attribute tables; the evidence is in the phase 1 plan's survey finding
 | 2. Extract the parser | [PLAN-ovf-parser-phase-02-extract.md](PLAN-ovf-parser-phase-02-extract.md) | Complete | 97273c7 |
 | 3. ElementTree and the specification | [PLAN-ovf-parser-phase-03-elementtree.md](PLAN-ovf-parser-phase-03-elementtree.md) | Complete | b1f8894 |
 | 4. Archive correctness | [PLAN-ovf-parser-phase-04-archive.md](PLAN-ovf-parser-phase-04-archive.md) | Complete | a8f44bf |
-| 5. Corpus CI tier | [PLAN-ovf-parser-phase-05-corpus-ci.md](PLAN-ovf-parser-phase-05-corpus-ci.md) | In progress | |
+| 5. Corpus CI tier | [PLAN-ovf-parser-phase-05-corpus-ci.md](PLAN-ovf-parser-phase-05-corpus-ci.md) | Complete | 248ecd3 |
 | 6. Push audit | - | Not started | |
 
 Phase plans are written when each phase starts, from this plan and
