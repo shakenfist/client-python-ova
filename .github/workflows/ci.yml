@@ -1,13 +1,15 @@
 # CI for the OVA client plugin.
 #
-# Two jobs, because there are two kinds of work with different needs:
-# lint-and-build is the pre-commit hooks, the unit tests and a package
-# build, which need nothing but the repository; descriptor-corpus runs
-# the test tier that fetches two upstream descriptor collections over
-# the network, which is slower and can fail for reasons outside the
-# change, so it reports separately. Both run on a static runner --
-# nothing here installs an OS package or otherwise changes the machine,
-# so nothing needs a throwaway VM.
+# Three jobs, because there are three kinds of work with different
+# needs: lint-and-build is the pre-commit hooks, the unit tests and a
+# package build, which need nothing but the repository; descriptor-corpus
+# runs the test tier that fetches two upstream descriptor collections
+# over the network, which is slower and can fail for reasons outside the
+# change, so it reports separately; appliance-corpus runs the tier over
+# private appliances, which needs a secret and a runner carrying the
+# test data, and is described where it is defined. The first two run on
+# a static runner -- nothing in them installs an OS package or otherwise
+# changes the machine, so nothing needs a throwaway VM.
 #
 # That argument is about cost, not safety. Everything below executes
 # code the pull request controls: pre-commit runs the hooks its own
@@ -81,6 +83,14 @@ jobs:
         run: |
           tox -epy3
 
+      # The appliance corpus job's fetch script holds a credential, and
+      # its input guards are what stop it running somewhere it should
+      # not. They are tested here rather than in that job, because that
+      # job does not run for forks and these tests need nothing private.
+      - name: Test the appliance corpus fetch script's guards
+        run: |
+          tools/ci/test-fetch-appliance-corpus.sh
+
       - name: Build the sdist and wheel
         run: |
           python3 -m build --outdir "${RUNNER_TEMP}/dist" .
@@ -130,9 +140,104 @@ jobs:
         run: |
           rm -rf "${RUNNER_TEMP}/venv-corpus"
 
-  # The automatic review, gated on both jobs above passing: a job skipped
-  # because a dependency failed never starts the reusable workflow, so
-  # the needs list is the CI-passed gate.
+  # The appliance corpus: every OVA in the private instar-testdata
+  # repository's downloaded/ova/, opened and checked by
+  # tox -eappliance-corpus. Fetching it needs a GitLab token, which makes
+  # this the one job here that holds a secret, and the shape of the job
+  # follows from keeping that secret away from code it was not meant for.
+  #
+  # The `if:` keeps fork pull requests out. GitHub gives a fork's run no
+  # secrets, so the job could only fail there; skipping it says so
+  # honestly instead. It does not soften the test: inside the job, a
+  # missing or incomplete corpus fails. What reaches the job is a pull
+  # request from a branch of this repository (Renovate's included), a
+  # push to develop, and a dispatch (pr-retest.yml) -- all code from a
+  # branch someone with write access controls. That person can read the
+  # token, through the fetch script on their own branch; that is
+  # accepted, because the token is read-only and reaches one repository
+  # of test data.
+  #
+  # Within the job, the secret is in the environment of one step, the
+  # fetch, which runs before anything is installed. Every later step
+  # runs code this repository does not control -- pip's downloads, tox,
+  # and whatever a Renovate branch has just bumped -- and none of them
+  # can read a secret that was never in their environment. The fetch
+  # script also leaves nothing on disk for them to find: the token goes
+  # to git as a header, and the script fails if it can find the token
+  # under the testdata tree's .git afterwards. That confinement assumes
+  # the runner and its testdata disk are not shared with less-trusted
+  # jobs; as a check on the disk, the script refuses a tree whose
+  # repository configuration carries keys a clone does not.
+  #
+  # The `instar` label is what promises the runner fleet's pre-built
+  # testdata disk; the script updates that tree in place rather than
+  # cloning, and fails if it is missing.
+  appliance-corpus:
+    name: Appliance corpus
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, debian-13, xl, instar]
+    permissions:
+      contents: read
+    # 30 minutes, against the other jobs' 15: on a disk built before the
+    # corpus last changed, the fetch can pull most of its 2GB of LFS
+    # objects, and the test then hashes every disk in every appliance.
+    timeout-minutes: 30
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-appliance-corpus
+      cancel-in-progress: true
+
+    steps:
+      # fetch-depth: 0 so setuptools_scm can derive the version when tox
+      # builds the package; it runs git describe on local tags, so no
+      # later step needs the GITHUB_TOKEN. persist-credentials: false
+      # because this job runs branch code on a runner that holds the
+      # testdata credential for one step, so the GITHUB_TOKEN need not
+      # sit in .git/config either. This job is the one holding a secret,
+      # so its one action is pinned to a commit rather than a movable
+      # tag; Renovate keeps the digest current.
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The only step that sees the secret; see the comment on the job.
+      # TESTDATA_USER is a repository variable, not a secret, because a
+      # username is not one; the script defaults it when it is unset.
+      # The script writes APPLIANCE_CORPUS to $GITHUB_ENV for the tox
+      # step.
+      - name: Fetch the appliance corpus
+        env:
+          TESTDATA_TOKEN: ${{ secrets.GITLAB_TESTDATA_TOKEN }}
+          TESTDATA_USER: ${{ vars.GITLAB_TESTDATA_USER }}
+        run: |
+          tools/ci/fetch-appliance-corpus.sh
+
+      # A venv under $RUNNER_TEMP for the reasons given in lint-and-build,
+      # with its own name so no two jobs share a path.
+      - name: Install tox
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/venv-appliance"
+          "${RUNNER_TEMP}/venv-appliance/bin/pip" install --quiet \
+              --disable-pip-version-check tox
+
+      - name: Put the venv on PATH
+        run: echo "${RUNNER_TEMP}/venv-appliance/bin" >> "${GITHUB_PATH}"
+
+      - name: Run the appliance corpus tests
+        run: |
+          tox -eappliance-corpus
+
+      - name: Clean up
+        if: always()
+        run: |
+          rm -rf "${RUNNER_TEMP}/venv-appliance"
+
+  # The automatic review, gated on lint-and-build and descriptor-corpus
+  # passing: a job skipped because a dependency failed never starts the
+  # reusable workflow, so the needs list is the CI-passed gate.
+  # appliance-corpus is left out of it because it is skipped for fork
+  # pull requests, and a skipped dependency would skip the review too.
   #
   # The permissions block has to be here rather than in the reusable
   # workflow, because a cross-repository reusable workflow cannot grant

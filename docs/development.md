@@ -218,6 +218,43 @@ Like the unit-tier expected files, the ledger and the curated expected
 file are regenerated with `OVF_UPDATE_EXPECTED=1 tox -edescriptor-corpus`
 (which then fails) and never hand-edited.
 
+### Appliance corpus tier
+
+A third tier runs the parser, the digest checks and the import command
+over the real appliances in the private `instar-testdata` repository,
+in `shakenfist_client_ova/appliance_tests/`. It takes each appliance in
+`downloaded/ova` and the outcome from its provenance file: a whole
+appliance must open, match its manifest and import (with the client
+mocked) uploading each disk once; a descriptor-only one must fail with
+`MissingMemberError` naming exactly the members it omits. The
+appliances named in `expected.json` are the exceptions, each with the
+outcome it must produce.
+
+`APPLIANCE_CORPUS` names the `downloaded/ova` directory. To run it
+against a local checkout:
+
+```bash
+git lfs pull --include 'downloaded/ova/**'   # in the checkout
+APPLIANCE_CORPUS=<checkout>/downloaded/ova tox -eappliance-corpus
+```
+
+It fails, never skips, if the variable is unset or the corpus is
+missing, still Git LFS pointers, or lacks a provenance file. The corpus
+is private, so assertion messages carry appliance, artifact and outcome
+names only, never descriptor or manifest text. The offline unit tier
+has a guard test (`tests/test_appliance_guard.py`, in `tox -epy3`) for
+the tier itself.
+
+In CI the `appliance-corpus` job runs only for branches of this
+repository, not forks, on runners with the `instar` label that carry
+the testdata disk. `tools/ci/fetch-appliance-corpus.sh` updates the
+tree there using a read-only token held as a repository secret. It
+refuses a tree whose repository configuration carries keys a clone of
+instar-testdata does not, such as a hook path or an include, and runs
+git there without the runner's system or global configuration and with
+hooks off. The script's offline test,
+`tools/ci/test-fetch-appliance-corpus.sh`, runs in the lint job.
+
 ### Adding a producer quirk
 
 When an appliance is refused because its producer deviates from the
@@ -232,7 +269,7 @@ review the diff.
 
 | Workflow | Runs | What it does |
 |----------|------|--------------|
-| `ci.yml` | Pull requests, pushes to `develop`, dispatch | Two jobs: the pre-commit hooks, the unit tests and an sdist and wheel build; and the descriptor corpus tier (`tox -edescriptor-corpus`). Then the automated reviewer on pull requests. |
+| `ci.yml` | Pull requests, pushes to `develop`, dispatch | Three jobs: the pre-commit hooks, the unit tests, the fetch script's guard test and an sdist and wheel build; the descriptor corpus tier (`tox -edescriptor-corpus`); and the appliance corpus tier (`tox -eappliance-corpus`), for branches of this repository only. Then the automated reviewer on pull requests. |
 | `secret-scan.yml` | Pull requests, pushes to `develop`, dispatch | gitleaks over the history, after a positive control. `tools/gitleaks-scan.sh` runs the same scan locally. |
 | `codeql-analysis.yml` | Pull requests, pushes, weekly | CodeQL. |
 | `pr-re-review.yml` | A "please re-review" comment | Another automated review. |

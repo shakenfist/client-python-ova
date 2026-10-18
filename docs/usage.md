@@ -72,12 +72,18 @@ with `--namespace <name>`.
 7. **Uploads the disks.** Each disk is uploaded as a blob, or an
    existing blob with the same SHA-512 is reused, and wrapped in an
    artifact named `<system>-<disk>`, from the virtual system's
-   `ovf:id` and the disk's `ovf:diskId`. The artifact's source URL is
-   `ova://` followed by the absolute path of the OVA with any symlinks
-   resolved, so the same OVA reached through a symlinked directory is
-   the same artifact, a `/` and the member name, such as
-   `ova:///home/me/appliance.ova/disk1.vmdk`. Nothing is
-   percent-encoded. A name containing a `/` is refused before
+   `ovf:id` and the disk's `ovf:diskId`. No source URL is sent, so the
+   server gives each artifact `sf://upload/<namespace>/<artifact name>`.
+   An artifact is identified by its name in your namespace. Before any
+   disk is read, the import looks each name up and says, for each disk,
+   whether it goes to a new artifact or "into the existing artifact
+   <uuid>". Importing an unchanged disk again adds no
+   version, because the server skips a version whose content matches
+   the latest. An artifact of yours with that name that was not made
+   by an upload, for example one cached from a URL, is refused: rename
+   or delete it first. Each artifact gets two metadata keys, `ova_file`,
+   the OVA's real path with any symlinks resolved, and `ova_member`,
+   the disk's member name. A name containing a `/` is refused before
    anything is read, because Shaken Fist would refuse it only after
    the upload.
 
@@ -186,6 +192,19 @@ is one that ends early. Each of these also prints one line and exits
   `DigestMismatchError`.
 * A delta disk (`ovf:parentRef`), which holds only the changes from
   its parent and alone would not boot: `DeltaDiskError`.
+
+Three more refusals come from the server rather than the OVA. Each
+prints one line and exits 1:
+
+* A lookup of an artifact name that failed, before any disk is read.
+* An artifact of yours with the name that was not made by an upload,
+  which the import cannot add to. Rename or delete it.
+* A metadata update that failed after the disk had landed. The line
+  names the artifact the disk is in, so the metadata can be set by
+  hand. The import stops there, so the OVA's later disks are not
+  uploaded. Once the cause is fixed, run the import again: the disks
+  already uploaded go "into the existing artifact", which sets their
+  metadata, and the rest are uploaded as before.
 
 That is the intended behaviour: an OVA whose description is only
 partly understood would otherwise become an instance that is subtly
