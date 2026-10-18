@@ -5,8 +5,7 @@ The corpora are fetched by tools/fetch-descriptor-corpus.sh. Each is named on
 the command line as NAME=DIRECTORY[:N], where DIRECTORY is the pinned
 subdirectory and N, if given, overrides --curate for that corpus.
 
-With no --curate the tool prints each corpus's shape counts, which are the
-ones the corpus survey found (docs/development.md, "Test fixtures").
+With no --curate the tool prints each corpus's shape counts.
 Parsing uses defusedxml, so a malformed descriptor and a descriptor that
 declares a DOCTYPE or an entity are counted as their own shapes rather than
 being expanded.

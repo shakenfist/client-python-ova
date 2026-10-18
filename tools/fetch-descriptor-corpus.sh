@@ -11,7 +11,7 @@
 # fetch never leaves a directory that looks complete. A directory is reused
 # only under its final name. Nothing else in this script touches the network.
 #
-# Bumping a pin: change the sha here and in the plan, then regenerate
+# Bumping a pin: change the sha here, which is the only place it is written, then regenerate
 # shakenfist_client_ova/corpus_tests/curated.txt with tools/classify-ovf-corpus.py
 # (its docstring has the command).
 

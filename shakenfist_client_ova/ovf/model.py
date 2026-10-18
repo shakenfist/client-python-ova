@@ -153,7 +153,7 @@ class Envelope:
 @dataclass
 class ManifestEntry:
     name: str
-    algorithm: str                              # lower case, as today
+    algorithm: str                              # lower case, whatever case the manifest used
     digest: str
 
 
