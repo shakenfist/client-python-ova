@@ -191,6 +191,11 @@ is one that ends early. Each of these also prints one line and exits
   `CompressedFileError`.
 * A manifest with no entry for the descriptor or for a file's member:
   `UnlistedFileError`.
+* A manifest that cannot be read: a line that does not parse, an
+  algorithm other than SHA1, SHA256 or SHA512, a digest of the wrong
+  length or not hexadecimal, a second line for one file, or a manifest
+  that is not UTF-8: `ManifestError`. Apart from an encoding failure,
+  the message gives the line number.
 * A descriptor or disk whose digest differs from the manifest's:
   `DigestMismatchError`.
 * A delta disk (`ovf:parentRef`), which holds only the changes from
