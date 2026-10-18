@@ -244,15 +244,15 @@
     "deployment_options": [
       {
         "default": true,
-        "description": "Base set of properties only",
+        "description": "TRIMMED",
         "id": "default",
-        "label": "Default"
+        "label": "TRIMMED"
       },
       {
         "default": false,
-        "description": "Includes config-specific properties in each category",
+        "description": "TRIMMED",
         "id": "extended",
-        "label": "Extended"
+        "label": "TRIMMED"
       }
     ],
     "disks": [],
@@ -2429,15 +2429,15 @@
     "deployment_options": [
       {
         "default": true,
-        "description": "Base configuration",
+        "description": "TRIMMED",
         "id": "default",
-        "label": "Default"
+        "label": "TRIMMED"
       },
       {
         "default": false,
-        "description": "Includes config-specific properties",
+        "description": "TRIMMED",
         "id": "extended",
-        "label": "Extended"
+        "label": "TRIMMED"
       }
     ],
     "disks": [

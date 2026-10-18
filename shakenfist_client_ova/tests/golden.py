@@ -83,7 +83,7 @@ def outcome_of(data, scrub=False):
     try:
         envelope = ovf.parse_descriptor(data)
         if scrub:
-            prose.scrub(envelope.virtual_system)
+            prose.scrub(envelope)
         return ovf.to_json(envelope), None
     except ovf.OVFError as e:
         return None, e

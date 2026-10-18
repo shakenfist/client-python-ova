@@ -16,16 +16,16 @@
   <DeploymentOptionSection>
     <Info>List of profiles</Info>
     <Configuration ovf:default="true" ovf:id="1CPU-512MB">
-      <Label ovf:msgid="Small.label">Small</Label>
-      <Description ovf:msgid="Small.description">Minimal hardware profile - 1 vCPU, 512 MB RAM</Description>
+      <Label ovf:msgid="Small.label">TRIMMED</Label>
+      <Description ovf:msgid="Small.description">TRIMMED</Description>
     </Configuration>
     <Configuration ovf:id="4CPU-16GB">
-      <Label ovf:msgid="Medium.label">Medium</Label>
-      <Description ovf:msgid="Medium.description">Medium hardware profile - 4 vCPUs, 16 GB RAM</Description>
+      <Label ovf:msgid="Medium.label">TRIMMED</Label>
+      <Description ovf:msgid="Medium.description">TRIMMED</Description>
     </Configuration>
     <Configuration ovf:id="8CPU-32GB">
-      <Label ovf:msgid="Large.label">Large</Label>
-      <Description ovf:msgid="Large.description">Large hardware profile - 8 vCPUs, 32 GB RAM</Description>
+      <Label ovf:msgid="Large.label">TRIMMED</Label>
+      <Description ovf:msgid="Large.description">TRIMMED</Description>
     </Configuration>
   </DeploymentOptionSection>
   <vmw:IpAssignmentSection ovf:required="false" vmw:protocols="IPv4 IPv6" vmw:schemes="ovfenv dhcp">

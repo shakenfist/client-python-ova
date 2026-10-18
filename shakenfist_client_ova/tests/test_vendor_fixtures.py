@@ -535,8 +535,9 @@ class VendorFixtureTestCase(testtools.TestCase):
             [ovf.Network(name='LAN', description='LAN network'), ovf.Network(name='WAN', description='WAN network')],
             envelope.networks)
         self.assertEqual(
-            [('1CPU-512MB', True, 'Small'), ('4CPU-16GB', False, 'Medium'), ('8CPU-32GB', False, 'Large')],
-            [(option.id, option.default, option.label) for option in envelope.deployment_options])
+            [('1CPU-512MB', True, 'TRIMMED', 'TRIMMED'), ('4CPU-16GB', False, 'TRIMMED', 'TRIMMED'),
+             ('8CPU-32GB', False, 'TRIMMED', 'TRIMMED')],
+            [(option.id, option.default, option.label, option.description) for option in envelope.deployment_options])
 
         system = envelope.virtual_system
         self.assertEqual('VyOS', system.id)

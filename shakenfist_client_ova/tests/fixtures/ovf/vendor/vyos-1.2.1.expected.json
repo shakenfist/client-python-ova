@@ -2,21 +2,21 @@
   "deployment_options": [
     {
       "default": true,
-      "description": "Minimal hardware profile - 1 vCPU, 512 MB RAM",
+      "description": "TRIMMED",
       "id": "1CPU-512MB",
-      "label": "Small"
+      "label": "TRIMMED"
     },
     {
       "default": false,
-      "description": "Medium hardware profile - 4 vCPUs, 16 GB RAM",
+      "description": "TRIMMED",
       "id": "4CPU-16GB",
-      "label": "Medium"
+      "label": "TRIMMED"
     },
     {
       "default": false,
-      "description": "Large hardware profile - 8 vCPUs, 32 GB RAM",
+      "description": "TRIMMED",
       "id": "8CPU-32GB",
-      "label": "Large"
+      "label": "TRIMMED"
     }
   ],
   "disks": [
