@@ -522,7 +522,7 @@ attribute tables; the evidence is in the phase 1 plan's survey finding
 | 3. ElementTree and the specification | [PLAN-ovf-parser-phase-03-elementtree.md](PLAN-ovf-parser-phase-03-elementtree.md) | Complete | b1f8894 |
 | 4. Archive correctness | [PLAN-ovf-parser-phase-04-archive.md](PLAN-ovf-parser-phase-04-archive.md) | Complete | a8f44bf |
 | 5. Corpus CI tier | [PLAN-ovf-parser-phase-05-corpus-ci.md](PLAN-ovf-parser-phase-05-corpus-ci.md) | Complete | 248ecd3 |
-| 6. Push audit | - | Not started | |
+| 6. Push audit | [PLAN-ovf-parser-phase-06-push-audit.md](PLAN-ovf-parser-phase-06-push-audit.md) | In progress | |
 
 Phase plans are written when each phase starts, from this plan and
 from what the previous phase learned, rather than all now.
@@ -874,11 +874,27 @@ to the recorded ranges, plus four questions specific to this plan:
   of upstream prose? Does every Glance file appear in its `NOTICE`,
   and does `git ls-files` list every file the `NOTICE` names?
 - Does the corpus CI path put the private GitLab hostname anywhere
-  new? It already appears in the public `shakenfist/instar`, so
-  carrying it here is not a new disclosure, but the audit records the
-  verdict rather than assuming it.
+  new? It is in `tools/ci/fetch-appliance-corpus.sh` and
+  `tools/ci/test-fetch-appliance-corpus.sh`. It already appears in the
+  public `shakenfist/instar`, so carrying it here is not a new
+  disclosure, but the audit records the verdict rather than assuming
+  it.
 - Does `shakenfist_client_ova/ovf/` still import nothing outside the
   standard library and `defusedxml` (decision 1)?
+
+The phase plan's survey added two more questions:
+
+- What does a release publish? `setuptools_scm` puts every tracked
+  file into the sdist, so the trimmed fixtures, the Glance archives
+  and the fetch scripts presumably reach PyPI. The audit checks
+  whether that is right.
+- Does private corpus content reach a public CI log? The repository's
+  logs are public, and the `appliance-corpus` job runs the corpus test
+  on them.
+
+The plan's first-parent range on `develop`, `db7bdaa^1..248ecd3`, also
+holds two Renovate merges, #15 and #17. They are not plan work, and
+are not audited as such.
 
 <!-- shared-block: plan-push-audit-phase v4 -->
 Push audit phase (shared block; do not edit -- the canonical
