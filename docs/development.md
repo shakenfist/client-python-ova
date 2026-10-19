@@ -303,10 +303,14 @@ merged around the queue, by an administrator bypassing it, cannot be
 released until a later commit has gone through the queue.
 
 Enqueueing a fork's pull request is also the point at which its code
-first runs with this repository's secrets. The setting that holds a
-fork's workflows for approval does not apply to merge queue runs, and
-a queued commit runs its own `ci.yml` and `tools/ci/` scripts. Read
-any change under `.github/` or `tools/ci/` before enqueueing it.
+first runs unreviewed by GitHub's approval setting, which does not
+apply to merge queue runs. A queued commit runs all of its own code --
+workflows, `tools/ci/` scripts, `tox.ini`, the pre-commit config,
+packaging and tests -- on the persistent static runners, and its
+appliance-corpus job with this repository's secret. Review the whole
+diff with that in mind before enqueueing it; changes under `.github/`
+and `tools/ci/` deserve the closest reading, because they decide where
+the secret goes.
 
 The wheel check in the lint job is
 [`check-dist`](https://github.com/shakenfist/actions/blob/main/docs/actions.md#check-dist).

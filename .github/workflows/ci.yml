@@ -275,9 +275,9 @@ jobs:
   # https://boinkor.net/2023/11/neat-github-actions-patterns-for-github-merge-queues/
   # "Can enqueue" reports on pull requests and "Can merge" on merge
   # queue entries; each is skipped, which GitHub treats as success, on
-  # the other event. "Can enqueue" counts a skipped job as passed, which
-  # is what lets a fork pull request, whose appliance-corpus job is
-  # skipped, be enqueued. "Can merge" does not: on a merge queue entry
+  # the other event. "Can enqueue" counts a skipped appliance-corpus as
+  # passed, which is what lets a fork pull request, whose
+  # appliance-corpus job is skipped, be enqueued. "Can merge" does not: on a merge queue entry
   # every job runs, and must succeed. The
   # automated reviewer is advisory and deliberately not in needs: it
   # must not be able to block a merge on an API hiccup.
@@ -293,13 +293,13 @@ jobs:
     runs-on: [self-hosted, static]
     timeout-minutes: 5
     steps:
-      # A skipped need passes here, because appliance-corpus is skipped
-      # on a fork pull request.
+      # appliance-corpus, and only appliance-corpus, may be skipped here:
+      # it is skipped on a fork pull request. Any other skipped job fails.
       - name: Transform outcomes
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
-          echo "ALL_SUCCESS=$(echo "${NEEDS_JSON}" | jq '. | to_entries | map([.value.result == "success", .value.result == "skipped"] | any) | all')" >> "${GITHUB_ENV}"
+          echo "ALL_SUCCESS=$(echo "${NEEDS_JSON}" | jq 'to_entries | map(.value.result == "success" or (.key == "appliance-corpus" and .value.result == "skipped")) | all')" >> "${GITHUB_ENV}"
       - name: Check outcomes
         run: |
           [ "${ALL_SUCCESS}" == true ]
