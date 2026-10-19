@@ -20,7 +20,10 @@
 # -- Settings > Actions requires approval for all external
 # contributors, so a fork's workflows do not run until a maintainer has
 # looked. If that setting is ever relaxed, these jobs belong on the
-# throwaway vm pool, as secret-scan.yml already is.
+# throwaway vm pool, as secret-scan.yml already is. That setting does
+# not cover merge queue runs: enqueueing a fork's pull request runs its
+# version of this file, and of tools/ci/, with this repository's
+# secrets. For a merge queue entry, enqueueing is the approval.
 name: CI
 
 on:
@@ -272,9 +275,10 @@ jobs:
   # https://boinkor.net/2023/11/neat-github-actions-patterns-for-github-merge-queues/
   # "Can enqueue" reports on pull requests and "Can merge" on merge
   # queue entries; each is skipped, which GitHub treats as success, on
-  # the other event. A skipped job counts as passed here too, which is
-  # what lets a fork pull request, whose appliance-corpus job is
-  # skipped, be enqueued; on a merge queue entry that job runs. The
+  # the other event. "Can enqueue" counts a skipped job as passed, which
+  # is what lets a fork pull request, whose appliance-corpus job is
+  # skipped, be enqueued. "Can merge" does not: on a merge queue entry
+  # every job runs, and must succeed. The
   # automated reviewer is advisory and deliberately not in needs: it
   # must not be able to block a merge on an API hiccup.
   can-enqueue:
@@ -283,13 +287,14 @@ jobs:
       - lint-and-build
       - descriptor-corpus
       - appliance-corpus
-    if: always() && github.event_name != 'merge_group'
-    permissions:
-      actions: read
+    if: ${{ !cancelled() && github.event_name != 'merge_group' }}
+    # The steps read only the needs context, so the token needs nothing.
+    permissions: {}
     runs-on: [self-hosted, static]
-    # A jq expression over the needs context.
     timeout-minutes: 5
     steps:
+      # A skipped need passes here, because appliance-corpus is skipped
+      # on a fork pull request.
       - name: Transform outcomes
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
@@ -305,18 +310,20 @@ jobs:
       - lint-and-build
       - descriptor-corpus
       - appliance-corpus
-    if: always() && github.event_name == 'merge_group'
-    permissions:
-      actions: read
+    if: ${{ !cancelled() && github.event_name == 'merge_group' }}
+    # The steps read only the needs context, so the token needs nothing.
+    permissions: {}
     runs-on: [self-hosted, static]
-    # A jq expression over the needs context.
     timeout-minutes: 5
     steps:
+      # Every need must succeed: on a merge queue entry every job is meant
+      # to run, and this run is the one release.yml's CI gate counts. A
+      # job that skipped here would let an untested tier reach a release.
       - name: Transform outcomes
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
-          echo "ALL_SUCCESS=$(echo "${NEEDS_JSON}" | jq '. | to_entries | map([.value.result == "success", .value.result == "skipped"] | any) | all')" >> "${GITHUB_ENV}"
+          echo "ALL_SUCCESS=$(echo "${NEEDS_JSON}" | jq '. | to_entries | map(.value.result == "success") | all')" >> "${GITHUB_ENV}"
       - name: Check outcomes
         run: |
           [ "${ALL_SUCCESS}" == true ]

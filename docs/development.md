@@ -302,6 +302,12 @@ That second run is the one a release counts (see below), so a change
 merged around the queue, by an administrator bypassing it, cannot be
 released until a later commit has gone through the queue.
 
+Enqueueing a fork's pull request is also the point at which its code
+first runs with this repository's secrets. The setting that holds a
+fork's workflows for approval does not apply to merge queue runs, and
+a queued commit runs its own `ci.yml` and `tools/ci/` scripts. Read
+any change under `.github/` or `tools/ci/` before enqueueing it.
+
 The wheel check in the lint job is
 [`check-dist`](https://github.com/shakenfist/actions/blob/main/docs/actions.md#check-dist).
 It fails if the wheel holds a test directory, so a packaging change
@@ -313,9 +319,10 @@ release time.
 Pushing a `v*` tag triggers `release.yml`. Its jobs, in order:
 
 1. `ci-gate` checks that `ci.yml` succeeded on the tagged commit, in
-   its merge queue run. A commit that only added
-   review marks after a merge is checked through its parent. How the
-   gate decides is documented with the action, as
+   its merge queue run. A run started by hand, as `pr-retest.yml` does
+   with `workflow_dispatch`, does not count, so to recover from a
+   flaky queue run, use "Re-run jobs" on that merge queue run itself.
+   How the gate decides is documented with the action, as
    [`require-ci-success`](https://github.com/shakenfist/actions/blob/main/docs/actions.md#require-ci-success).
    It has no override.
 2. `build` builds the sdist and wheel, then runs `twine check` and the
