@@ -283,7 +283,7 @@ review the diff.
 
 | Workflow | Runs | What it does |
 |----------|------|--------------|
-| `ci.yml` | Pull requests, pushes to `develop`, dispatch | Three jobs: the pre-commit hooks, the unit tests, the fetch script's guard test and an sdist and wheel build; the descriptor corpus tier (`tox -edescriptor-corpus`); and the appliance corpus tier (`tox -eappliance-corpus`), for branches of this repository only. Then the automated reviewer on pull requests. |
+| `ci.yml` | Pull requests, merge queue entries, dispatch | Three jobs: the pre-commit hooks, the unit tests, the fetch script's guard test, and an sdist and wheel build with a check of the wheel's contents; the descriptor corpus tier (`tox -edescriptor-corpus`); and the appliance corpus tier (`tox -eappliance-corpus`), which skips fork pull requests. Then the automated reviewer on pull requests, and the "Can enqueue" and "Can merge" checks the merge queue requires. |
 | `secret-scan.yml` | Pull requests, pushes to `develop`, dispatch | gitleaks over the history, after a positive control. `tools/gitleaks-scan.sh` runs the same scan locally. |
 | `codeql-analysis.yml` | Pull requests, pushes, weekly | CodeQL. |
 | `pr-re-review.yml` | A "please re-review" comment | Another automated review. |
@@ -292,11 +292,59 @@ review the diff.
 | `export-repo-config.yml` | Daily | Exports the repository settings to `.github/exported-config/`. |
 | `release.yml` | A `v*` tag | The release, as below. |
 
+### Merging
+
+Pull requests merge through a merge queue on `develop`, not with the
+merge button directly. A pull request can be queued once its "Can
+enqueue" check passes. The queue then runs `ci.yml` again on the
+commit it is about to merge, and merges only when "Can merge" passes.
+That second run is the one a release counts (see below), so a change
+merged around the queue, by an administrator bypassing it, cannot be
+released until a later commit has gone through the queue.
+
+Enqueueing a fork's pull request is also the point at which its code
+first runs unreviewed by GitHub's approval setting, which does not
+apply to merge queue runs. A queued commit runs all of its own code --
+workflows, `tools/ci/` scripts, `tox.ini`, the pre-commit config,
+packaging and tests -- on the persistent static runners, and its
+appliance-corpus job with this repository's secret. Review the whole
+diff with that in mind before enqueueing it; changes under `.github/`
+and `tools/ci/` deserve the closest reading, because they decide where
+the secret goes.
+
+The wheel check in the lint job is
+[`check-dist`](https://github.com/shakenfist/actions/blob/main/docs/actions.md#check-dist).
+It fails if the wheel holds a test directory, so a packaging change
+that would ship the tests fails on its pull request rather than at
+release time.
+
 ## Releasing
 
-Pushing a `v*` tag triggers `release.yml`, which builds the
-distribution, waits for approval in the `release` environment,
-re-signs the tag with gitsign, and publishes to PyPI with
-attestations. The version
-comes from the tag through setuptools_scm. The one-time setup, and
-how to verify a release, are in `RELEASE-SETUP.md`.
+Pushing a `v*` tag triggers `release.yml`. Its jobs, in order:
+
+1. `ci-gate` checks that `ci.yml` succeeded on the tagged commit, in
+   its merge queue run. A run started by hand, as `pr-retest.yml` does
+   with `workflow_dispatch`, does not count, so to recover from a
+   flaky queue run, use "Re-run jobs" on that merge queue run itself.
+   How the gate decides is documented with the action, as
+   [`require-ci-success`](https://github.com/shakenfist/actions/blob/main/docs/actions.md#require-ci-success).
+   It has no override.
+2. `build` builds the sdist and wheel, then runs `twine check` and the
+   same wheel check as CI. It runs only if the gate passed.
+3. The publishing jobs wait for approval in the `release`
+   environment, re-sign the tag with gitsign, and publish to PyPI with
+   attestations.
+
+So tag a commit that is on `develop` and went through the merge
+queue, and wait for its `ci.yml` run to finish first. A gate failure
+means nothing was signed or published, so every failure is
+recoverable: the template's
+[recovery table](https://github.com/shakenfist/development/blob/main/templates/release-automation/README.md#recovering-from-a-gate-failure)
+says what to do for each cause, which is usually moving the tag or
+re-running CI and then the `ci-gate` job.
+
+Running `release.yml` by hand with `workflow_dispatch` skips the gate
+and the publishing jobs, and only builds and checks the packages.
+
+The version comes from the tag through setuptools_scm. The one-time
+setup, and how to verify a release, are in `RELEASE-SETUP.md`.
