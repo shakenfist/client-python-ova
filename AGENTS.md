@@ -70,5 +70,9 @@ releasing.
   in `.gitignore`, and only from sources whose terms allow it: an
   instar-testdata appliance whose `redistributable` is not `true` never
   goes there.
+- Changes merge to `develop` through the merge queue, never around it:
+  a release tag is only accepted on a commit whose queue run passed.
+  A new `ci.yml` job goes in the `needs:` of "Can enqueue" and "Can
+  merge". See "Merging" and "Releasing" in `docs/development.md`.
 - Plans live in `docs/plans/`, start from `PLAN-TEMPLATE.md`, and are
   registered in `docs/plans/index.md`.
