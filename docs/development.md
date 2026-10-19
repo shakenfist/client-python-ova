@@ -302,6 +302,12 @@ That second run is the one a release counts (see below), so a change
 merged around the queue, by an administrator bypassing it, cannot be
 released until a later commit has gone through the queue.
 
+The queue builds one entry at a time (`max_entries_to_build: 1` in the
+`develop` ruleset). `ci.yml`'s concurrency groups depend on that: a
+queue run shares a group with whatever the queue builds next, so that
+a superseded run is cancelled. Raising the setting would make each
+entry cancel the one ahead of it, so revisit those groups first.
+
 Enqueueing a fork's pull request is also the point at which its code
 first runs unreviewed by GitHub's approval setting, which does not
 apply to merge queue runs. A queued commit runs all of its own code --
