@@ -7,7 +7,7 @@ repos:
   # Lints the agent context (AGENTS.md and anything else handed to an
   # agent) for malformed skills, smuggled unicode and pasted secrets.
   - repo: https://github.com/stbenjam/skillsaw
-    rev: v0.21.0
+    rev: v0.22.0
     hooks:
       - id: skillsaw
 
