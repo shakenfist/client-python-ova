@@ -11,6 +11,7 @@ self-hosted-runner:
     # self-hosted label, so it has to be listed before a job can name it.
     - instar
     - static
+    - persistent
     - vm
     - s
     - xl
